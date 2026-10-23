@@ -94,7 +94,7 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     id: 'azure-architect',
     title: 'Azure Architect',
     subtitle: 'Passing Grade Mastery',
-    description: 'Maintained 70%+ accuracy with at least 30 questions answered (Microsoft official pass benchmark).',
+    description: 'Maintained 70%+ accuracy with at least 30 questions answered (official pass benchmark).',
     category: 'mastery',
     tier: 'diamond',
     iconName: 'Crown',
@@ -109,7 +109,7 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     id: 'master-of-modules',
     title: 'Master of Modules',
     subtitle: 'Full Curriculum Breadth',
-    description: 'Tackled questions across all 3 official Microsoft Learning Paths (Cloud Concepts, Architecture & Services, Governance & Management).',
+    description: 'Tackled questions across all 3 official Azure Curriculum Learning Paths (Cloud Concepts, Architecture & Services, Governance & Management).',
     category: 'curriculum',
     tier: 'gold',
     iconName: 'Layers',
@@ -439,7 +439,7 @@ export const BadgeSystem: React.FC<BadgeSystemProps> = ({ stats, onExplorePracti
               <MaasaiMedallion size={24} />
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Earn authentic cloud credentials as you solve practice scenarios, maintain your daily study streak, and master all three Microsoft AZ-900 domains.
+              Earn authentic cloud credentials as you solve practice scenarios, maintain your daily study streak, and master all three Azure Curriculum domains.
             </p>
           </div>
 

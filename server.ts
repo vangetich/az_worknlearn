@@ -8,6 +8,7 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+(globalThis as any).__dirname = path.resolve(__dirname, 'node_modules/vite-plugin-pwa/dist');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -209,9 +210,36 @@ async function startServer() {
   if (!isProd) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        ws: false,
+      },
       appType: 'spa',
     });
+
+    // Provide clean /@vite/client module with inert transport for AI Studio cloud environment
+    app.get('/@vite/client', async (req, res, next) => {
+      try {
+        const mod = await vite.transformRequest('/@vite/client');
+        if (mod) {
+          res.setHeader('Content-Type', 'application/javascript');
+          res.setHeader('Cache-Control', 'no-cache');
+          let code = mod.code;
+          if (code.includes('const createWebSocketModuleRunnerTransport = (options) => {')) {
+            code = code.replace(
+              'const createWebSocketModuleRunnerTransport = (options) => {',
+              'const createWebSocketModuleRunnerTransport = () => ({ async connect() {}, send() {}, async disconnect() {} }); const _unused_ws = (options) => {'
+            );
+          }
+          return res.send(code);
+        }
+        next();
+      } catch (err) {
+        next(err);
+      }
+    });
+
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.resolve(__dirname, 'dist')));

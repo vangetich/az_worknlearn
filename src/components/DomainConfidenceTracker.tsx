@@ -18,6 +18,7 @@ import {
   ShieldAlert,
   ChevronRight,
   Download,
+  RotateCcw,
 } from 'lucide-react';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { UserStats } from '../types/quiz';
@@ -27,6 +28,7 @@ import { DailyConsistencyChart } from './DailyConsistencyChart';
 import { ExamReadinessGauge } from './ExamReadinessGauge';
 import { WeaknessHeatmap } from './WeaknessHeatmap';
 import { BadgeSystem } from './BadgeSystem';
+import { ResetModuleModal } from './ResetModuleModal';
 
 interface DomainConfidenceProps {
   stats: UserStats;
@@ -35,6 +37,7 @@ interface DomainConfidenceProps {
   onLaunchMicroDrill?: (moduleId: number) => void;
   onOpenStudyBreak?: () => void;
   onOpenExport?: () => void;
+  onResetModuleConfidence?: (moduleId: number) => void;
 }
 
 export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
@@ -44,9 +47,11 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
   onLaunchMicroDrill,
   onOpenStudyBreak,
   onOpenExport,
+  onResetModuleConfidence,
 }) => {
   // Toggle between 'Last 7 Days' and 'Last 30 Days'
   const [timeRange, setTimeRange] = useState<'7d' | '30d'>('7d');
+  const [resetModalModuleId, setResetModalModuleId] = useState<number | null | false>(false);
 
   // Compute confidence metrics filtered by the selected time range
   const filteredMetrics = useMemo(() => {
@@ -170,7 +175,7 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
                 </span>
               </div>
               <p className="text-sm text-slate-600 mt-1 max-w-xl">
-                Continuous performance modeling based on your scenario quiz answers across all 3 official Microsoft Learn paths.
+                Continuous performance modeling based on your scenario quiz answers across all 3 official Azure Curriculum paths.
               </p>
             </div>
           </div>
@@ -215,6 +220,19 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
               >
                 <Coffee className="w-4 h-4 text-amber-600" />
                 <span>Kahawa Break ☕</span>
+              </button>
+            )}
+
+            {/* Reset Module Confidence Button */}
+            {onResetModuleConfidence && (
+              <button
+                type="button"
+                onClick={() => setResetModalModuleId(null)}
+                className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
+                title="Reset progress on a specific module without clearing other data"
+              >
+                <RotateCcw className="w-4 h-4 text-rose-600" />
+                <span>Reset Module Confidence</span>
               </button>
             )}
 
@@ -288,11 +306,15 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
         </div>
       </div>
 
-      {/* Exam Readiness Gauge (Weighted domain calculation & Pass Mark target) */}
+      {/* Exam Readiness Gauge (Average Domain Confidence across all 12 modules) */}
       <ExamReadinessGauge
+        moduleMastery={filteredMetrics.moduleMastery}
         pathMastery={filteredMetrics.pathMastery}
         totalAnswered={filteredMetrics.totalAnswered}
       />
+
+      {/* Daily Consistency Bar Chart (Recharts) with Azure Blue #0078D4 Bars */}
+      <DailyConsistencyChart stats={stats} />
 
       {/* ADAPTIVE GRADUAL MASTERY LADDER (Progress to 700 Pass Mark) */}
       <div className="bg-white rounded-xl border border-slate-200 card-elevation p-6 space-y-4">
@@ -308,7 +330,7 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
               <p className="text-xs text-slate-500">
                 {scaledScore >= 700
                   ? '🎉 Outstanding! You are in the Certified Ready zone (700+ pts).'
-                  : `You need ${pointsToPass} more points to reach the official Microsoft 700 passing mark.`}
+                  : `You need ${pointsToPass} more points to reach the official 700 passing benchmark.`}
               </p>
             </div>
           </div>
@@ -399,8 +421,6 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
         onLaunchMicroDrill={onLaunchMicroDrill}
       />
 
-      {/* Daily Consistency Bar Chart (Recharts) with Azure Blue #0078D4 Bars */}
-      <DailyConsistencyChart stats={stats} />
 
       {/* Azure Milestone & Harambee Badge System */}
       <BadgeSystem
@@ -513,6 +533,21 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
                           >
                             {modStat.total > 0 ? `${modPct}%` : 'New'}
                           </span>
+
+                          {onResetModuleConfidence && modStat.total > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setResetModalModuleId(m.id);
+                              }}
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title={`Reset M${m.id} confidence`}
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                            </button>
+                          )}
+
                           <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                         </div>
                       </div>
@@ -524,6 +559,18 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
           })}
         </div>
       </div>
+
+      {/* Scoped Reset Module Confidence Modal */}
+      {resetModalModuleId !== false && onResetModuleConfidence && (
+        <ResetModuleModal
+          stats={stats}
+          initialModuleId={resetModalModuleId}
+          onReset={(modId) => {
+            onResetModuleConfidence(modId);
+          }}
+          onClose={() => setResetModalModuleId(false)}
+        />
+      )}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Flame,
   CheckCircle2,
@@ -29,8 +29,18 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
     String(stats.dailyGoal || 10)
   );
   const [goalFeedback, setGoalFeedback] = useState<string | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<boolean>(false);
+  const [isIncrementing, setIsIncrementing] = useState<boolean>(false);
+  const [justReachedGoal, setJustReachedGoal] = useState<boolean>(false);
 
-  // Today's attempts calculation
+  // Sync goalInput whenever stats.dailyGoal updates externally
+  useEffect(() => {
+    if (stats.dailyGoal) {
+      setGoalInput(String(stats.dailyGoal));
+    }
+  }, [stats.dailyGoal]);
+
+  // Today's attempts calculation (dynamic session progress)
   const todayKey = new Date().toISOString().split('T')[0];
   let todayAnswered = 0;
   Object.values(stats.attempts || {}).forEach((attemptsList) => {
@@ -50,6 +60,22 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
     Math.round((todayAnswered / dailyGoal) * 100)
   );
   const isGoalReached = todayAnswered >= dailyGoal && dailyGoal > 0;
+
+  // Track progress increments to smoothly animate ring and trigger celebratory sparkle
+  const prevAnsweredRef = React.useRef<number>(todayAnswered);
+  useEffect(() => {
+    if (todayAnswered > prevAnsweredRef.current) {
+      setIsIncrementing(true);
+      const timer = setTimeout(() => setIsIncrementing(false), 1200);
+      if (todayAnswered >= dailyGoal && prevAnsweredRef.current < dailyGoal) {
+        setJustReachedGoal(true);
+        setTimeout(() => setJustReachedGoal(false), 4500);
+      }
+      prevAnsweredRef.current = todayAnswered;
+      return () => clearTimeout(timer);
+    }
+    prevAnsweredRef.current = todayAnswered;
+  }, [todayAnswered, dailyGoal]);
 
   // Generate last 7 days status
   const today = new Date();
@@ -92,7 +118,7 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
     streak < 3 ? 3 : streak < 7 ? 7 : streak < 14 ? 14 : streak < 30 ? 30 : streak + 10;
   const daysRemaining = Math.max(1, nextMilestone - streak);
 
-  const handleSaveGoal = (targetValue: number) => {
+  const commitGoal = (targetValue: number, showToast: boolean = true) => {
     if (isNaN(targetValue) || targetValue <= 0) return;
     const cleanGoal = Math.max(1, Math.min(100, Math.round(targetValue)));
     const updated = setDailyGoal(stats, cleanGoal);
@@ -101,99 +127,226 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
     }
     setGoalInput(String(cleanGoal));
     setIsEditingGoal(false);
-    setGoalFeedback(`Goal set to ${cleanGoal} questions/day!`);
-    setTimeout(() => setGoalFeedback(null), 2500);
+    setSaveFeedback(true);
+    setTimeout(() => setSaveFeedback(false), 2000);
+    if (showToast) {
+      setGoalFeedback(`Goal set to ${cleanGoal} questions/day!`);
+      setTimeout(() => setGoalFeedback(null), 2500);
+    }
   };
 
-  // Progress ring constants (r=11 in 32x32 viewbox -> circumference ~ 69.115)
-  const ringRadius = 11;
-  const ringCircumference = 2 * Math.PI * ringRadius; // ~69.12
+  const handleHeaderGoalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setGoalInput(val);
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= 100) {
+      // Instantly persist to localStorage so progress ring updates dynamically
+      const updated = setDailyGoal(stats, parsed);
+      if (onUpdateStats) {
+        onUpdateStats(updated);
+      }
+      setSaveFeedback(true);
+      setTimeout(() => setSaveFeedback(false), 1500);
+    }
+  };
+
+  const handleHeaderGoalBlur = () => {
+    const parsed = parseInt(goalInput, 10);
+    if (isNaN(parsed) || parsed < 1) {
+      commitGoal(10, false);
+    } else {
+      commitGoal(parsed, false);
+    }
+  };
+
+  const handleHeaderGoalKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  // Progress ring constants (r=14 in 36x36 viewbox -> circumference ~ 87.96)
+  const ringRadius = 14;
+  const ringCircumference = 2 * Math.PI * ringRadius; // ~87.96
   const ringOffset =
     ringCircumference - (goalPercent / 100) * ringCircumference;
 
   return (
     <div className="relative">
-      {/* Trigger Button with Progress Ring around Streak Flame */}
-      <button
-        onClick={() => setShowDropdown(!showDropdown)}
-        className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all group ${
+      {/* Header Widget: Flame Progress Ring + Streak + Direct Daily Goal Input */}
+      <div
+        className={`flex items-center rounded-xl border transition-all ${
           isGoalReached
-            ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 hover:from-emerald-100 hover:to-teal-100 border-emerald-300 text-emerald-950 shadow-2xs'
-            : 'bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 hover:from-orange-100 hover:to-amber-100 border-orange-200/80 text-orange-950 shadow-2xs'
+            ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-emerald-300 text-emerald-950 shadow-2xs'
+            : 'bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border-orange-200/80 text-orange-950 shadow-2xs'
         }`}
-        title={`Daily Goal: ${todayAnswered}/${dailyGoal} questions (${goalPercent}%). Streak: ${streak} days. Click to view or adjust goal.`}
       >
-        {/* Flame icon with Circular Progress Ring */}
-        <div
-          className={`relative flex items-center justify-center w-7 h-7 ${
-            isGoalReached ? 'animate-goal-glow rounded-full' : ''
-          }`}
+        {/* Clickable Area: Visual Progress Ring around Flame & Streak Stats */}
+        <button
+          type="button"
+          onClick={() => setShowDropdown(!showDropdown)}
+          className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-black/5 rounded-l-xl transition-colors cursor-pointer group"
+          title={`Daily Streak: ${streak} days. Progress: ${todayAnswered}/${dailyGoal} questions (${goalPercent}%). Click to view streak calendar and milestone badges.`}
         >
-          <svg
-            className="w-7 h-7 -rotate-90 origin-center"
-            viewBox="0 0 32 32"
+          {/* Flame icon with Smooth Circular Visual Progress Ring & Sparkle Effect */}
+          <div
+            className={`relative flex items-center justify-center w-8 h-8 transition-transform duration-300 ${
+              isGoalReached ? 'animate-goal-glow rounded-full' : ''
+            } ${isIncrementing ? 'animate-ring-pulse' : ''}`}
           >
-            {/* Background Track Circle */}
-            <circle
-              cx="16"
-              cy="16"
-              r={ringRadius}
-              fill="none"
-              stroke={isGoalReached ? '#A7F3D0' : '#FED7AA'}
-              strokeWidth="2.75"
-            />
-            {/* Animated Progress Ring */}
-            <circle
-              cx="16"
-              cy="16"
-              r={ringRadius}
-              fill="none"
-              stroke={isGoalReached ? '#16A34A' : '#EA580C'}
-              strokeWidth="2.75"
-              strokeDasharray={ringCircumference}
-              strokeDashoffset={ringOffset}
-              strokeLinecap="round"
-              className="transition-all duration-700 ease-out"
-            />
-          </svg>
+            <svg
+              className="w-8 h-8 -rotate-90 origin-center"
+              viewBox="0 0 36 36"
+            >
+              {/* Background Track Circle */}
+              <circle
+                cx="18"
+                cy="18"
+                r={ringRadius}
+                fill="none"
+                stroke={isGoalReached ? '#A7F3D0' : '#FED7AA'}
+                strokeWidth="3.2"
+              />
+              {/* Animated Dynamic Progress Ring with Smooth Settle Curve */}
+              <circle
+                cx="18"
+                cy="18"
+                r={ringRadius}
+                fill="none"
+                stroke={isGoalReached ? '#16A34A' : '#EA580C'}
+                strokeWidth="3.2"
+                strokeDasharray={ringCircumference}
+                strokeDashoffset={ringOffset}
+                strokeLinecap="round"
+                style={{
+                  transition:
+                    'stroke-dashoffset 0.85s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.4s ease',
+                }}
+              />
+            </svg>
 
-          {/* Centered Flame Icon */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Flame
-              className={`w-3.5 h-3.5 group-hover:scale-110 transition-transform ${
-                isGoalReached
-                  ? 'text-emerald-600 fill-emerald-500'
-                  : 'text-orange-600 fill-orange-500'
-              }`}
-            />
+            {/* Centered Flame Icon */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Flame
+                className={`w-4 h-4 group-hover:scale-110 transition-transform ${
+                  isGoalReached
+                    ? 'text-emerald-600 fill-emerald-500 animate-pulse'
+                    : 'text-orange-600 fill-orange-500'
+                }`}
+              />
+            </div>
+
+            {/* Subtle Sparkle Motif Particles when Goal is Reached */}
+            {isGoalReached && (
+              <div
+                className="absolute inset-0 pointer-events-none overflow-visible"
+                aria-hidden="true"
+              >
+                {/* Sparkle 1 (Top Right) */}
+                <span className="absolute -top-1.5 -right-1 text-amber-500 animate-sparkle-1">
+                  <svg className="w-2.5 h-2.5 fill-amber-400 drop-shadow-xs" viewBox="0 0 24 24">
+                    <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
+                  </svg>
+                </span>
+                {/* Sparkle 2 (Bottom Left) */}
+                <span className="absolute -bottom-1 -left-1.5 text-emerald-500 animate-sparkle-2">
+                  <svg className="w-2.5 h-2.5 fill-emerald-400 drop-shadow-xs" viewBox="0 0 24 24">
+                    <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
+                  </svg>
+                </span>
+                {/* Sparkle 3 (Top Left) */}
+                <span className="absolute -top-1 -left-1 text-amber-300 animate-sparkle-3">
+                  <svg className="w-2 h-2 fill-yellow-400" viewBox="0 0 24 24">
+                    <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
+                  </svg>
+                </span>
+                {/* Sparkle 4 (Bottom Right) */}
+                <span className="absolute -bottom-1.5 -right-0.5 text-amber-400 animate-sparkle-1">
+                  <svg className="w-2 h-2 fill-amber-300" viewBox="0 0 24 24">
+                    <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
+                  </svg>
+                </span>
+              </div>
+            )}
+
+            {/* Goal Completed Check Badge */}
+            {isGoalReached && (
+              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border border-white rounded-full flex items-center justify-center text-white shadow-2xs z-10">
+                <Check className="w-2 h-2 stroke-[3]" />
+              </span>
+            )}
           </div>
 
-          {/* Goal Completed Badge */}
-          {isGoalReached && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 border border-white rounded-full" />
-          )}
-        </div>
+          {/* Streak and Progress Counts */}
+          <div className="flex flex-col text-left">
+            <div className="flex items-center gap-1">
+              <span className="font-black text-xs text-slate-900">
+                {streak}d
+              </span>
+              <span
+                className={`text-xs font-black transition-colors duration-500 ${
+                  isGoalReached ? 'text-emerald-700' : 'text-orange-800'
+                }`}
+              >
+                ({todayAnswered}/{dailyGoal})
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-slate-500 leading-none flex items-center gap-0.5">
+              {isGoalReached ? (
+                <>
+                  <Sparkles className="w-2.5 h-2.5 text-amber-500 inline" />
+                  <span className="text-emerald-700 font-extrabold">Done! ✨</span>
+                </>
+              ) : (
+                `${goalPercent}% today`
+              )}
+            </span>
+          </div>
 
-        {/* Streak and Daily Goal Info */}
-        <div className="flex items-center gap-1.5">
-          <span className="font-black text-xs text-slate-900">
-            {streak}d
-          </span>
-          <span className="text-slate-300">•</span>
-          <span
-            className={`text-xs font-extrabold ${
-              isGoalReached ? 'text-emerald-700' : 'text-orange-800'
+          <ChevronDown
+            className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-transform ${
+              showDropdown ? 'rotate-180' : ''
             }`}
-          >
-            {todayAnswered}/{dailyGoal}
-          </span>
-          <span className="hidden sm:inline text-[11px] text-slate-500 font-medium">
-            Goal
-          </span>
-        </div>
+          />
+        </button>
 
-        <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-700 transition-colors" />
-      </button>
+        {/* Direct Input Field in App Header to set Daily Learning Goal */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-l border-orange-200/60 dark:border-slate-200/60">
+          <label
+            htmlFor="header-daily-goal-input"
+            className="text-[11px] font-bold text-slate-600 hidden sm:inline whitespace-nowrap"
+            title="Daily questions target"
+          >
+            Goal:
+          </label>
+          <div className="relative flex items-center">
+            <input
+              id="header-daily-goal-input"
+              type="number"
+              min={1}
+              max={100}
+              value={goalInput}
+              onChange={handleHeaderGoalChange}
+              onBlur={handleHeaderGoalBlur}
+              onKeyDown={handleHeaderGoalKeyDown}
+              title="Set your Daily Learning Goal (questions per day). Persists automatically in localStorage."
+              aria-label="Set Daily Learning Goal questions per day"
+              className="w-12 h-7 px-1 text-center font-black text-xs text-slate-900 bg-white border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0078D4] focus:border-[#0078D4] shadow-2xs transition-all"
+            />
+            <span className="ml-1 text-[11px] text-slate-500 font-semibold hidden md:inline">
+              q/day
+            </span>
+            {saveFeedback && (
+              <span
+                className="ml-1 text-[10px] font-black text-emerald-600 flex items-center gap-0.5 animate-in fade-in"
+                title="Saved to localStorage!"
+              >
+                <Check className="w-3 h-3 stroke-[3]" />
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Popover Dropdown Card */}
       {showDropdown && (
@@ -343,7 +496,7 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
                     {[5, 10, 15, 20, 30].map((preset) => (
                       <button
                         key={preset}
-                        onClick={() => handleSaveGoal(preset)}
+                        onClick={() => commitGoal(preset)}
                         className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${
                           dailyGoal === preset
                             ? 'bg-[#0078D4] text-white border-[#0078D4]'
@@ -367,7 +520,7 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
                       className="w-24 px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#0078D4]"
                     />
                     <button
-                      onClick={() => handleSaveGoal(parseInt(goalInput, 10))}
+                      onClick={() => commitGoal(parseInt(goalInput, 10))}
                       className="px-3 py-1.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-bold flex items-center gap-1 transition-colors"
                     >
                       <Check className="w-3.5 h-3.5" />

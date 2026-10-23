@@ -14,8 +14,11 @@ import {
   RefreshCw,
   Search,
   Filter,
+  Users,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
-import { Header } from './components/Header';
+import { Header, AppTab } from './components/Header';
 import { QuizCard } from './components/QuizCard';
 import { ModuleBrowser } from './components/ModuleBrowser';
 import { AiScenarioGenerator } from './components/AiScenarioGenerator';
@@ -28,16 +31,21 @@ import { StudyBreakModal } from './components/StudyBreakModal';
 import { DailyChallengeBanner } from './components/DailyChallengeBanner';
 import { HarambeeWisdomDeck } from './components/HarambeeWisdomDeck';
 import { ExportProgressModal } from './components/ExportProgressModal';
+import { FlashcardsView } from './components/FlashcardsView';
+import { GlobalLeaderboard } from './components/GlobalLeaderboard';
+import { AdaptiveQuizView } from './components/AdaptiveQuizView';
+import { ReviewHistoryView } from './components/ReviewHistoryView';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { GlassyStudyHubDropdown } from './components/GlassyStudyHubDropdown';
+import { ResetModuleModal } from './components/ResetModuleModal';
 import { AfricanWatermarkPattern, KitengeRibbon, MaasaiMedallion } from './components/MotifDecorations';
 import { BUILTIN_QUESTIONS } from './data/questionBank';
 import { LEARNING_PATHS } from './data/curriculum';
 import { Question, UserStats, QuestionAttempt } from './types/quiz';
-import { getInitialStats, saveUserAttempt, toggleBookmark } from './utils/storage';
+import { getInitialStats, saveUserAttempt, toggleBookmark, resetModuleConfidence, saveQuizSession } from './utils/storage';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<
-    'quiz' | 'mock' | 'ai-builder' | 'assistant' | 'study-decks' | 'analytics' | 'wisdom'
-  >('quiz');
+  const [activeTab, setActiveTab] = useState<AppTab>('quiz');
 
   // Questions state (built-in + any AI generated)
   const [questions, setQuestions] = useState<Question[]>(() => {
@@ -74,9 +82,35 @@ export default function App() {
   // Engagement & Anti-fatigue states
   const [sessionAnswerCount, setSessionAnswerCount] = useState<number>(0);
   const [showStudyBreak, setShowStudyBreak] = useState<boolean>(false);
-  const [showMicroDrill, setShowMicroDrill] = useState<boolean>(false);
+  const [showMicroDrill, setShowMicroDrill] = useState<number | false>(false);
   const [microDrillTargetModuleId, setMicroDrillTargetModuleId] = useState<number>(5);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
+
+  // Focus Mode state (minimizes UI by hiding nav bar and footer)
+  const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
+
+  // Slide menu visibility state
+  const [isMenuHidden, setIsMenuHidden] = useState<boolean>(false);
+
+  // Scoped reset module modal state
+  const [showResetModuleModal, setShowResetModuleModal] = useState<boolean>(false);
+
+  // Escape key listener to exit Focus Mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFocusMode) {
+        setIsFocusMode(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFocusMode]);
+
+  // Scoped Module Confidence Reset Handler
+  const handleResetModuleConfidence = (moduleId: number) => {
+    const updated = resetModuleConfidence(stats, moduleId);
+    setStats(updated);
+  };
 
   // Filtered question set
   const filteredQuestions = useMemo(() => {
@@ -202,47 +236,124 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#1E293B] relative flex flex-col font-sans">
-      {/* Subtle African Kitenge Watermark Background (0.04-0.08 opacity) */}
+      {/* Subtle African Kitenge Watermark Background */}
       <AfricanWatermarkPattern opacity={0.04} />
 
-      {/* Primary Header with African Motif Ribbon */}
-      <Header
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        stats={stats}
-        onOpenExport={() => setShowExportModal(true)}
-        onUpdateStats={setStats}
-      />
+      {/* Offline Status Toast Indicator */}
+      <OfflineIndicator />
+
+      {/* Primary Header with African Motif Ribbon & Azure Curriculum Branding (Hidden in Focus Mode) */}
+      {!isFocusMode && (
+        <Header
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          selectedPathId={selectedPathId}
+          onSelectPath={(p) => setSelectedPathId(p)}
+          stats={stats}
+          onOpenExport={() => setShowExportModal(true)}
+          onUpdateStats={setStats}
+        />
+      )}
+
+      {/* Floating Focus Mode Banner (Minimized UI for Test-Like Concentration) */}
+      {isFocusMode && (
+        <div className="sticky top-4 z-50 px-4 max-w-4xl w-full mx-auto animate-in slide-in-from-top-3 duration-200">
+          <div className="bg-slate-900/95 text-white backdrop-blur-md rounded-2xl p-3.5 px-5 shadow-2xl border border-slate-700/80 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-3 w-3 relative shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
+              <div>
+                <span className="text-xs font-black tracking-wider uppercase text-emerald-400 block">
+                  Focus Mode Active
+                </span>
+                <span className="text-xs text-slate-300 hidden sm:inline">
+                  Navigation bar and footer hidden • Test-like exam concentration
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-slate-400">
+                Question {currentQuestionIndex + 1} of {filteredQuestions.length}
+              </span>
+              <button
+                onClick={() => setIsFocusMode(false)}
+                className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition-colors border border-white/20 cursor-pointer"
+                title="Exit Focus Mode (or press Esc)"
+              >
+                <Minimize2 className="w-3.5 h-3.5" />
+                <span>Exit Focus</span>
+                <kbd className="hidden sm:inline px-1.5 py-0.5 rounded bg-black/40 text-[10px] text-slate-300">Esc</kbd>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 relative z-10">
         {/* TAB 1: PRACTICE MODULES */}
         {activeTab === 'quiz' && (
           <div className="space-y-6">
-            {/* Top Banner with African Heritage Accent */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-[#005A9E] to-[#0078D4] text-white p-6 sm:p-7 shadow-md">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1.5 max-w-2xl">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-950 uppercase tracking-wide">
-                      AZ-900 Exam Engine
-                    </span>
-                    <span className="text-xs text-blue-200">
-                      Official Scenario Practice
-                    </span>
+            {/* Centered Hero Section with Light Azure Shimmer, Glassy Dropdown Menu & AZ-900 at the top (Hidden in Focus Mode) */}
+            {!isFocusMode && (
+              <div className="text-center py-2 sm:py-4 space-y-4 max-w-4xl mx-auto relative z-20">
+                {/* AZ-900 Azure fundamentals at the top */}
+                <div className="flex items-center justify-center gap-2">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-black bg-gradient-to-r from-blue-500/10 via-sky-500/20 to-blue-500/10 text-[#0078D4] border border-sky-300/60 shadow-2xs backdrop-blur-xs">
+                    <MaasaiMedallion size={16} />
+                    <span className="tracking-wide uppercase font-extrabold">AZ-900 Azure Fundamentals</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-slate-600 font-semibold text-[11px] hidden sm:inline">Azure Curriculum</span>
                   </div>
-                  <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-                    Microsoft Azure Fundamentals Practice Studio
+                </div>
+
+                {/* Centred below nav menu and between nav menu and the Heading: Semi-transparent glassy dropdown-menu */}
+                <div className="flex justify-center">
+                  <GlassyStudyHubDropdown
+                    stats={stats}
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                    onOpenExport={() => setShowExportModal(true)}
+                    isMenuHidden={isMenuHidden}
+                    onToggleSlideMenu={() => setIsMenuHidden(!isMenuHidden)}
+                    onOpenResetModal={() => setShowResetModuleModal(true)}
+                  />
+                </div>
+
+                {/* Heading: Centred as well and font enlarged, looking nice with a light azure blue vibrant shimmer */}
+                <div className="space-y-2">
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight animate-azure-shimmer text-center">
+                    AZ-900 Azure Fundamentals Practice Studio
                   </h1>
-                  <p className="text-xs sm:text-sm text-blue-100/90 leading-relaxed">
-                    Master scenario-based questions with instant architectural breakdowns ("why it's right" vs. "why others are wrong") and exam anchor tips.
+                  <p className="text-xs sm:text-sm md:text-base text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal">
+                    Master official scenario-based questions with instant architectural breakdowns ("why it's right" vs. "why others are wrong"), exam anchor tips, and distraction-free Focus Mode.
                   </p>
                 </div>
 
-                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
+                {/* Quick Actions Centered */}
+                <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                  <button
+                    onClick={() => setActiveTab('adaptive')}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#0078D4] to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+                  >
+                    <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                    <span>Adaptive Quiz Mode</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('flashcards')}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                    <span>Concept Flashcards</span>
+                  </button>
+
                   <button
                     onClick={() => setShowMockExam(true)}
-                    className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all"
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all cursor-pointer"
                   >
                     <Award className="w-4 h-4" />
                     <span>Launch Mock Exam</span>
@@ -250,28 +361,20 @@ export default function App() {
 
                   <button
                     onClick={() => setActiveTab('ai-builder')}
-                    className="px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 backdrop-blur-xs transition-all"
+                    className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
                   >
-                    <Sparkles className="w-4 h-4 text-amber-300" />
+                    <Sparkles className="w-4 h-4 text-amber-600" />
                     <span>Create AI Scenario</span>
                   </button>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Daily Challenge Notification System based on Heatmap lowest confidence */}
-            <DailyChallengeBanner
-              stats={stats}
-              onLaunchChallenge={(modId) => {
-                setMicroDrillTargetModuleId(modId);
-                setShowMicroDrill(true);
-              }}
-            />
-
-            {/* Main Studio Grid: Curriculum Sidebar + Quiz Card */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left Column: Navigator & Filters (4 cols) */}
-              <div className="lg:col-span-4 space-y-4">
+            {/* Main Studio Grid: Curriculum Sidebar + Quiz Card (Left sidebar hidden in Focus Mode) */}
+            <div className={isFocusMode ? "max-w-4xl mx-auto w-full" : "grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"}>
+              {/* Left Column: Navigator & Filters (4 cols, hidden during Focus Mode) */}
+              {!isFocusMode && (
+                <div className="lg:col-span-4 space-y-4">
                 {/* Quick Filters */}
                 <div className="bg-white rounded-xl border border-slate-200 p-4 card-elevation flex items-center justify-between gap-2">
                   <button
@@ -346,9 +449,10 @@ export default function App() {
                   </div>
                 </div>
               </div>
+            )}
 
-              {/* Right Column: Active Scenario Question Card (8 cols) */}
-              <div className="lg:col-span-8">
+              {/* Right Column: Active Scenario Question Card (Takes full width in Focus Mode) */}
+              <div className={isFocusMode ? "w-full" : "lg:col-span-8"}>
                 {filteredQuestions.length > 0 && currentQ ? (
                   <QuizCard
                     question={currentQ}
@@ -367,6 +471,8 @@ export default function App() {
                     isBookmarked={stats.bookmarks.includes(currentQ.id)}
                     onAskTutorAboutQuestion={handleAskTutorAboutQuestion}
                     stats={stats}
+                    isFocusMode={isFocusMode}
+                    onToggleFocusMode={() => setIsFocusMode(!isFocusMode)}
                   />
                 ) : (
                   <div className="bg-white rounded-xl border border-slate-200 card-elevation p-12 text-center space-y-4">
@@ -400,10 +506,60 @@ export default function App() {
                 )}
               </div>
             </div>
+
+            {/* Daily Harambee Challenge Unit (Positioned at bottom of page below question area, above footer) */}
+            <DailyChallengeBanner
+              stats={stats}
+              onLaunchChallenge={(modId) => {
+                setMicroDrillTargetModuleId(modId);
+                setShowMicroDrill(modId);
+              }}
+            />
           </div>
         )}
 
-        {/* TAB 2: TIMED MOCK EXAM */}
+        {/* TAB: ADAPTIVE QUIZ MODE (DYNAMIC DIFFICULTY BALANCER) */}
+        {activeTab === 'adaptive' && (
+          <AdaptiveQuizView
+            questions={questions}
+            stats={stats}
+            onUpdateStats={setStats}
+            onNavigateToHistory={() => setActiveTab('history')}
+            onNavigateToPractice={() => setActiveTab('quiz')}
+          />
+        )}
+
+        {/* TAB: REVIEW HISTORY & LEARNING TRAJECTORY */}
+        {activeTab === 'history' && (
+          <ReviewHistoryView
+            onStartAdaptiveQuiz={() => setActiveTab('adaptive')}
+            onRetryQuestion={(qId) => {
+              const targetIndex = filteredQuestions.findIndex((q) => q.id === qId);
+              if (targetIndex !== -1) {
+                setCurrentQuestionIndex(targetIndex);
+              }
+              setActiveTab('quiz');
+            }}
+          />
+        )}
+
+        {/* TAB: FLASHCARDS (FRONT/BACK SYSTEM FOCUSED ON MISSED CONCEPTS) */}
+        {activeTab === 'flashcards' && (
+          <FlashcardsView
+            stats={stats}
+            onPracticeModule={handleSelectModuleFromTracker}
+          />
+        )}
+
+        {/* TAB: GLOBAL LEARNING LEADERBOARD */}
+        {activeTab === 'leaderboard' && (
+          <GlobalLeaderboard
+            stats={stats}
+            onPracticeClick={() => setActiveTab('quiz')}
+          />
+        )}
+
+        {/* TAB: TIMED MOCK EXAM */}
         {activeTab === 'mock' && (
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-slate-200 card-elevation p-8 max-w-3xl mx-auto text-center space-y-6">
@@ -413,7 +569,7 @@ export default function App() {
 
               <div>
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                  Official Exam Simulation
+                  Microsoft Official Exam Simulation
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">
                   AZ-900 Microsoft Azure Fundamentals Mock Exam
@@ -434,7 +590,7 @@ export default function App() {
                 </div>
                 <div className="space-y-1">
                   <span className="font-bold text-slate-900 block">Exam Weight Balance:</span>
-                  <span className="text-slate-600">Paths 1, 2, & 3 per Microsoft</span>
+                  <span className="text-slate-600">Paths 1, 2, &amp; 3 per Microsoft</span>
                 </div>
               </div>
 
@@ -449,7 +605,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: AI SCENARIO GENERATOR */}
+        {/* TAB: AI SCENARIO GENERATOR */}
         {activeTab === 'ai-builder' && (
           <div className="max-w-4xl mx-auto">
             <AiScenarioGenerator
@@ -458,7 +614,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 4: KNOWLEDGE ASSISTANT & TUTOR */}
+        {/* TAB: KNOWLEDGE ASSISTANT & TUTOR */}
         {activeTab === 'assistant' && (
           <div className="max-w-5xl mx-auto">
             <KnowledgeAssistant
@@ -468,26 +624,26 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: STUDY DECKS & MATRIX */}
+        {/* TAB: STUDY DECKS & MATRIX */}
         {activeTab === 'study-decks' && (
           <div className="max-w-5xl mx-auto">
             <StudyDeck />
           </div>
         )}
 
-        {/* TAB 6: HARAMBEE EXAM WISDOM SLIDES & VITAL CUES */}
+        {/* TAB: HARAMBEE EXAM WISDOM SLIDES & VITAL CUES */}
         {activeTab === 'wisdom' && (
           <div className="max-w-5xl mx-auto">
             <HarambeeWisdomDeck
               onQuizTopic={(modId) => {
                 setMicroDrillTargetModuleId(modId);
-                setShowMicroDrill(true);
+                setShowMicroDrill(modId);
               }}
             />
           </div>
         )}
 
-        {/* TAB 7: DOMAIN CONFIDENCE */}
+        {/* TAB: DOMAIN CONFIDENCE */}
         {activeTab === 'analytics' && (
           <div className="max-w-5xl mx-auto">
             <DomainConfidenceTracker
@@ -496,10 +652,11 @@ export default function App() {
               onSelectModule={handleSelectModuleFromTracker}
               onLaunchMicroDrill={(moduleId) => {
                 setMicroDrillTargetModuleId(moduleId);
-                setShowMicroDrill(true);
+                setShowMicroDrill(moduleId);
               }}
               onOpenStudyBreak={() => setShowStudyBreak(true)}
               onOpenExport={() => setShowExportModal(true)}
+              onResetModuleConfidence={handleResetModuleConfidence}
             />
           </div>
         )}
@@ -510,7 +667,24 @@ export default function App() {
         <MockExamModal
           questions={questions.slice(0, 35)}
           onFinish={(correct, total) => {
-            console.log(`Exam finished: ${correct}/${total}`);
+            const scorePercent = Math.round((correct / total) * 100);
+            saveQuizSession({
+              id: `session-mock-${Date.now()}`,
+              timestamp: Date.now(),
+              dateStr: new Date().toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              title: `Timed Mock Exam (${total} Questions)`,
+              mode: 'mock',
+              totalQuestions: total,
+              correctCount: correct,
+              scorePercent,
+              passed: scorePercent >= 70,
+              missedQuestions: [],
+            });
           }}
           onClose={() => setShowMockExam(false)}
         />
@@ -523,14 +697,14 @@ export default function App() {
           onTakeBreak={() => setShowStudyBreak(false)}
           onStartMicroDrill={() => {
             setShowStudyBreak(false);
-            setShowMicroDrill(true);
+            setShowMicroDrill(microDrillTargetModuleId || 5);
           }}
           onDismiss={() => setShowStudyBreak(false)}
         />
       )}
 
       {/* 3-Question Rapid Micro-Drill Modal */}
-      {showMicroDrill && (
+      {showMicroDrill !== false && (
         <MicroDrillModal
           questions={
             questions.filter((q) => q.moduleId === microDrillTargetModuleId).length > 0
@@ -555,29 +729,40 @@ export default function App() {
         />
       )}
 
-      {/* Footer with African Heritage Accent */}
-      <footer className="mt-auto border-t border-slate-200/80 bg-white py-6 relative z-10 text-xs text-slate-500">
-        <KitengeRibbon height={3} className="mb-4" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <MaasaiMedallion size={20} />
-            <span className="font-bold text-slate-700">
-              AZ-900 Smart Quiz Builder & Knowledge Assistant
-            </span>
-            <span className="text-slate-400">•</span>
-            <span>Aligned with Microsoft Learn AZ-900 Exam Specifications</span>
+      {/* Scoped Reset Module Confidence Modal */}
+      {showResetModuleModal && (
+        <ResetModuleModal
+          stats={stats}
+          onReset={handleResetModuleConfidence}
+          onClose={() => setShowResetModuleModal(false)}
+        />
+      )}
+
+      {/* Footer with Microsoft Curriculum Only & African Heritage Accent (Hidden in Focus Mode) */}
+      {!isFocusMode && (
+        <footer className="mt-auto border-t border-slate-200/80 bg-white py-6 relative z-10 text-xs text-slate-500">
+          <KitengeRibbon height={3} className="mb-4" />
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <MaasaiMedallion size={20} />
+              <span className="font-bold text-slate-700">
+                Microsoft Curriculum Only: AZ-900 Azure Fundamentals
+              </span>
+              <span className="text-slate-400">•</span>
+              <span>Official Learning Objectives • Offline PWA Enabled</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-amber-700 font-medium">
+                Kenyan Heritage Edition 🇰🇪
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="text-slate-500">
+                Global Harambee Azure Cohort
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-amber-700 font-medium">
-              Kenyan Heritage Edition 🇰🇪
-            </span>
-            <span className="text-slate-300">|</span>
-            <span className="text-slate-500">
-              Designed for Azure Certified Learners
-            </span>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }

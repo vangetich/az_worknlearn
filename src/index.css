@@ -134,13 +134,203 @@ body {
 
 @keyframes goalCelebrationGlow {
   0%, 100% {
-    box-shadow: 0 0 10px rgba(234, 179, 8, 0.25);
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.3), 0 0 16px rgba(245, 158, 11, 0.2);
   }
   50% {
-    box-shadow: 0 0 20px rgba(234, 179, 8, 0.55);
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.6), 0 0 24px rgba(245, 158, 11, 0.4);
   }
 }
 
 .animate-goal-glow {
   animation: goalCelebrationGlow 2.5s ease-in-out infinite;
+}
+
+/* Subtle Sparkle Effects for Daily Learning Goal Ring */
+@keyframes sparkleTwinkle {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(0.6) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2) rotate(90deg);
+    filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.8));
+  }
+}
+
+@keyframes sparkleOrbit {
+  0% {
+    transform: rotate(0deg) translateX(18px) rotate(0deg);
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(180deg) translateX(18px) rotate(-180deg) scale(1.15);
+  }
+  100% {
+    transform: rotate(360deg) translateX(18px) rotate(-360deg);
+    opacity: 0.4;
+  }
+}
+
+@keyframes ringIncrementPulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.14);
+    filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.6));
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-ring-pulse {
+  animation: ringIncrementPulse 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-sparkle-1 {
+  animation: sparkleTwinkle 2s ease-in-out infinite;
+}
+
+.animate-sparkle-2 {
+  animation: sparkleTwinkle 2.4s ease-in-out 0.6s infinite;
+}
+
+.animate-sparkle-3 {
+  animation: sparkleTwinkle 2.8s ease-in-out 1.2s infinite;
+}
+
+/* African Fire Motif Animations for Daily Harambee Challenge */
+@keyframes fireStreakShooting {
+  0% {
+    transform: translateX(-140%) translateY(40%) rotate(-18deg) scaleX(0.7);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.95;
+  }
+  75% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateX(380%) translateY(-50%) rotate(-18deg) scaleX(1.3);
+    opacity: 0;
+  }
+}
+
+@keyframes fireStreakReverse {
+  0% {
+    transform: translateX(340%) translateY(-30%) rotate(162deg) scaleX(0.7);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.85;
+  }
+  75% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(-160%) translateY(40%) rotate(162deg) scaleX(1.2);
+    opacity: 0;
+  }
+}
+
+@keyframes emberDrifting {
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.95;
+  }
+  80% {
+    opacity: 0.7;
+    transform: translate(60px, -35px) scale(1.2);
+  }
+  100% {
+    transform: translate(120px, -70px) scale(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes fireGlowPulse {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.04);
+  }
+}
+
+.animate-fire-streak-1 {
+  animation: fireStreakShooting 4.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+}
+
+.animate-fire-streak-2 {
+  animation: fireStreakShooting 5.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 1.8s infinite;
+}
+
+.animate-fire-streak-3 {
+  animation: fireStreakReverse 6.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 3s infinite;
+}
+
+.animate-ember-1 {
+  animation: emberDrifting 3.8s ease-in-out infinite;
+}
+
+.animate-ember-2 {
+  animation: emberDrifting 4.6s ease-in-out 1.5s infinite;
+}
+
+.animate-ember-3 {
+  animation: emberDrifting 5.2s ease-in-out 2.7s infinite;
+}
+
+.animate-fire-pulse {
+  animation: fireGlowPulse 3s ease-in-out infinite;
+}
+
+/* Light Azure Blue Vibrant Shimmer Effect */
+@keyframes azureShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-azure-shimmer {
+  background: linear-gradient(
+    90deg,
+    #0f172a 0%,
+    #0078d4 30%,
+    #38bdf8 50%,
+    #0078d4 70%,
+    #0f172a 100%
+  );
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: azureShimmer 4s linear infinite;
+}
+
+@keyframes azureBorderGlow {
+  0%, 100% {
+    border-color: rgba(0, 120, 212, 0.35);
+    box-shadow: 0 4px 20px rgba(0, 120, 212, 0.08), 0 0 12px rgba(56, 189, 248, 0.15);
+  }
+  50% {
+    border-color: rgba(56, 189, 248, 0.65);
+    box-shadow: 0 4px 25px rgba(0, 120, 212, 0.16), 0 0 20px rgba(56, 189, 248, 0.3);
+  }
+}
+
+.animate-azure-glow {
+  animation: azureBorderGlow 3s ease-in-out infinite;
 }
