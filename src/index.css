@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+:root {
+  --color-azure: #0078d4;
+  --color-azure-dark: #005a9e;
+  --color-azure-light: #ebf3fc;
+  --color-ochre: #d97706;
+  --color-terracotta: #c2410c;
+  --color-savannah: #eab308;
+  --color-slate-dark: #1e293b;
+  --color-bg-light: #f8f9fa;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  background-color: #f8f9fa;
+  color: #1e293b;
+  min-height: 100vh;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Kenyan Kitenge Geometric Watermark Pattern (Diamond Step Weave) */
+.pattern-kitenge {
+  background-image: radial-gradient(#d97706 0.75px, transparent 0.75px),
+    radial-gradient(#c2410c 0.75px, #f8f9fa 0.75px);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+
+/* Maasai Beadwork Geometric Chevron Stripe */
+.motif-border-african {
+  position: relative;
+}
+.motif-border-african::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #c2410c 0%, #d97706 33%, #eab308 66%, #0078d4 100%);
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+
+/* Soft elevation card as requested */
+.card-elevation {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+}
+
+.card-elevation-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-elevation-hover:hover {
+  box-shadow: 0 8px 30px rgba(0, 120, 212, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Kitenge Border Motif SVG ribbon */
+.kitenge-ribbon {
+  background: repeating-linear-gradient(
+    45deg,
+    #c2410c,
+    #c2410c 8px,
+    #d97706 8px,
+    #d97706 16px,
+    #eab308 16px,
+    #eab308 24px,
+    #0078d4 24px,
+    #0078d4 32px
+  );
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Subtle entrance animations for Instant Feedback & Breakdown */
+@keyframes feedbackSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-feedback-entrance {
+  animation: feedbackSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes feedbackItemCascade {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-cascade-1 {
+  animation: feedbackItemCascade 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.04s both;
+}
+
+.animate-cascade-2 {
+  animation: feedbackItemCascade 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.10s both;
+}
+
+.animate-cascade-3 {
+  animation: feedbackItemCascade 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.16s both;
+}
+
+.animate-cascade-4 {
+  animation: feedbackItemCascade 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.22s both;
+}
+
+@keyframes goalCelebrationGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(234, 179, 8, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(234, 179, 8, 0.55);
+  }
+}
+
+.animate-goal-glow {
+  animation: goalCelebrationGlow 2.5s ease-in-out infinite;
+}
