@@ -245,7 +245,7 @@ export const KeyConceptSidePanel: React.FC<KeyConceptSidePanelProps> = ({
             <div className="bg-sky-50/50 rounded-xl p-3 border border-sky-100 space-y-1">
               <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#0078D4] flex items-center gap-1">
                 <BookmarkCheck className="w-3 h-3" />
-                <span>Azure Curriculum Definition</span>
+                <span>Official Microsoft Definition</span>
               </span>
               <p className="text-xs text-slate-800 leading-relaxed font-normal">
                 {activeConcept.officialDefinition}

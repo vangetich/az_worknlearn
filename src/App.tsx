@@ -33,8 +33,6 @@ import { HarambeeWisdomDeck } from './components/HarambeeWisdomDeck';
 import { ExportProgressModal } from './components/ExportProgressModal';
 import { FlashcardsView } from './components/FlashcardsView';
 import { GlobalLeaderboard } from './components/GlobalLeaderboard';
-import { AdaptiveQuizView } from './components/AdaptiveQuizView';
-import { ReviewHistoryView } from './components/ReviewHistoryView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { GlassyStudyHubDropdown } from './components/GlassyStudyHubDropdown';
 import { ResetModuleModal } from './components/ResetModuleModal';
@@ -42,7 +40,7 @@ import { AfricanWatermarkPattern, KitengeRibbon, MaasaiMedallion } from './compo
 import { BUILTIN_QUESTIONS } from './data/questionBank';
 import { LEARNING_PATHS } from './data/curriculum';
 import { Question, UserStats, QuestionAttempt } from './types/quiz';
-import { getInitialStats, saveUserAttempt, toggleBookmark, resetModuleConfidence, saveQuizSession } from './utils/storage';
+import { getInitialStats, saveUserAttempt, toggleBookmark, resetModuleConfidence } from './utils/storage';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('quiz');
@@ -242,16 +240,16 @@ export default function App() {
       {/* Offline Status Toast Indicator */}
       <OfflineIndicator />
 
-      {/* Primary Header with African Motif Ribbon & Azure Curriculum Branding (Hidden in Focus Mode) */}
+      {/* Primary Header with African Motif Ribbon & Microsoft Curriculum Only Branding (Hidden in Focus Mode) */}
       {!isFocusMode && (
         <Header
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          selectedPathId={selectedPathId}
-          onSelectPath={(p) => setSelectedPathId(p)}
           stats={stats}
           onOpenExport={() => setShowExportModal(true)}
           onUpdateStats={setStats}
+          isMenuHidden={isMenuHidden}
+          onToggleMenu={() => setIsMenuHidden(!isMenuHidden)}
         />
       )}
 
@@ -306,7 +304,7 @@ export default function App() {
                     <MaasaiMedallion size={16} />
                     <span className="tracking-wide uppercase font-extrabold">AZ-900 Azure Fundamentals</span>
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-slate-600 font-semibold text-[11px] hidden sm:inline">Azure Curriculum</span>
+                    <span className="text-slate-600 font-semibold text-[11px] hidden sm:inline">Microsoft Official Curriculum</span>
                   </div>
                 </div>
 
@@ -326,7 +324,7 @@ export default function App() {
                 {/* Heading: Centred as well and font enlarged, looking nice with a light azure blue vibrant shimmer */}
                 <div className="space-y-2">
                   <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight animate-azure-shimmer text-center">
-                    AZ-900 Azure Fundamentals Practice Studio
+                    Microsoft Azure Fundamentals Practice Studio
                   </h1>
                   <p className="text-xs sm:text-sm md:text-base text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal">
                     Master official scenario-based questions with instant architectural breakdowns ("why it's right" vs. "why others are wrong"), exam anchor tips, and distraction-free Focus Mode.
@@ -335,14 +333,6 @@ export default function App() {
 
                 {/* Quick Actions Centered */}
                 <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
-                  <button
-                    onClick={() => setActiveTab('adaptive')}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#0078D4] to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-                  >
-                    <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-                    <span>Adaptive Quiz Mode</span>
-                  </button>
-
                   <button
                     onClick={() => setActiveTab('flashcards')}
                     className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all cursor-pointer"
@@ -518,31 +508,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB: ADAPTIVE QUIZ MODE (DYNAMIC DIFFICULTY BALANCER) */}
-        {activeTab === 'adaptive' && (
-          <AdaptiveQuizView
-            questions={questions}
-            stats={stats}
-            onUpdateStats={setStats}
-            onNavigateToHistory={() => setActiveTab('history')}
-            onNavigateToPractice={() => setActiveTab('quiz')}
-          />
-        )}
-
-        {/* TAB: REVIEW HISTORY & LEARNING TRAJECTORY */}
-        {activeTab === 'history' && (
-          <ReviewHistoryView
-            onStartAdaptiveQuiz={() => setActiveTab('adaptive')}
-            onRetryQuestion={(qId) => {
-              const targetIndex = filteredQuestions.findIndex((q) => q.id === qId);
-              if (targetIndex !== -1) {
-                setCurrentQuestionIndex(targetIndex);
-              }
-              setActiveTab('quiz');
-            }}
-          />
-        )}
-
         {/* TAB: FLASHCARDS (FRONT/BACK SYSTEM FOCUSED ON MISSED CONCEPTS) */}
         {activeTab === 'flashcards' && (
           <FlashcardsView
@@ -667,24 +632,7 @@ export default function App() {
         <MockExamModal
           questions={questions.slice(0, 35)}
           onFinish={(correct, total) => {
-            const scorePercent = Math.round((correct / total) * 100);
-            saveQuizSession({
-              id: `session-mock-${Date.now()}`,
-              timestamp: Date.now(),
-              dateStr: new Date().toLocaleDateString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
-              title: `Timed Mock Exam (${total} Questions)`,
-              mode: 'mock',
-              totalQuestions: total,
-              correctCount: correct,
-              scorePercent,
-              passed: scorePercent >= 70,
-              missedQuestions: [],
-            });
+            console.log(`Exam finished: ${correct}/${total}`);
           }}
           onClose={() => setShowMockExam(false)}
         />

@@ -103,32 +103,3 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-export interface QuizSessionMissedQuestion {
-  questionId: string;
-  scenario: string;
-  question: string;
-  selectedAnswer: string;
-  selectedAnswerText: string;
-  correctAnswer: string;
-  correctAnswerText: string;
-  whyCorrect: string;
-  examTip: string;
-  moduleId: number;
-  moduleTitle: string;
-  learningPathTitle: string;
-}
-
-export interface QuizSessionRecord {
-  id: string;
-  timestamp: number;
-  dateStr: string;
-  title: string;
-  mode: 'adaptive' | 'mock' | 'practice' | 'micro-drill';
-  totalQuestions: number;
-  correctCount: number;
-  scorePercent: number;
-  passed: boolean;
-  durationSeconds?: number;
-  missedQuestions: QuizSessionMissedQuestion[];
-}
-

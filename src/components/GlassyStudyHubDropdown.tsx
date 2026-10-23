@@ -13,8 +13,6 @@ import {
   ArrowRight,
   Target,
   Trophy,
-  History,
-  Zap,
 } from 'lucide-react';
 import { UserStats } from '../types/quiz';
 import { BADGE_DEFINITIONS } from './BadgeSystem';
@@ -217,60 +215,6 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">
                 Adaptive mastery model across all 3 paths &amp; 12 official modules
-              </p>
-            </div>
-          </button>
-
-          {/* ITEM: Adaptive Quiz Mode */}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('adaptive');
-              setIsOpen(false);
-            }}
-            className="w-full text-left p-2.5 rounded-xl hover:bg-blue-50/70 border border-transparent hover:border-blue-200/80 transition-all flex items-start gap-3 group/item cursor-pointer"
-          >
-            <div className="p-2 rounded-xl bg-gradient-to-br from-blue-700 to-indigo-700 text-white shadow-2xs shrink-0 mt-0.5 group-hover/item:scale-105 transition-transform">
-              <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-            </div>
-            <div className="grow">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-slate-900 group-hover/item:text-blue-900">
-                  Adaptive Quiz Mode
-                </h4>
-                <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
-                  Dynamic Difficulty
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Automatically prioritizes questions from your weakest domains
-              </p>
-            </div>
-          </button>
-
-          {/* ITEM: Quiz Review History */}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('history');
-              setIsOpen(false);
-            }}
-            className="w-full text-left p-2.5 rounded-xl hover:bg-slate-100 border border-transparent hover:border-slate-300 transition-all flex items-start gap-3 group/item cursor-pointer"
-          >
-            <div className="p-2 rounded-xl bg-slate-800 text-white shadow-2xs shrink-0 mt-0.5 group-hover/item:scale-105 transition-transform">
-              <History className="w-4 h-4 text-sky-300" />
-            </div>
-            <div className="grow">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-slate-900 group-hover/item:text-slate-900">
-                  Review Past Sessions
-                </h4>
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800">
-                  Trajectory
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Track past scores and review missed scenario questions
               </p>
             </div>
           </button>

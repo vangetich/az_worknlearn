@@ -235,7 +235,7 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#0078D4] text-white uppercase tracking-wider">
-                Azure Curriculum
+                Microsoft Curriculum Only
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-400/20 text-amber-300 border border-amber-300/30">
                 Global Harambee Circle

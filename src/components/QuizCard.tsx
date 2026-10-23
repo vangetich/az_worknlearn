@@ -317,7 +317,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                       : `Not Quite. The correct answer is ${question.correctAnswer}`}
                   </h4>
                   <p className="text-xs text-slate-600 mt-0.5">
-                    Review the Azure Curriculum architecture breakdown below:
+                    Review the official Microsoft architecture breakdown below:
                   </p>
                 </div>
               </div>

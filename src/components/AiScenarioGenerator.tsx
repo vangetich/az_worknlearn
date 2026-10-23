@@ -87,7 +87,7 @@ export const AiScenarioGenerator: React.FC<AiScenarioGeneratorProps> = ({
         correctAnswer: q.correctAnswer,
         whyCorrect: q.whyCorrect,
         distractorBreakdown: q.distractorBreakdown || [],
-        examTip: q.examTip || 'Focus on Azure Curriculum architectural definitions.',
+        examTip: q.examTip || 'Focus on Microsoft Learn official architectural definitions.',
         isAiGenerated: true,
       };
 

@@ -15,7 +15,7 @@ export const OfflineIndicator: React.FC = () => {
       <div>
         <div className="text-amber-300 font-bold">Offline Study Mode Active</div>
         <div className="text-[11px] text-slate-300">
-          Azure Curriculum, flashcards, and quizzes cached locally.
+          Microsoft curriculum, flashcards, and quizzes cached locally.
         </div>
       </div>
     </div>
