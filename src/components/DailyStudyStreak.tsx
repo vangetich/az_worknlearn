@@ -400,42 +400,56 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
             )}
           </div>
 
-          {/* Daily Learning Goal Progress Counts */}
-          <div className="flex flex-col text-left">
-            <div className="flex items-center gap-1">
-              <span className="text-[11px] font-extrabold text-slate-500">Goal</span>
-              <span
-                className={`text-xs font-black transition-colors duration-500 ${
-                  isFireStreakActive
-                    ? 'text-orange-950 font-black'
-                    : saveFeedback
-                    ? 'text-[#0078D4]'
-                    : isGoalReached
-                    ? 'text-emerald-700'
-                    : 'text-orange-900'
+          {/* Daily Quiz Streak Counter + Daily Learning Goal Progress Counts */}
+          <div className="flex items-center gap-2 text-left">
+            {/* Consecutive Daily Quiz Streak Badge with Animated Fire Icon */}
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-gradient-to-r from-amber-500/15 via-orange-500/20 to-red-500/15 border border-orange-300/80">
+              <Flame
+                className={`w-3.5 h-3.5 text-orange-600 fill-orange-500 shrink-0 ${
+                  isFireStreakActive ? 'animate-bounce scale-125' : 'animate-pulse'
                 }`}
-              >
-                {todayAnswered}/{dailyGoal}
+              />
+              <span className="text-xs font-black text-orange-950 whitespace-nowrap">
+                {streak}d Streak
               </span>
             </div>
-            <span className="text-[10px] font-bold text-slate-500 leading-none flex items-center gap-0.5">
-              {isFireStreakActive ? (
-                <span className="text-orange-600 font-extrabold animate-pulse">
-                  🔥 +1 Momentum!
+
+            <div className="flex flex-col text-left">
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] font-extrabold text-slate-500">Goal</span>
+                <span
+                  className={`text-xs font-black transition-colors duration-500 ${
+                    isFireStreakActive
+                      ? 'text-orange-950 font-black'
+                      : saveFeedback
+                      ? 'text-[#0078D4]'
+                      : isGoalReached
+                      ? 'text-emerald-700'
+                      : 'text-orange-900'
+                  }`}
+                >
+                  {todayAnswered}/{dailyGoal}
                 </span>
-              ) : saveFeedback ? (
-                <span className="text-[#0078D4] font-extrabold">
-                  ✓ Ring Updated ({goalPercent}%)
-                </span>
-              ) : isGoalReached ? (
-                <>
-                  <Sparkles className="w-2.5 h-2.5 text-amber-500 inline" />
-                  <span className="text-emerald-700 font-extrabold">Done! ✨</span>
-                </>
-              ) : (
-                `${goalPercent}% today`
-              )}
-            </span>
+              </div>
+              <span className="text-[10px] font-bold text-slate-500 leading-none flex items-center gap-0.5">
+                {isFireStreakActive ? (
+                  <span className="text-orange-600 font-extrabold animate-pulse">
+                    🔥 +1 Momentum!
+                  </span>
+                ) : saveFeedback ? (
+                  <span className="text-[#0078D4] font-extrabold">
+                    ✓ Ring Updated ({goalPercent}%)
+                  </span>
+                ) : isGoalReached ? (
+                  <>
+                    <Sparkles className="w-2.5 h-2.5 text-amber-500 inline" />
+                    <span className="text-emerald-700 font-extrabold">Done! ✨</span>
+                  </>
+                ) : (
+                  `${goalPercent}% today`
+                )}
+              </span>
+            </div>
           </div>
 
           <ChevronDown

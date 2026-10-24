@@ -31,10 +31,14 @@ import { LEARNING_PATHS } from '../data/curriculum';
 import { MODULE_FREQUENTLY_MISSED_TERMS } from '../data/frequentlyMissedTerms';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
 import { DailyAccuracyTrajectoryChart } from './DailyAccuracyTrajectoryChart';
+import { DailyLearningGoal } from './DailyLearningGoal';
+import { LearningPathProgressMap } from './LearningPathProgressMap';
+import { triggerAchievementOverlay } from './AchievementOverlay';
 import { AppTab } from './Header';
 
 export interface ProfileViewProps {
   stats: UserStats;
+  onUpdateStats?: (newStats: UserStats) => void;
   onNavigateToPractice: () => void;
   onNavigateToMock: () => void;
   onOpenManageGoal: () => void;
@@ -63,6 +67,7 @@ interface ExplorerServiceItem {
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
   stats,
+  onUpdateStats,
   onNavigateToPractice,
   onNavigateToMock,
   onOpenManageGoal,
@@ -1172,6 +1177,27 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         )}
       </section>
 
+      {/* Daily Learning Goal Component with Circular Progress Ring & Celebration Animation */}
+      <DailyLearningGoal
+        stats={stats}
+        onUpdateStats={onUpdateStats}
+        onStartPractice={onNavigateToPractice}
+      />
+
+      {/* Interactive Step-by-Step Learning Path Progress Map */}
+      <LearningPathProgressMap
+        stats={stats}
+        onSelectModule={(modId, pathId) => {
+          if (onSelectModule) {
+            onSelectModule(modId, pathId);
+          }
+          onNavigateToPractice();
+        }}
+        onToggleModuleComplete={onToggleModuleComplete}
+        questionCountByModule={questionCountByModule}
+        defaultExpanded={false}
+      />
+
       {/* 30-Day Daily Accuracy Percentage Line Chart (Recharts) */}
       <DailyAccuracyTrajectoryChart stats={stats} />
 
@@ -1181,22 +1207,54 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       <div className="bg-white rounded-2xl border border-slate-200 card-elevation overflow-hidden p-4 sm:p-6 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Award className="w-5 h-5 text-amber-500" />
               <h3 className="text-base sm:text-lg font-black text-slate-900">
-                Azure Badges &amp; Milestone Achievements
+                Azure Virtual Badges &amp; Achievement System
               </h3>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-200">
                 {unlockedCount}/{totalBadges} Unlocked
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Earn badges for consistency, streaks, passing accuracy, and domain mastery across all 3 learning paths.
+              Custom-designed virtual badges for milestones like &lsquo;First 100 Questions&rsquo;, &lsquo;Mastered Networking Path&rsquo;, and &lsquo;7-Day Streak&rsquo;. Click any badge to launch the CSS-animated reveal overlay!
             </p>
           </div>
 
-          {/* Filter Pills + Compact Toggle */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Featured Milestone Reveal Showcase Buttons */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => triggerAchievementOverlay('first-100-questions')}
+              className="px-2.5 py-1 rounded-xl bg-sky-50 hover:bg-sky-100 text-[#0078D4] border border-sky-200 text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+              title="Reveal CSS-animated overlay for First 100 Questions"
+            >
+              <Sparkles className="w-3 h-3 text-[#0078D4]" />
+              <span>Reveal: First 100 Questions</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => triggerAchievementOverlay('mastered-networking-path')}
+              className="px-2.5 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+              title="Reveal CSS-animated overlay for Mastered Networking Path"
+            >
+              <Compass className="w-3 h-3 text-amber-600" />
+              <span>Reveal: Mastered Networking</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => triggerAchievementOverlay('safari-marathon')}
+              className="px-2.5 py-1 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200 text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+              title="Reveal CSS-animated overlay for 7-Day Streak"
+            >
+              <Flame className="w-3 h-3 text-orange-600 fill-orange-500" />
+              <span>Reveal: 7-Day Streak</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Pills + Compact Toggle */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center p-0.5 bg-slate-100 rounded-xl text-xs font-bold border border-slate-200">
               <button
                 type="button"
@@ -1254,7 +1312,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               )}
             </button>
           </div>
-        </div>
 
         {/* Category Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
@@ -1288,33 +1345,38 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             return (
               <div
                 key={badge.id}
-                className={`relative rounded-xl border ${
+                onClick={() => triggerAchievementOverlay(badge.id)}
+                className={`group relative rounded-xl border cursor-pointer ${
                   compactBadges ? 'p-3' : 'p-4'
                 } transition-all flex flex-col justify-between ${
                   badge.unlocked
-                    ? `${tierStyle.bg} ${tierStyle.border} shadow-xs ring-1 ${tierStyle.ring}`
-                    : 'bg-slate-50/70 border-slate-200 opacity-80 hover:opacity-100'
+                    ? `${tierStyle.bg} ${tierStyle.border} shadow-xs ring-1 ${tierStyle.ring} hover:scale-[1.01]`
+                    : 'bg-slate-50/70 border-slate-200 opacity-85 hover:opacity-100 hover:border-sky-300'
                 }`}
+                title={`Click to launch CSS-animated achievement reveal for ${badge.title}`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold shadow-2xs shrink-0 ${
+                        className={`relative w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-2xs shrink-0 transition-transform group-hover:scale-110 ${
                           badge.unlocked
-                            ? 'bg-white text-amber-600 border border-amber-200'
-                            : 'bg-slate-200 text-slate-400'
+                            ? 'bg-gradient-to-br from-amber-400 via-[#0078D4] to-indigo-700 text-white border border-white'
+                            : 'bg-slate-200 text-slate-500 border border-slate-300'
                         }`}
                       >
                         {badge.unlocked ? (
-                          <Award className="w-5 h-5 text-amber-500 fill-amber-500/20" />
+                          <Award className="w-5 h-5 text-amber-200 fill-amber-300/30" />
                         ) : (
                           <Lock className="w-4 h-4" />
                         )}
+                        <span className="absolute -bottom-1 -right-1">
+                          <MaasaiMedallion size={12} />
+                        </span>
                       </div>
 
                       <div className="min-w-0">
-                        <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 leading-tight truncate">
+                        <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 leading-tight truncate group-hover:text-[#0078D4] transition-colors">
                           {badge.title}
                         </h4>
                         <span className="text-[10px] font-semibold text-slate-500 block truncate">
@@ -1343,7 +1405,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   )}
                 </div>
 
-                <div className="space-y-1 pt-2 border-t border-slate-200/60">
+                <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
                   <div className="flex items-center justify-between text-[11px] font-bold">
                     <span
                       className={
@@ -1363,7 +1425,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         </span>
                       )}
                     </span>
-                    <span className="text-slate-700">{badge.progress}%</span>
+                    <span className="text-[#0078D4] font-extrabold flex items-center gap-0.5">
+                      <Sparkles className="w-3 h-3" />
+                      <span>Reveal</span>
+                    </span>
                   </div>
 
                   <div className="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">

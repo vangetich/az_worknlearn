@@ -28,6 +28,12 @@ import {
   StickyNote,
   Trash2,
   Filter,
+  Mic,
+  MicOff,
+  ShieldCheck,
+  Lock,
+  Unlock,
+  QrCode,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
@@ -56,6 +62,10 @@ interface QuizCardProps {
   consecutiveStreak?: number;
   isDynamicDifficultyEnabled?: boolean;
   onToggleDynamicDifficulty?: () => void;
+  lockedDifficulty?: 'Fundamental' | 'Intermediate' | 'Advanced' | null;
+  onChangeLockedDifficulty?: (nextLock: 'Fundamental' | 'Intermediate' | 'Advanced' | null) => void;
+  selectedDifficultyFilter?: 'all' | 'Fundamental' | 'Intermediate' | 'Advanced';
+  onSelectDifficultyFilter?: (nextFilter: 'all' | 'Fundamental' | 'Intermediate' | 'Advanced') => void;
   onOpenStudyRoom?: () => void;
   onFinishSession?: () => void;
   onOpenPersonalizedReview?: () => void;
@@ -65,6 +75,8 @@ interface QuizCardProps {
   isRetryingIncorrectInPath?: boolean;
   incorrectCountInCurrentPath?: number;
 }
+
+const EXAM_SIMULATION_DURATION_SECONDS = 45 * 60; // 45:00 standard AZ-900 exam duration
 
 export const QuizCard: React.FC<QuizCardProps> = ({
   question,
@@ -83,6 +95,10 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   consecutiveStreak = 0,
   isDynamicDifficultyEnabled = false,
   onToggleDynamicDifficulty,
+  lockedDifficulty = null,
+  onChangeLockedDifficulty,
+  selectedDifficultyFilter = 'all',
+  onSelectDifficultyFilter,
   onOpenStudyRoom,
   onFinishSession,
   onOpenPersonalizedReview,
@@ -103,7 +119,178 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [retryNoticeMessage, setRetryNoticeMessage] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
+  const [shareCopiedToast, setShareCopiedToast] = useState<boolean>(false);
   const [showQuickStudy, setShowQuickStudy] = useState<boolean>(false);
+
+  // Local fallback state for permanent difficulty lock if parent doesn't control it
+  const [localLockedDifficulty, setLocalLockedDifficulty] = useState<
+    'Fundamental' | 'Intermediate' | 'Advanced' | null
+  >(() => {
+    try {
+      const saved = localStorage.getItem('az900_locked_difficulty');
+      if (saved === 'Fundamental' || saved === 'Intermediate' || saved === 'Advanced') {
+        return saved;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  });
+
+  const activeLockedDifficulty =
+    onChangeLockedDifficulty !== undefined ? lockedDifficulty : localLockedDifficulty;
+
+  const handleSetLockedDifficulty = (
+    level: 'Fundamental' | 'Intermediate' | 'Advanced' | null
+  ) => {
+    if (onChangeLockedDifficulty) {
+      onChangeLockedDifficulty(level);
+    } else {
+      setLocalLockedDifficulty(level);
+      try {
+        if (level) {
+          localStorage.setItem('az900_locked_difficulty', level);
+        } else {
+          localStorage.removeItem('az900_locked_difficulty');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  // Multi-state difficulty badge cycle handler (Fundamental -> Intermediate -> Advanced -> All)
+  const handleCycleDifficultyBadgeFilter = () => {
+    if (!onSelectDifficultyFilter) return;
+    const cycleOrder: Array<'all' | 'Fundamental' | 'Intermediate' | 'Advanced'> = [
+      'all',
+      'Fundamental',
+      'Intermediate',
+      'Advanced',
+    ];
+    const currentIndex = cycleOrder.indexOf(selectedDifficultyFilter);
+    const nextFilter = cycleOrder[(currentIndex + 1) % cycleOrder.length];
+    onSelectDifficultyFilter(nextFilter);
+  };
+
+  // Instant Share Deep-Link Copy Handler
+  const handleShareDeepLinkCopy = async () => {
+    if (typeof window === 'undefined') return;
+    const deepLinkUrl = `${window.location.origin}${window.location.pathname}?q=${encodeURIComponent(
+      question.id
+    )}&path=${question.learningPathId}&mod=${question.moduleId}`;
+
+    try {
+      window.history.replaceState(
+        null,
+        '',
+        `?q=${encodeURIComponent(question.id)}&path=${question.learningPathId}&mod=${question.moduleId}`
+      );
+    } catch {
+      // ignore history errors in restricted iframes
+    }
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(deepLinkUrl);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = deepLinkUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setShareCopiedToast(true);
+      setTimeout(() => setShareCopiedToast(false), 2600);
+    } catch {
+      // Fallback: open share modal if clipboard is blocked
+      setShowShareModal(true);
+    }
+  };
+
+  // Global Toggle: 'study' (Study Mode: immediate feedback, hints, distractor explanations)
+  // vs 'exam' (Exam Simulation Mode: no hints, no immediate feedback, live Time Remaining countdown)
+  const [quizCardMode, setQuizCardMode] = useState<'study' | 'exam'>(() => {
+    try {
+      const saved = localStorage.getItem('az900_quiz_card_mode');
+      return saved === 'exam' ? 'exam' : 'study';
+    } catch {
+      return 'study';
+    }
+  });
+  const [examFeedbackRevealed, setExamFeedbackRevealed] = useState<boolean>(false);
+
+  // Exam Simulation Mode 'Time Remaining' Countdown Timer (45:00 certification pressure timer)
+  const [examTimeRemaining, setExamTimeRemaining] = useState<number>(() => {
+    try {
+      const saved = sessionStorage.getItem('az900_exam_sim_time_remaining');
+      if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return EXAM_SIMULATION_DURATION_SECONDS;
+  });
+
+  // Tick down 'Time Remaining' every second when in Exam Simulation Mode
+  React.useEffect(() => {
+    if (quizCardMode !== 'exam') return;
+    const countdownInterval = setInterval(() => {
+      setExamTimeRemaining((prev) => {
+        const nextVal = Math.max(0, prev - 1);
+        try {
+          sessionStorage.setItem('az900_exam_sim_time_remaining', String(nextVal));
+        } catch {
+          // ignore
+        }
+        return nextVal;
+      });
+    }, 1000);
+    return () => clearInterval(countdownInterval);
+  }, [quizCardMode]);
+
+  const handleResetExamCountdown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExamTimeRemaining(EXAM_SIMULATION_DURATION_SECONDS);
+    try {
+      sessionStorage.setItem(
+        'az900_exam_sim_time_remaining',
+        String(EXAM_SIMULATION_DURATION_SECONDS)
+      );
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleToggleQuizCardMode = (nextMode: 'study' | 'exam') => {
+    setQuizCardMode(nextMode);
+    try {
+      localStorage.setItem('az900_quiz_card_mode', nextMode);
+    } catch (e) {
+      console.error(e);
+    }
+    if (nextMode === 'exam') {
+      setShowKnowledgeCheck(false);
+      setShowQuickStudy(false);
+      if (examTimeRemaining === 0) {
+        setExamTimeRemaining(EXAM_SIMULATION_DURATION_SECONDS);
+      }
+    }
+  };
+
+  // SpeechRecognition API state for hands-free Study Notes dictation
+  const [isRecordingNote, setIsRecordingNote] = useState<boolean>(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const recognitionRef = React.useRef<any>(null);
+
   const [isDeepWorkEnabled, setIsDeepWorkEnabled] = useState<boolean>(() => {
     try {
       return localStorage.getItem('az900_deep_work_enabled') === 'true';
@@ -148,6 +335,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   React.useEffect(() => {
     setSelectedOption(null);
     setHasSubmitted(false);
+    setExamFeedbackRevealed(false);
     setElapsedSeconds(0);
     setShowKnowledgeCheck(false);
     setSelectedConceptId(null);
@@ -156,6 +344,15 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     setHasNote(Boolean(savedNote.trim()));
     setNoteSavedFeedback(false);
     setRetryNoticeMessage(null);
+    setSpeechError(null);
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      setIsRecordingNote(false);
+    }
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
@@ -175,6 +372,80 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     saveQuestionNote(question.id, '');
     setHasNote(false);
     setNoteSavedFeedback(false);
+  };
+
+  // Toggle SpeechRecognition API dictation for Study Notes
+  const handleToggleVoiceNote = () => {
+    setSpeechError(null);
+    if (isRecordingNote && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      setIsRecordingNote(false);
+      return;
+    }
+
+    const SpeechRecognitionAPI =
+      typeof window !== 'undefined'
+        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        : null;
+
+    if (!SpeechRecognitionAPI) {
+      setSpeechError(
+        'Voice dictation (SpeechRecognition API) is not supported in this browser. Try Chrome or Edge.'
+      );
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognitionAPI();
+      recognition.lang = 'en-US';
+      recognition.continuous = true;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsRecordingNote(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        let newTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            newTranscript += event.results[i][0].transcript + ' ';
+          }
+        }
+        if (newTranscript.trim()) {
+          setQuestionNoteText((prev) => {
+            const combined = prev.trim()
+              ? `${prev.trim()} ${newTranscript.trim()}`
+              : newTranscript.trim();
+            saveQuestionNote(question.id, combined);
+            setHasNote(Boolean(combined.trim()));
+            setNoteSavedFeedback(true);
+            return combined;
+          });
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error !== 'aborted') {
+          setSpeechError(`Voice input stopped (${event.error || 'microphone permission required'}).`);
+        }
+        setIsRecordingNote(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecordingNote(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setSpeechError('Could not start microphone transcription.');
+      setIsRecordingNote(false);
+    }
   };
 
   const handleRetryIncorrectClick = () => {
@@ -301,6 +572,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   };
 
   const isAnswered = hasSubmitted && selectedOption !== null;
+  const isExamMode = quizCardMode === 'exam';
+  const showImmediateFeedback = isAnswered && (!isExamMode || examFeedbackRevealed);
   const isSelectedCorrect = selectedOption === question.correctAnswer;
 
   // Path styling tags
@@ -325,17 +598,80 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           <span className="text-xs font-medium text-slate-600 hidden sm:inline">
             {question.moduleTitle}
           </span>
-          <span
-            className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
-              question.difficulty === 'Fundamental'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : question.difficulty === 'Intermediate'
-                ? 'bg-sky-50 text-sky-700 border border-sky-200'
-                : 'bg-purple-50 text-purple-700 border border-purple-200'
-            }`}
-          >
-            {question.difficulty}
-          </span>
+
+          {/* Clickable Multi-State Difficulty Badge & Filter (Fundamental, Intermediate, Advanced) */}
+          <div className="inline-flex items-center rounded-lg border border-slate-200/90 bg-white p-0.5 shadow-2xs">
+            <button
+              type="button"
+              onClick={handleCycleDifficultyBadgeFilter}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                question.difficulty === 'Fundamental'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                  : question.difficulty === 'Intermediate'
+                  ? 'bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100'
+                  : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
+              }`}
+              title={`Current Question Difficulty: ${question.difficulty}. Click to cycle multi-state difficulty filter (${
+                selectedDifficultyFilter === 'all' ? 'All Difficulties' : `Filtered: ${selectedDifficultyFilter}`
+              })`}
+            >
+              <Filter className="w-2.5 h-2.5 opacity-75" />
+              <span>{question.difficulty}</span>
+            </button>
+
+            {onSelectDifficultyFilter && (
+              <div
+                className="inline-flex items-center gap-0.5 pl-1 ml-1 border-l border-slate-200 text-[10px] font-extrabold"
+                role="group"
+                aria-label="Filter active quiz questions by difficulty level"
+              >
+                {(['Fundamental', 'Intermediate', 'Advanced'] as const).map((level) => {
+                  const isFiltered = selectedDifficultyFilter === level;
+                  const shortLabel =
+                    level === 'Fundamental' ? 'Fund' : level === 'Intermediate' ? 'Inter' : 'Adv';
+                  const activeColor =
+                    level === 'Fundamental'
+                      ? 'bg-emerald-600 text-white'
+                      : level === 'Intermediate'
+                      ? 'bg-[#0078D4] text-white'
+                      : 'bg-purple-600 text-white';
+
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() =>
+                        onSelectDifficultyFilter(isFiltered ? 'all' : level)
+                      }
+                      className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                        isFiltered
+                          ? `${activeColor} shadow-2xs`
+                          : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                      }`}
+                      title={
+                        isFiltered
+                          ? `Showing only ${level} questions. Click to show all difficulties.`
+                          : `Filter active quiz questions to ${level} difficulty only`
+                      }
+                    >
+                      {shortLabel}
+                    </button>
+                  );
+                })}
+                {selectedDifficultyFilter !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => onSelectDifficultyFilter('all')}
+                    className="px-1 py-0.5 rounded text-rose-600 hover:bg-rose-50 font-black cursor-pointer"
+                    title="Clear difficulty filter (show all)"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           {question.isAiGenerated && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-gradient-to-r from-amber-100 to-orange-100 text-amber-900 border border-amber-300">
               <Sparkles className="w-3 h-3 text-amber-600" />
@@ -343,33 +679,155 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             </span>
           )}
 
-          {/* Dynamic Difficulty Scaling Indicator */}
-          {isDynamicDifficultyEnabled && dynamicDifficulty && (
+          {/* Dynamic Difficulty Scaling & Permanent Difficulty Lock UI Toggle */}
+          <div className="inline-flex items-center rounded-lg border border-slate-200/90 bg-white p-0.5 shadow-2xs">
             <button
               type="button"
-              onClick={onToggleDynamicDifficulty}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border transition-all cursor-pointer ${
-                dynamicDifficulty === 'Advanced'
-                  ? 'bg-purple-100/90 text-purple-900 border-purple-300 shadow-2xs'
-                  : dynamicDifficulty === 'Intermediate'
-                  ? 'bg-blue-100/90 text-blue-900 border-blue-300 shadow-2xs'
-                  : 'bg-emerald-100/90 text-emerald-900 border-emerald-300 shadow-2xs'
+              onClick={() => {
+                if (activeLockedDifficulty !== null) {
+                  handleSetLockedDifficulty(null);
+                } else if (onToggleDynamicDifficulty) {
+                  onToggleDynamicDifficulty();
+                }
+              }}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                activeLockedDifficulty !== null
+                  ? 'bg-amber-100 text-amber-950 border border-amber-300'
+                  : isDynamicDifficultyEnabled
+                  ? 'bg-sky-50 text-[#0078D4] border border-sky-200'
+                  : 'bg-slate-100 text-slate-500'
               }`}
-              title="Dynamic Difficulty: Automatically adjusts based on your consecutive answers. Click to toggle."
+              title={
+                activeLockedDifficulty !== null
+                  ? `Dynamic Difficulty is permanently locked to ${activeLockedDifficulty} mode. Click to unlock automatic progression.`
+                  : 'Dynamic Difficulty: Automatically adjusts based on your consecutive answers, or click a mode to lock permanently.'
+              }
             >
-              <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
-              <span>Dynamic: {dynamicDifficulty}</span>
+              {activeLockedDifficulty !== null ? (
+                <Lock className="w-3 h-3 text-amber-700" />
+              ) : (
+                <Unlock className="w-3 h-3 text-[#0078D4]" />
+              )}
+              <span>
+                {activeLockedDifficulty !== null
+                  ? `Locked: ${activeLockedDifficulty}`
+                  : `Dynamic: ${dynamicDifficulty || 'Intermediate'}`}
+              </span>
               {consecutiveStreak > 0 && (
                 <span className="text-[10px] font-black bg-amber-200/90 text-amber-950 px-1 rounded-sm">
                   {consecutiveStreak}🔥
                 </span>
               )}
             </button>
-          )}
+
+            {/* Permanent Lock Mode Selector Buttons (Fundamental / Intermediate / Advanced) */}
+            <div
+              className="inline-flex items-center gap-0.5 pl-1 ml-1 border-l border-slate-200 text-[10px] font-extrabold"
+              role="group"
+              aria-label="Permanently lock dynamic difficulty adjustment mode"
+            >
+              {(['Fundamental', 'Intermediate', 'Advanced'] as const).map((mode) => {
+                const isLockedToMode = activeLockedDifficulty === mode;
+                const shortMode =
+                  mode === 'Fundamental' ? 'F' : mode === 'Intermediate' ? 'I' : 'A';
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() =>
+                      handleSetLockedDifficulty(isLockedToMode ? null : mode)
+                    }
+                    className={`px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-all cursor-pointer ${
+                      isLockedToMode
+                        ? 'bg-amber-600 text-white shadow-2xs font-black'
+                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                    title={
+                      isLockedToMode
+                        ? `Unlock ${mode} mode and return to automatic difficulty progression`
+                        : `Permanently lock dynamic difficulty to ${mode} mode (overrides automatic progression)`
+                    }
+                  >
+                    {isLockedToMode && <Lock className="w-2.5 h-2.5" />}
+                    <span>{shortMode}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        {/* Counter, Focus Mode Toggle and Bookmark */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        {/* Counter, Study vs Exam Mode Toggle, Exam Countdown Timer, Share Deep-Link, Focus Mode Toggle and Bookmark */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          {/* Global Toggle: Study Mode vs. Exam Simulation Mode */}
+          <div
+            className="inline-flex items-center p-0.5 rounded-xl bg-slate-200/90 border border-slate-300/80 text-[11px] font-bold shadow-2xs"
+            role="group"
+            aria-label="Switch between Study Mode and Exam Simulation Mode"
+          >
+            <button
+              type="button"
+              onClick={() => handleToggleQuizCardMode('study')}
+              className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
+                !isExamMode
+                  ? 'bg-[#0078D4] text-white font-extrabold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Study Mode: Immediate answer feedback, hints, and distractor explanations enabled"
+            >
+              <BookOpen className="w-3 h-3" />
+              <span>Study Mode</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleQuizCardMode('exam')}
+              className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
+                isExamMode
+                  ? 'bg-slate-900 text-amber-300 font-extrabold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Exam Simulation Mode: No hints, no immediate answer feedback, and active Time Remaining countdown"
+            >
+              <ShieldCheck className="w-3 h-3" />
+              <span>Exam Simulation</span>
+            </button>
+          </div>
+
+          {/* Exam Simulation Mode 'Time Remaining' Countdown Timer */}
+          {isExamMode && (
+            <div
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-extrabold shadow-xs transition-all ${
+                examTimeRemaining <= 180
+                  ? 'bg-rose-950 text-rose-200 border-rose-500 ring-2 ring-rose-500/40 animate-pulse'
+                  : examTimeRemaining <= 600
+                  ? 'bg-amber-950 text-amber-200 border-amber-500 ring-1 ring-amber-400/30'
+                  : 'bg-slate-900 text-amber-300 border-slate-700'
+              }`}
+              title="Certification Exam Simulation Countdown: Official 45-minute AZ-900 exam time pressure"
+            >
+              <Clock
+                className={`w-3.5 h-3.5 ${
+                  examTimeRemaining <= 180 ? 'text-rose-400 animate-spin' : 'text-amber-400'
+                }`}
+              />
+              <span className="uppercase tracking-wider text-[10px] text-slate-300">
+                Time Remaining:
+              </span>
+              <span className="font-mono text-xs font-black tracking-tight text-white">
+                {examTimeRemaining > 0 ? formatTimer(examTimeRemaining) : '0:00 (Time Up)'}
+              </span>
+              <button
+                type="button"
+                onClick={handleResetExamCountdown}
+                className="ml-0.5 p-0.5 rounded hover:bg-white/15 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                title="Reset 45:00 Exam Simulation countdown timer"
+                aria-label="Reset Exam Simulation countdown timer"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
           {/* Focus Mode Toggle */}
           {onToggleFocusMode && (
             <button
@@ -511,33 +969,60 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             </button>
           )}
 
-          {/* Quick Study Toggle: Frequently Missed Key Terms */}
-          <button
-            type="button"
-            onClick={() => setShowQuickStudy(!showQuickStudy)}
-            className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              showQuickStudy
-                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white border-amber-600 shadow-xs ring-2 ring-amber-400/40'
-                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-            }`}
-            title={showQuickStudy ? 'Hide Quick Study overlay' : 'Toggle Quick Study: displays only the most frequently missed key terms for this module'}
-          >
-            <Zap className={`w-3.5 h-3.5 ${showQuickStudy ? 'text-amber-200 fill-amber-200' : 'text-amber-500'}`} />
-            <span className="hidden sm:inline">Quick Study</span>
-            <span className="sm:hidden">Terms</span>
-            {showQuickStudy && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
-          </button>
+          {/* Quick Study Toggle: Frequently Missed Key Terms (Hidden in Exam Simulation Mode) */}
+          {!isExamMode && (
+            <button
+              type="button"
+              onClick={() => setShowQuickStudy(!showQuickStudy)}
+              className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                showQuickStudy
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white border-amber-600 shadow-xs ring-2 ring-amber-400/40'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+              }`}
+              title={showQuickStudy ? 'Hide Quick Study overlay' : 'Toggle Quick Study: displays only the most frequently missed key terms for this module'}
+            >
+              <Zap className={`w-3.5 h-3.5 ${showQuickStudy ? 'text-amber-200 fill-amber-200' : 'text-amber-500'}`} />
+              <span className="hidden sm:inline">Quick Study</span>
+              <span className="sm:hidden">Terms</span>
+              {showQuickStudy && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+            </button>
+          )}
 
-          {/* Share Question Button (Copyable Link & QR Code) */}
-          <button
-            type="button"
-            onClick={() => setShowShareModal(true)}
-            className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            title="Share Question: Generate a copyable link or QR code containing this scenario context to discuss with study peers"
-          >
-            <Share2 className="w-3.5 h-3.5 text-[#0078D4]" />
-            <span className="hidden sm:inline">Share</span>
-          </button>
+          {/* Share Question Icon Button (Generates & Copies Deep-Link URL Directly to Clipboard + QR Option) */}
+          <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white shadow-2xs overflow-hidden">
+            <button
+              type="button"
+              onClick={handleShareDeepLinkCopy}
+              className={`px-2.5 py-1 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                shareCopiedToast
+                  ? 'bg-emerald-600 text-white'
+                  : 'hover:bg-slate-100 text-slate-700'
+              }`}
+              title="Copy Deep-Link URL to clipboard: Opens this specific question and its Learning Path directly"
+              aria-label="Share question deep-link URL to clipboard"
+            >
+              {shareCopiedToast ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-white" />
+                  <span>Link Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-3.5 h-3.5 text-[#0078D4]" />
+                  <span className="hidden sm:inline">Share</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowShareModal(true)}
+              className="px-1.5 py-1 border-l border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-[#0078D4] transition-colors cursor-pointer"
+              title="Open QR Code & Study Peer Share Modal"
+              aria-label="Open QR Code Share Modal"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
           {/* Deep Work Timer Toggle */}
           <button
@@ -669,33 +1154,40 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   </div>
                 </div>
 
-                {/* Knowledge Check Toggle Switch */}
-                <button
-                  type="button"
-                  onClick={() => setShowKnowledgeCheck(!showKnowledgeCheck)}
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shadow-2xs shrink-0 self-start ${
-                    showKnowledgeCheck
-                      ? 'bg-gradient-to-r from-blue-50 to-sky-50 text-[#0078D4] border-sky-300 ring-2 ring-sky-400/20'
-                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                  }`}
-                  title="Toggle concise Key Concept Definition side-panel for core Azure terminology in this scenario"
-                >
-                  <BookOpen className={`w-3.5 h-3.5 ${showKnowledgeCheck ? 'text-[#0078D4]' : 'text-slate-400'}`} />
-                  <span>Knowledge Check</span>
-
-                  {/* Toggle Pill Slider */}
-                  <div
-                    className={`w-7 h-4 rounded-full transition-colors flex items-center p-0.5 ${
-                      showKnowledgeCheck ? 'bg-[#0078D4]' : 'bg-slate-300'
+                {/* Knowledge Check Toggle Switch (Hidden in Exam Simulation Mode) */}
+                {!isExamMode ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowKnowledgeCheck(!showKnowledgeCheck)}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shadow-2xs shrink-0 self-start ${
+                      showKnowledgeCheck
+                        ? 'bg-gradient-to-r from-blue-50 to-sky-50 text-[#0078D4] border-sky-300 ring-2 ring-sky-400/20'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
                     }`}
+                    title="Toggle concise Key Concept Definition side-panel for core Azure terminology in this scenario"
                   >
+                    <BookOpen className={`w-3.5 h-3.5 ${showKnowledgeCheck ? 'text-[#0078D4]' : 'text-slate-400'}`} />
+                    <span>Knowledge Check</span>
+
+                    {/* Toggle Pill Slider */}
                     <div
-                      className={`w-3 h-3 rounded-full bg-white shadow-xs transition-transform duration-200 ${
-                        showKnowledgeCheck ? 'translate-x-3' : 'translate-x-0'
+                      className={`w-7 h-4 rounded-full transition-colors flex items-center p-0.5 ${
+                        showKnowledgeCheck ? 'bg-[#0078D4]' : 'bg-slate-300'
                       }`}
-                    />
-                  </div>
-                </button>
+                    >
+                      <div
+                        className={`w-3 h-3 rounded-full bg-white shadow-xs transition-transform duration-200 ${
+                          showKnowledgeCheck ? 'translate-x-3' : 'translate-x-0'
+                        }`}
+                      />
+                    </div>
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-amber-300 border border-slate-700 shrink-0 self-start">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Exam Mode • Hints Disabled</span>
+                  </span>
+                )}
               </div>
             </div>
 
@@ -719,7 +1211,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60 text-slate-800';
             let badgeStyles = 'bg-slate-100 text-slate-700 border-slate-300';
 
-            if (isAnswered) {
+            if (showImmediateFeedback) {
               if (isCorrectOption) {
                 cardStyles =
                   'border-emerald-500 bg-emerald-50/80 text-emerald-950 ring-2 ring-emerald-500/20';
@@ -748,9 +1240,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 <span
                   className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 border transition-colors ${badgeStyles}`}
                 >
-                  {isAnswered && isCorrectOption ? (
+                  {showImmediateFeedback && isCorrectOption ? (
                     <Check className="w-4 h-4 stroke-[3]" />
-                  ) : isAnswered && isSelected && !isCorrectOption ? (
+                  ) : showImmediateFeedback && isSelected && !isCorrectOption ? (
                     <XCircle className="w-4 h-4" />
                   ) : (
                     option.letter
@@ -760,15 +1252,56 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   {option.text}
                 </span>
 
-                {isAnswered && isCorrectOption && (
+                {showImmediateFeedback && isCorrectOption && (
                   <span className="shrink-0 text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-md self-center">
                     Correct Answer
+                  </span>
+                )}
+                {isAnswered && isExamMode && !examFeedbackRevealed && isSelected && (
+                  <span className="shrink-0 text-xs font-bold text-[#0078D4] bg-blue-100 px-2.5 py-1 rounded-md self-center">
+                    Answer Recorded
                   </span>
                 )}
               </button>
             );
           })}
         </div>
+
+        {/* Exam Simulation Mode Locked Answer Banner (No Immediate Feedback) */}
+        {isAnswered && isExamMode && !examFeedbackRevealed && (
+          <div className="p-4 rounded-xl bg-slate-900 text-white border border-slate-700 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0" />
+              <div className="text-xs">
+                <span className="font-extrabold block text-white">
+                  Exam Simulation Mode: Option {selectedOption} Recorded
+                </span>
+                <span className="text-slate-300">
+                  Immediate feedback and hints are hidden during Exam Simulation Mode. Proceed to the next question or inspect the breakdown below.
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setExamFeedbackRevealed(true)}
+                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-amber-300 border border-amber-400/30 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Reveal Explanation
+              </button>
+              {questionIndex < totalQuestions - 1 && (
+                <button
+                  type="button"
+                  onClick={onNext}
+                  className="px-3.5 py-1.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <span>Next Question</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Active 'Retry Incorrect' Filter Banner or Info Notice */}
         {(isRetryingIncorrectInPath || retryNoticeMessage) && (
@@ -833,7 +1366,36 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               )}
             </label>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Browser SpeechRecognition API Microphone Button for Hands-Free Study Notes */}
+              <button
+                type="button"
+                onClick={handleToggleVoiceNote}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer ${
+                  isRecordingNote
+                    ? 'bg-rose-600 text-white border-rose-700 shadow-xs ring-2 ring-rose-400/40 animate-pulse'
+                    : 'bg-white hover:bg-blue-50 text-[#0078D4] border-blue-200 shadow-2xs'
+                }`}
+                title={
+                  isRecordingNote
+                    ? 'Stop voice transcription'
+                    : 'Record and transcribe your study notes hands-free using browser SpeechRecognition'
+                }
+              >
+                {isRecordingNote ? (
+                  <>
+                    <MicOff className="w-3.5 h-3.5 text-white" />
+                    <span>Stop Dictation</span>
+                    <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-3.5 h-3.5 text-[#0078D4]" />
+                    <span>Voice Note</span>
+                  </>
+                )}
+              </button>
+
               {hasNote && (
                 <button
                   type="button"
@@ -856,26 +1418,78 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             </div>
           </div>
 
-          <textarea
-            id={`study-note-textarea-${question.id}`}
-            value={questionNoteText}
-            onChange={handleInlineNoteChange}
-            rows={2}
-            placeholder={`Attach your personal study notes, memory hooks, or key Azure distinctions for ${question.moduleTitle} (${question.id.toUpperCase()})... Automatically saved to local storage.`}
-            className="w-full rounded-lg border border-amber-200/90 bg-white/95 px-3.5 py-2.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0078D4] focus:border-[#0078D4] transition-all resize-y leading-relaxed"
-          />
+          {speechError && (
+            <div className="px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-semibold flex items-center justify-between gap-2">
+              <span>{speechError}</span>
+              <button
+                type="button"
+                onClick={() => setSpeechError(null)}
+                className="text-rose-600 font-bold hover:underline cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          <div className="relative">
+            <textarea
+              id={`study-note-textarea-${question.id}`}
+              value={questionNoteText}
+              onChange={handleInlineNoteChange}
+              rows={2}
+              placeholder={
+                isRecordingNote
+                  ? 'Listening... Speak your study note clearly to transcribe hands-free...'
+                  : `Attach your personal study notes, memory hooks, or click 'Voice Note' to dictate hands-free for ${question.moduleTitle} (${question.id.toUpperCase()})...`
+              }
+              className={`w-full rounded-lg border px-3.5 py-2.5 pr-10 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all resize-y leading-relaxed ${
+                isRecordingNote
+                  ? 'border-rose-400 bg-rose-50/30 focus:ring-rose-500 focus:border-rose-500'
+                  : 'border-amber-200/90 bg-white/95 focus:ring-[#0078D4] focus:border-[#0078D4]'
+              }`}
+            />
+            <button
+              type="button"
+              onClick={handleToggleVoiceNote}
+              className={`absolute right-2.5 top-2.5 p-1.5 rounded-lg transition-all cursor-pointer ${
+                isRecordingNote
+                  ? 'bg-rose-600 text-white shadow-xs animate-pulse'
+                  : 'text-slate-400 hover:text-[#0078D4] hover:bg-blue-50'
+              }`}
+              title={
+                isRecordingNote
+                  ? 'Stop hands-free voice dictation'
+                  : 'Dictate study note with microphone (SpeechRecognition API)'
+              }
+              aria-label="Toggle microphone voice dictation for study notes"
+            >
+              {isRecordingNote ? (
+                <MicOff className="w-4 h-4" />
+              ) : (
+                <Mic className="w-4 h-4" />
+              )}
+            </button>
+          </div>
 
           <div className="flex items-center justify-between text-[11px] text-slate-500">
             <span>
-              Persisted automatically in browser local storage for Question{' '}
-              <strong className="text-slate-700">{question.id.toUpperCase()}</strong>
+              {isRecordingNote ? (
+                <strong className="text-rose-600 animate-pulse">
+                  ● Recording &amp; transcribing speech into your study note...
+                </strong>
+              ) : (
+                <>
+                  Persisted automatically in browser local storage for Question{' '}
+                  <strong className="text-slate-700">{question.id.toUpperCase()}</strong>
+                </>
+              )}
             </span>
             <span>{questionNoteText.length} chars</span>
           </div>
         </div>
 
-        {/* INSTANT FEEDBACK & BREAKDOWN ENGINE */}
-        {isAnswered && (
+        {/* INSTANT FEEDBACK & BREAKDOWN ENGINE (Shown immediately in Study Mode, or when revealed in Exam Mode) */}
+        {showImmediateFeedback && (
           <div className="mt-8 space-y-5 animate-feedback-entrance">
             {/* Status Header Banner */}
             <div

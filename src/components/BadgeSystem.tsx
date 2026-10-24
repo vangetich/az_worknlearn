@@ -91,6 +91,48 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     tipToUnlock: 'Practice consistently until you reach 50 total questions.',
   },
   {
+    id: 'first-100-questions',
+    title: 'First 100 Questions',
+    subtitle: 'Century Cloud Legend',
+    description: 'Completed 100 AZ-900 scenario questions across all exam domains.',
+    category: 'milestones',
+    tier: 'diamond',
+    iconName: 'Crown',
+    proverbQuote: '“Even the mightiest river begins with raindrops gathered in unity.” — African Proverb',
+    targetValue: 100,
+    unit: 'questions',
+    isUnlocked: (stats) => stats.totalAnswered >= 100,
+    getCurrentValue: (stats) => stats.totalAnswered,
+    tipToUnlock: 'Reach 100 total answered questions across practice and adaptive modes.',
+  },
+  {
+    id: 'mastered-networking-path',
+    title: 'Mastered Networking Path',
+    subtitle: 'VNet, ExpressRoute & Architecture Ace',
+    description: 'Mastered Azure Compute & Networking Services (Module 5 / Path 2) with 70%+ accuracy or marked complete.',
+    category: 'curriculum',
+    tier: 'gold',
+    iconName: 'Compass',
+    proverbQuote: '“Bridges built with wisdom connect the farthest horizons.” — African Proverb',
+    targetValue: 5,
+    unit: 'networking Qs',
+    isUnlocked: (stats) => {
+      const m5 = stats.moduleMastery?.[5] || { correct: 0, total: 0 };
+      const p2 = stats.pathMastery?.[2] || { correct: 0, total: 0 };
+      const m5Done = (stats.completedModules || []).includes(5);
+      const m5Acc = m5.total > 0 ? (m5.correct / m5.total) * 100 : 0;
+      const p2Acc = p2.total > 0 ? (p2.correct / p2.total) * 100 : 0;
+      return m5Done || (m5.total >= 5 && m5Acc >= 70) || (p2.total >= 8 && p2Acc >= 70);
+    },
+    getCurrentValue: (stats) => {
+      const m5 = stats.moduleMastery?.[5] || { correct: 0, total: 0 };
+      const m5Done = (stats.completedModules || []).includes(5);
+      if (m5Done) return 5;
+      return Math.min(5, m5.total);
+    },
+    tipToUnlock: 'Answer 5+ questions in Module 5 (Azure Compute & Networking) with 70%+ accuracy or complete the module.',
+  },
+  {
     id: 'azure-architect',
     title: 'Azure Architect',
     subtitle: 'Passing Grade Mastery',
@@ -178,9 +220,9 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
   },
   {
     id: 'safari-marathon',
-    title: 'Safari Marathon',
-    subtitle: '7-Day Discipline',
-    description: 'Sustained a formidable 7-day daily study streak.',
+    title: '7-Day Streak',
+    subtitle: 'Safari Marathon Discipline',
+    description: 'Sustained a formidable 7-day consecutive daily study streak.',
     category: 'consistency',
     tier: 'gold',
     iconName: 'Flame',

@@ -50,7 +50,13 @@ import { ProfileView } from './components/ProfileView';
 import { AchievementOverlay } from './components/AchievementOverlay';
 import { PostSessionWeakAreaReview } from './components/PostSessionWeakAreaReview';
 import { AzureCloudExplorer } from './components/AzureCloudExplorer';
-import { AfricanWatermarkPattern, KitengeRibbon, MaasaiMedallion } from './components/MotifDecorations';
+import { LearningPathProgressMap } from './components/LearningPathProgressMap';
+import {
+  AfricanWatermarkPattern,
+  KitengeRibbon,
+  MaasaiMedallion,
+  FooterAfricanMotifsBackground,
+} from './components/MotifDecorations';
 import { BUILTIN_QUESTIONS } from './data/questionBank';
 import { LEARNING_PATHS } from './data/curriculum';
 import { Question, UserStats, QuestionAttempt } from './types/quiz';
@@ -96,12 +102,16 @@ export default function App() {
   // Filter selections for Practice Mode
   const [selectedPathId, setSelectedPathId] = useState<number | 'all'>('all');
   const [selectedModuleId, setSelectedModuleId] = useState<number | 'all'>('all');
+  const [selectedDifficultyFilter, setSelectedDifficultyFilter] = useState<
+    'all' | 'Fundamental' | 'Intermediate' | 'Advanced'
+  >('all');
   const [onlyBookmarks, setOnlyBookmarks] = useState<boolean>(false);
   const [onlyAiGenerated, setOnlyAiGenerated] = useState<boolean>(false);
   const [retryIncorrectPathId, setRetryIncorrectPathId] = useState<1 | 2 | 3 | null>(null);
   const [retryIncorrectSnapshotIds, setRetryIncorrectSnapshotIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [pendingJumpQuestionId, setPendingJumpQuestionId] = useState<string | null>(null);
+  const initialDeepLinkHandledRef = React.useRef<boolean>(false);
 
   // Active question index in filtered list
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -139,11 +149,59 @@ export default function App() {
   // Review Session Modal state (Last 10 Missed Questions & Re-Test)
   const [showReviewSession, setShowReviewSession] = useState<boolean>(false);
 
-  // Dynamic Difficulty Adjustment state
+  // Dynamic Difficulty Adjustment & Permanent Difficulty Lock state
   const [isDynamicDifficultyEnabled, setIsDynamicDifficultyEnabled] = useState<boolean>(true);
+  const [lockedDifficulty, setLockedDifficulty] = useState<
+    'Fundamental' | 'Intermediate' | 'Advanced' | null
+  >(() => {
+    try {
+      const saved = localStorage.getItem('az900_locked_difficulty');
+      if (saved === 'Fundamental' || saved === 'Intermediate' || saved === 'Advanced') {
+        return saved;
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return null;
+  });
   const [consecutiveCorrect, setConsecutiveCorrect] = useState<number>(0);
   const [consecutiveIncorrect, setConsecutiveIncorrect] = useState<number>(0);
-  const [dynamicDifficulty, setDynamicDifficulty] = useState<'Fundamental' | 'Intermediate' | 'Advanced'>('Intermediate');
+  const [dynamicDifficulty, setDynamicDifficulty] = useState<
+    'Fundamental' | 'Intermediate' | 'Advanced'
+  >(() => {
+    try {
+      const saved = localStorage.getItem('az900_locked_difficulty');
+      if (saved === 'Fundamental' || saved === 'Intermediate' || saved === 'Advanced') {
+        return saved;
+      }
+    } catch {
+      // ignore
+    }
+    return 'Intermediate';
+  });
+
+  // Handler to permanently lock or unlock dynamic difficulty
+  const handleChangeLockedDifficulty = (
+    nextLock: 'Fundamental' | 'Intermediate' | 'Advanced' | null
+  ) => {
+    setLockedDifficulty(nextLock);
+    try {
+      if (nextLock) {
+        localStorage.setItem('az900_locked_difficulty', nextLock);
+      } else {
+        localStorage.removeItem('az900_locked_difficulty');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    if (nextLock) {
+      setDynamicDifficulty(nextLock);
+      setIsDynamicDifficultyEnabled(true);
+    }
+  };
+
+  // Effective dynamic difficulty respects permanent lock override
+  const effectiveDynamicDifficulty = lockedDifficulty || dynamicDifficulty;
 
   // Visual Fire-Streak celebration trigger in header
   const [fireStreakTrigger, setFireStreakTrigger] = useState<number>(0);
@@ -221,7 +279,7 @@ export default function App() {
     setActiveTab('quiz');
   };
 
-  // Filtered question set with dynamic difficulty prioritization and global search query
+  // Filtered question set with multi-state difficulty filter, dynamic difficulty lock, and global search
   const filteredQuestions = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
     const list = questions.filter((q) => {
@@ -237,6 +295,9 @@ export default function App() {
         return false;
       }
       if (selectedModuleId !== 'all' && q.moduleId !== selectedModuleId) {
+        return false;
+      }
+      if (selectedDifficultyFilter !== 'all' && q.difficulty !== selectedDifficultyFilter) {
         return false;
       }
       if (onlyBookmarks && !stats.bookmarks.includes(q.id)) {
@@ -260,6 +321,15 @@ export default function App() {
       return true;
     });
 
+    // If dynamic difficulty is permanently locked or enabled, prioritize the target difficulty
+    if (lockedDifficulty !== null) {
+      return [...list].sort((a, b) => {
+        if (a.difficulty === lockedDifficulty && b.difficulty !== lockedDifficulty) return -1;
+        if (b.difficulty === lockedDifficulty && a.difficulty !== lockedDifficulty) return 1;
+        return a.moduleId - b.moduleId;
+      });
+    }
+
     // When a specific learning path is selected, present questions sequentially within that path
     if (selectedPathId !== 'all') {
       return [...list].sort((a, b) => a.moduleId - b.moduleId);
@@ -268,8 +338,8 @@ export default function App() {
     // If dynamic difficulty is enabled and browsing all modules, prioritize matching difficulty
     if (isDynamicDifficultyEnabled && selectedModuleId === 'all') {
       return [...list].sort((a, b) => {
-        if (a.difficulty === dynamicDifficulty && b.difficulty !== dynamicDifficulty) return -1;
-        if (b.difficulty === dynamicDifficulty && a.difficulty !== dynamicDifficulty) return 1;
+        if (a.difficulty === effectiveDynamicDifficulty && b.difficulty !== effectiveDynamicDifficulty) return -1;
+        if (b.difficulty === effectiveDynamicDifficulty && a.difficulty !== effectiveDynamicDifficulty) return 1;
         return 0;
       });
     }
@@ -282,18 +352,22 @@ export default function App() {
     missedQuestionsByPath,
     selectedPathId,
     selectedModuleId,
+    selectedDifficultyFilter,
     onlyBookmarks,
     onlyAiGenerated,
     searchQuery,
     stats.bookmarks,
     isDynamicDifficultyEnabled,
-    dynamicDifficulty,
+    effectiveDynamicDifficulty,
+    lockedDifficulty,
   ]);
 
-  // Handle jumping directly to a specific question selected in GlobalSearchBar
+  // Handle jumping directly to a specific question selected in GlobalSearchBar or via Deep-Link
   useEffect(() => {
     if (!pendingJumpQuestionId) return;
-    const idx = filteredQuestions.findIndex((q) => q.id === pendingJumpQuestionId);
+    const idx = filteredQuestions.findIndex(
+      (q) => q.id.toLowerCase() === pendingJumpQuestionId.toLowerCase()
+    );
     if (idx !== -1) {
       setCurrentQuestionIndex(idx);
       setPendingJumpQuestionId(null);
@@ -307,24 +381,39 @@ export default function App() {
     }
   }, [filteredQuestions.length, currentQuestionIndex]);
 
-  // Deep-linking: Load shared question if present in URL query (?q=ID)
+  // Deep-linking: Automatically navigate to shared question (?q=ID&path=X) and open its learning path
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || initialDeepLinkHandledRef.current) return;
     const params = new URLSearchParams(window.location.search);
     const sharedQId = params.get('q');
-    if (sharedQId) {
-      const target = questions.find((q) => q.id === sharedQId);
+    const sharedPathParam = params.get('path');
+
+    if (sharedQId && questions.length > 0) {
+      const target = questions.find((q) => q.id.toLowerCase() === sharedQId.toLowerCase());
       if (target) {
+        initialDeepLinkHandledRef.current = true;
+        setRetryIncorrectPathId(null);
+        setRetryIncorrectSnapshotIds([]);
         setSelectedPathId(target.learningPathId);
         setSelectedModuleId('all');
+        setSelectedDifficultyFilter('all');
+        setOnlyBookmarks(false);
+        setOnlyAiGenerated(false);
+        setSearchQuery('');
+        setShowPostSessionReview(false);
         setActiveTab('quiz');
-        const targetIdx = filteredQuestions.findIndex((q) => q.id === sharedQId);
-        if (targetIdx !== -1) {
-          setCurrentQuestionIndex(targetIdx);
-        }
+        setPendingJumpQuestionId(target.id);
+      }
+    } else if (sharedPathParam) {
+      const parsedPath = Number(sharedPathParam);
+      if (parsedPath === 1 || parsedPath === 2 || parsedPath === 3) {
+        initialDeepLinkHandledRef.current = true;
+        setSelectedPathId(parsedPath);
+        setSelectedModuleId('all');
+        setActiveTab('quiz');
       }
     }
-  }, [questions, filteredQuestions]);
+  }, [questions]);
 
   // Count questions per module
   const questionCountByModule = useMemo(() => {
@@ -335,7 +424,7 @@ export default function App() {
     return counts;
   }, [questions]);
 
-  // Answer handler with dynamic difficulty progression
+  // Answer handler with dynamic difficulty progression (respecting permanent difficulty lock)
   const handleAnswerQuestion = (
     questionId: string,
     selectedAnswer: string,
@@ -359,9 +448,8 @@ export default function App() {
     setSessionAttempts((prev) => [...prev, attempt]);
 
     // Dynamic Difficulty Adjustment:
-    // If user answers consecutively correct (>=2), step up difficulty: Fundamental -> Intermediate -> Advanced
-    // If user struggles (consecutive incorrect >= 1), step down difficulty: Advanced -> Intermediate -> Fundamental
-    if (isDynamicDifficultyEnabled) {
+    // Only auto-adjust if not permanently locked to Fundamental, Intermediate, or Advanced
+    if (isDynamicDifficultyEnabled && lockedDifficulty === null) {
       if (isCorrect) {
         const nextCorrectStreak = consecutiveCorrect + 1;
         setConsecutiveCorrect(nextCorrectStreak);
@@ -384,6 +472,15 @@ export default function App() {
             setDynamicDifficulty('Fundamental');
           }
         }
+      }
+    } else if (lockedDifficulty !== null) {
+      // Maintain streak counters while keeping difficulty permanently locked
+      if (isCorrect) {
+        setConsecutiveCorrect((prev) => prev + 1);
+        setConsecutiveIncorrect(0);
+      } else {
+        setConsecutiveIncorrect((prev) => prev + 1);
+        setConsecutiveCorrect(0);
       }
     }
 
@@ -686,6 +783,24 @@ export default function App() {
               />
             )}
 
+            {/* Step-by-Step Visual Learning Path Progress Map */}
+            {!isFocusMode && (
+              <LearningPathProgressMap
+                stats={stats}
+                selectedPathId={selectedPathId}
+                selectedModuleId={selectedModuleId}
+                onSelectModule={(modId, pathId) => {
+                  setSelectedPathId(pathId);
+                  setSelectedModuleId(modId);
+                  setCurrentQuestionIndex(0);
+                  setShowPostSessionReview(false);
+                }}
+                onToggleModuleComplete={handleToggleModuleComplete}
+                questionCountByModule={questionCountByModule}
+                defaultExpanded={false}
+              />
+            )}
+
             {/* Separate Post-Session Weak-Area Review & Practice Question Generator */}
             {showPostSessionReview ? (
               <PostSessionWeakAreaReview
@@ -901,12 +1016,19 @@ export default function App() {
                     stats={stats}
                     isFocusMode={isFocusMode}
                     onToggleFocusMode={() => setIsFocusMode(!isFocusMode)}
-                    dynamicDifficulty={dynamicDifficulty}
+                    dynamicDifficulty={effectiveDynamicDifficulty}
                     consecutiveStreak={consecutiveCorrect}
                     isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
                     onToggleDynamicDifficulty={() =>
                       setIsDynamicDifficultyEnabled(!isDynamicDifficultyEnabled)
                     }
+                    lockedDifficulty={lockedDifficulty}
+                    onChangeLockedDifficulty={handleChangeLockedDifficulty}
+                    selectedDifficultyFilter={selectedDifficultyFilter}
+                    onSelectDifficultyFilter={(nextFilter) => {
+                      setSelectedDifficultyFilter(nextFilter);
+                      setCurrentQuestionIndex(0);
+                    }}
                     onOpenStudyRoom={() => setShowStudyRoom(true)}
                     onFinishSession={() => setShowPostSessionReview(true)}
                     onOpenPersonalizedReview={() => setShowReviewSession(true)}
@@ -931,6 +1053,8 @@ export default function App() {
                     <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
                       {searchQuery.trim()
                         ? `No questions matched "${searchQuery}". Try another Azure service or clear the search filter.`
+                        : selectedDifficultyFilter !== 'all'
+                        ? `No "${selectedDifficultyFilter}" questions matched the current filter selection.`
                         : retryIncorrectPathId !== null
                         ? `No previously missed questions remain in Learning Path ${retryIncorrectPathId}.`
                         : onlyBookmarks
@@ -943,6 +1067,7 @@ export default function App() {
                       onClick={() => {
                         setSelectedPathId('all');
                         setSelectedModuleId('all');
+                        setSelectedDifficultyFilter('all');
                         setRetryIncorrectPathId(null);
                         setRetryIncorrectSnapshotIds([]);
                         setOnlyBookmarks(false);
@@ -994,12 +1119,19 @@ export default function App() {
         {/* TAB: REVIEW HISTORY & LEARNING TRAJECTORY */}
         {activeTab === 'history' && (
           <ReviewHistoryView
+            stats={stats}
             onStartAdaptiveQuiz={() => setActiveTab('adaptive')}
             onRetryQuestion={(qId) => {
               const targetIndex = filteredQuestions.findIndex((q) => q.id === qId);
               if (targetIndex !== -1) {
                 setCurrentQuestionIndex(targetIndex);
               }
+              setActiveTab('quiz');
+            }}
+            onSelectPathForPractice={(pathId) => {
+              setSelectedPathId(pathId);
+              setSelectedModuleId('all');
+              setCurrentQuestionIndex(0);
               setActiveTab('quiz');
             }}
           />
@@ -1127,6 +1259,7 @@ export default function App() {
         {activeTab === 'profile' && (
           <ProfileView
             stats={stats}
+            onUpdateStats={setStats}
             onNavigateToPractice={() => setActiveTab('quiz')}
             onNavigateToMock={() => setShowMockExam(true)}
             onOpenManageGoal={() => {
@@ -1267,11 +1400,14 @@ export default function App() {
         onViewBadges={() => setActiveTab('profile')}
       />
 
-      {/* Footer with Azure Curriculum & African Heritage Accent (Hidden in Focus Mode) */}
+      {/* Footer with Randomly Placed Light-Azure Animated African Motifs & Heritage Accent (Hidden in Focus Mode) */}
       {!isFocusMode && (
-        <footer className="mt-auto border-t border-slate-200/80 bg-white py-6 relative z-10 text-xs text-slate-500">
-          <KitengeRibbon height={3} className="mb-4" />
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <footer className="mt-auto border-t border-sky-200/80 bg-white py-7 relative overflow-hidden z-10 text-xs text-slate-500">
+          {/* Randomly Placed African Motifs Partially Animated in Light Azure Colors */}
+          <FooterAfricanMotifsBackground />
+
+          <KitengeRibbon height={3} className="mb-4 relative z-10" />
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10">
             <div className="flex items-center gap-2">
               <MaasaiMedallion size={20} />
               <span className="font-bold text-slate-700">

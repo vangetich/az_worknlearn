@@ -17,12 +17,9 @@ import {
   X,
   SlidersHorizontal,
   AlertTriangle,
-  CheckCircle2,
   ArrowRight,
-  ShieldAlert,
 } from 'lucide-react';
 import {
-  KitengeRibbon,
   MaasaiMedallion,
   MoranShieldMotif,
   WarriorSpearBadge,
@@ -69,109 +66,28 @@ interface HeaderProps {
   retryIncorrectPathId?: 1 | 2 | 3 | null;
 }
 
-const PATH_FREQUENTLY_MISSED_INTEL: Record<
+const PATH_COMPACT_INTEL: Record<
   1 | 2 | 3,
   {
     code: string;
-    shortTitle: string;
     examWeight: string;
-    hierarchyRule: string;
-    criticalTraps: {
-      concept: string;
-      distinction: string;
-      moduleId: number;
-    }[];
+    keyTrapSummary: string;
   }
 > = {
   1: {
     code: 'P1 • Cloud Concepts',
-    shortTitle: 'Describe Cloud Concepts',
-    examWeight: '25–30% of Exam',
-    hierarchyRule: 'Customer ALWAYS owns Data, Endpoints, Account & Access across IaaS, PaaS & SaaS.',
-    criticalTraps: [
-      {
-        concept: 'Shared Responsibility (SaaS vs PaaS vs IaaS)',
-        distinction:
-          'Customer is 100% responsible for Data, Devices/Endpoints & Identities in ALL models. IaaS requires customer OS/patch management; PaaS & SaaS delegate OS to Microsoft.',
-        moduleId: 1,
-      },
-      {
-        concept: 'Elasticity vs. Scalability (Horizontal / Vertical)',
-        distinction:
-          'Elasticity automatically adds AND removes resources dynamically as load drops. Vertical scaling = bigger VM SKU (RAM/CPU); Horizontal scaling = adding more VM instances.',
-        moduleId: 2,
-      },
-      {
-        concept: 'CapEx vs. OpEx & Consumption Billing',
-        distinction:
-          'CapEx = upfront physical infrastructure spend (tax depreciation). OpEx = pay-as-you-go with zero upfront cost. Serverless (Functions) bills only when code actively executes.',
-        moduleId: 3,
-      },
-    ],
+    examWeight: '25–30%',
+    keyTrapSummary: 'Customer ALWAYS owns Data, Endpoints & Access (IaaS/PaaS/SaaS); Elasticity = auto-scales out & in.',
   },
   2: {
     code: 'P2 • Architecture & Services',
-    shortTitle: 'Describe Azure Architecture & Services',
-    examWeight: '35–40% of Exam',
-    hierarchyRule: 'Hierarchy: Management Groups → Subscriptions → Resource Groups → Resources.',
-    criticalTraps: [
-      {
-        concept: 'Availability Zones vs. Region Pairs',
-        distinction:
-          'Availability Zones = separate datacenters in the SAME region (isolated power/cooling). Region Pairs = >=300 miles apart for cross-region disaster recovery.',
-        moduleId: 4,
-      },
-      {
-        concept: 'ExpressRoute vs. VPN Gateway & VNet Peering',
-        distinction:
-          'ExpressRoute = dedicated private fiber bypassing public Internet. VPN Gateway = encrypted IPsec tunnel over public Internet. VNet Peering uses private Azure backbone.',
-        moduleId: 5,
-      },
-      {
-        concept: 'Storage Redundancy (LRS/ZRS/GRS) & Archive Tier',
-        distinction:
-          'LRS = 1 datacenter; ZRS = 3 zones in 1 region; GRS = paired region replication. Archive Blob Tier is offline and MUST be rehydrated to Hot/Cool before reading.',
-        moduleId: 6,
-      },
-      {
-        concept: 'Entra ID AuthN vs. AuthZ & Conditional Access',
-        distinction:
-          'Authentication (MFA/SSO) verifies "Who are you?". Authorization (Azure RBAC) controls "What can you access?". Conditional Access evaluates signals (IP/device) to enforce MFA.',
-        moduleId: 7,
-      },
-    ],
+    examWeight: '35–40%',
+    keyTrapSummary: 'ExpressRoute = private fiber (not internet); Archive tier requires rehydration; AuthN (MFA) ≠ AuthZ (RBAC).',
   },
   3: {
     code: 'P3 • Management & Governance',
-    shortTitle: 'Describe Azure Management & Governance',
-    examWeight: '30–35% of Exam',
-    hierarchyRule: 'Resource Locks (ReadOnly / CanNotDelete) override even Owner RBAC permissions.',
-    criticalTraps: [
-      {
-        concept: 'Pricing Calculator vs. TCO Calculator',
-        distinction:
-          'Pricing Calculator estimates monthly Azure resource bills. TCO Calculator compares on-premises datacenter operating costs against migrating to Azure.',
-        moduleId: 8,
-      },
-      {
-        concept: 'Azure Policy vs. RBAC vs. Resource Locks',
-        distinction:
-          'Azure Policy enforces resource rules (allowed regions, VM SKUs, required tags). RBAC grants user permissions. Resource Locks prevent accidental modification/deletion by anyone.',
-        moduleId: 9,
-      },
-      {
-        concept: 'Azure Arc vs. ARM Templates / Bicep',
-        distinction:
-          'Azure Arc extends Azure governance & policy to on-premises and multi-cloud servers. ARM Templates (JSON) & Bicep provide declarative Infrastructure as Code (IaC).',
-        moduleId: 10,
-      },
-      {
-        concept: 'Advisor vs. Service Health vs. Azure Monitor',
-        distinction:
-          'Azure Advisor = personalized Cost/Security/Reliability recommendations. Service Health = personalized Microsoft outage alerts. Monitor = Log Analytics (KQL) & metrics.',
-        moduleId: 11,
-      },
-    ],
+    examWeight: '30–35%',
+    keyTrapSummary: 'Resource Locks override Owner RBAC; Policy = resource rules; TCO = migration vs. Pricing = monthly bill.',
   },
 };
 
@@ -181,7 +97,6 @@ export const Header: React.FC<HeaderProps> = ({
   selectedPathId = 'all',
   onSelectPath,
   stats,
-  onOpenExport,
   onUpdateStats,
   fireStreakTrigger = 0,
   onOpenReviewSession,
@@ -326,7 +241,6 @@ export const Header: React.FC<HeaderProps> = ({
           } else {
             missedCountInPath += 1;
           }
-          // If never currently wrong on latest, check if historically missed and unresolved in mistakesHistory
         } else if (
           (stats.mistakesHistory || []).some(
             (m) => m.questionId === q.id && !(stats.reviewedMistakeIds || []).includes(q.id)
@@ -336,7 +250,6 @@ export const Header: React.FC<HeaderProps> = ({
         }
       });
 
-      // Fallback: if 0 unresolved latest wrong, count any question in path with at least one wrong attempt
       if (missedCountInPath === 0) {
         pathQuestions.forEach((q) => {
           const qAttempts = stats.attempts?.[q.id] || [];
@@ -346,7 +259,6 @@ export const Header: React.FC<HeaderProps> = ({
         });
       }
 
-      // Find weakest module in this path
       let lowestModAcc = 101;
       let weakestMod = path.modules[0];
       path.modules.forEach((m) => {
@@ -391,7 +303,6 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 relative z-10">
         {/* =====================================================================
             MOBILE & TABLET COMPACT TOP BAR (< lg screens)
-            Saves vertical screen real estate by tucking nav details into a neat dropdown
            ===================================================================== */}
         <div className="flex lg:hidden items-center justify-between py-2 gap-2">
           {/* Compact Brand Logo & Title */}
@@ -426,9 +337,8 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Right Controls on Mobile & Tablet: Tabs Visibility Toggle + Nav Details Dropdown Trigger */}
+          {/* Right Controls on Mobile & Tablet */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Show/Hide Sliding Tabs Toggle */}
             <button
               type="button"
               onClick={toggleMenuBar}
@@ -444,7 +354,6 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden sm:inline">{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
             </button>
 
-            {/* Mobile & Tablet Nav Details Dropdown Button */}
             <button
               type="button"
               onClick={() => setIsMobileDetailsOpen((prev) => !prev)}
@@ -454,7 +363,7 @@ export const Header: React.FC<HeaderProps> = ({
                   : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200/90'
               }`}
               aria-expanded={isMobileDetailsOpen}
-              aria-label="Toggle navigation tools and search dropdown"
+              aria-label="Toggle Tools and Goal dropdown"
             >
               {isMobileDetailsOpen ? (
                 <X className="w-4 h-4" />
@@ -518,7 +427,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Controls: Global Search, Compact Path Selector, Tools & Goal Dropdown, Goal Ring & Actions */}
           <div className="flex items-center justify-end gap-1.5 xl:gap-2 flex-wrap">
-            {/* Global Search Bar for Azure Services, Key Terms & Question Bank */}
             {onSearchQueryChange && onSelectQuestion && (
               <GlobalSearchBar
                 questions={questions}
@@ -529,7 +437,6 @@ export const Header: React.FC<HeaderProps> = ({
               />
             )}
 
-            {/* Path 1, 2, 3 Compact Pills */}
             {onSelectPath && (
               <div className="flex items-center p-0.5 bg-slate-100 rounded-xl border border-slate-200/80 text-xs font-bold shrink-0">
                 <button
@@ -601,7 +508,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             )}
 
-            {/* Desktop Tools & Goal Dropdown Button (Learning Path Intelligence & Exam Traps) */}
+            {/* Desktop Tools & Goal Dropdown Button */}
             <button
               type="button"
               onClick={() => setIsMobileDetailsOpen((prev) => !prev)}
@@ -611,7 +518,7 @@ export const Header: React.FC<HeaderProps> = ({
                   : 'bg-sky-50/80 hover:bg-sky-100 text-[#0078D4] border-sky-200/90'
               }`}
               aria-expanded={isMobileDetailsOpen}
-              title="Open Tools & Goal menu with specific AZ-900 Learning Path intelligence and Frequently Missed Exam Traps"
+              title="Open compact Tools & Goal menu"
             >
               {isMobileDetailsOpen ? (
                 <X className="w-3.5 h-3.5" />
@@ -626,14 +533,12 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </button>
 
-            {/* Daily Learning Goal Progress Ring with Fire-Streak Animation */}
             <DailyStudyStreak
               stats={stats}
               onUpdateStats={onUpdateStats}
               fireStreakTrigger={fireStreakTrigger}
             />
 
-            {/* Dedicated Manage Goal Button */}
             <button
               type="button"
               onClick={() => setShowGoalAlertsModal(true)}
@@ -644,7 +549,6 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden xl:inline">Goal</span>
             </button>
 
-            {/* Review Session Button */}
             {onOpenReviewSession && (
               <button
                 type="button"
@@ -662,13 +566,9 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Theme Toggle (Light / Midnight Azure) */}
             <ThemeToggle />
-
-            {/* PWA Install Button */}
             <PWAInstallButton />
 
-            {/* Minimalist & Stylish Toggle for Sliding Menu Bar */}
             <button
               type="button"
               onClick={toggleMenuBar}
@@ -692,378 +592,135 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* =====================================================================
-            TOOLS & GOAL DROPDOWN MENU (Responsive across Mobile, Tablet & Desktop)
-            Contains Global Search, Specific Learning Path Intelligence, Frequently Missed
-            AZ-900 Exam Distinctions, Module Triggers & Daily Goal Controls
+            ULTRA-COMPACT TOOLS & GOAL DROPDOWN (Strictly 3 Concise Lines Max)
            ===================================================================== */}
-        {isMobileDetailsOpen && (
-          <div className="mb-2.5 p-3.5 sm:p-4 rounded-2xl bg-white/98 border border-sky-200/90 shadow-xl space-y-3.5 animate-in slide-in-from-top-2 duration-150">
-            {/* Row 1: Global Search Bar (shown on <lg or quick filter access) */}
-            {onSearchQueryChange && onSelectQuestion && (
-              <div className="w-full lg:hidden">
-                <GlobalSearchBar
-                  questions={questions}
-                  searchQuery={searchQuery}
-                  onSearchQueryChange={onSearchQueryChange}
-                  onSelectQuestion={(q) => {
-                    onSelectQuestion(q);
-                    setIsMobileDetailsOpen(false);
-                  }}
-                  onSelectModule={(modId, pId) => {
-                    if (onSelectModule) onSelectModule(modId, pId);
-                    setIsMobileDetailsOpen(false);
-                  }}
-                />
-              </div>
-            )}
+        {isMobileDetailsOpen && (() => {
+          const activeIntel = PATH_COMPACT_INTEL[inspectedPathInMenu];
+          const activeTele = pathTelemetry[inspectedPathInMenu];
 
-            {/* Row 2: Rich Learning Path Intelligence & Frequently Missed Information Space */}
-            <div className="rounded-xl border border-sky-200/80 bg-gradient-to-br from-sky-50/50 via-white to-amber-50/30 p-3 sm:p-3.5 space-y-3">
-              {/* Top Header Bar: Learning Path Filter Selector + Active Path Status */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200/80">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-[#0078D4] text-white shadow-2xs">
-                    <Layers className="w-3.5 h-3.5" />
-                  </span>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-black uppercase tracking-wider text-slate-900">
-                        AZ-900 Learning Path &amp; Frequently Missed Exam Intelligence
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
-                        High-Yield Exam Traps
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Select a Learning Path below to filter practice questions and inspect critical exam distinctions &amp; missed concepts
-                    </p>
+          return (
+            <div className="mb-2 px-3 py-2 rounded-xl bg-white/98 border border-sky-200/90 shadow-lg space-y-1.5 text-xs animate-in slide-in-from-top-1 duration-150">
+              {/* LINE 1: Path Selector + Accuracy & Missed Retry */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-black text-slate-700 uppercase text-[10px] tracking-wider">Path:</span>
+                  <div className="inline-flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200/80 text-[11px] font-bold">
+                    {onSelectPath && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectPath('all');
+                          if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
+                        }}
+                        className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                          selectedPathId === 'all' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-600'
+                        }`}
+                      >
+                        All
+                      </button>
+                    )}
+                    {([1, 2, 3] as const).map((pId) => (
+                      <button
+                        key={pId}
+                        type="button"
+                        onClick={() => {
+                          setInspectedPathInMenu(pId);
+                          if (onSelectPath) onSelectPath(pId);
+                          if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
+                        }}
+                        className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                          inspectedPathInMenu === pId
+                            ? 'bg-[#0078D4] text-white font-black'
+                            : 'text-slate-600 hover:text-[#0078D4]'
+                        }`}
+                      >
+                        P{pId} ({PATH_COMPACT_INTEL[pId].examWeight})
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Learning Path Selector Pills */}
-                {onSelectPath && (
-                  <div className="flex items-center p-0.5 bg-slate-100 rounded-xl border border-slate-200/90 text-xs font-bold">
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  <span className="font-bold text-slate-600">
+                    {activeIntel.code}: {activeTele.attemptedQuestions > 0 ? `${activeTele.accuracy}% Acc` : '0% Acc'} • {activeTele.completedModules}/{activeTele.totalModules} Mods
+                  </span>
+                  {onRetryIncorrectPath && activeTele.missedQuestionCount > 0 && (
                     <button
                       type="button"
                       onClick={() => {
-                        onSelectPath('all');
-                        if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
+                        onRetryIncorrectPath(inspectedPathInMenu);
+                        setIsMobileDetailsOpen(false);
                       }}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                        selectedPathId === 'all'
-                          ? 'bg-white text-slate-900 shadow-2xs font-black'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                      className="px-2 py-0.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-black cursor-pointer"
                     >
-                      All Paths
+                      Retry {activeTele.missedQuestionCount} Missed
                     </button>
-                    {([1, 2, 3] as const).map((pId) => {
-                      const dotColor =
-                        pId === 1 ? 'bg-amber-500' : pId === 2 ? 'bg-[#0078D4]' : 'bg-orange-500';
-                      const isSelected = selectedPathId === pId;
-                      const isInspected = inspectedPathInMenu === pId;
-                      return (
-                        <button
-                          key={pId}
-                          type="button"
-                          onClick={() => {
-                            setInspectedPathInMenu(pId);
-                            onSelectPath(pId);
-                            if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
-                          }}
-                          className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-                            isSelected
-                              ? 'bg-[#0078D4] text-white shadow-2xs font-black'
-                              : isInspected
-                              ? 'bg-sky-100 text-[#0078D4] font-extrabold'
-                              : 'text-slate-600 hover:text-[#0078D4]'
-                          }`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
-                          <span>P{pId}</span>
-                          <span className="text-[10px] opacity-80 hidden sm:inline">
-                            ({LEARNING_PATHS.find((lp) => lp.id === pId)?.examWeight})
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
-              {/* 3-Path Summary Cards Strip (Click any card to inspect its frequently missed details) */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                {LEARNING_PATHS.map((lp) => {
-                  const pId = lp.id;
-                  const tele = pathTelemetry[pId];
-                  const isFocused = inspectedPathInMenu === pId;
-                  const isFilterActive = selectedPathId === pId;
-                  return (
-                    <div
-                      key={pId}
-                      onClick={() => setInspectedPathInMenu(pId)}
-                      className={`p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
-                        isFocused
-                          ? 'bg-white border-[#0078D4] ring-2 ring-[#0078D4]/20 shadow-xs'
-                          : 'bg-white/80 hover:bg-white border-slate-200/90'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between gap-1.5 mb-1">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase bg-slate-100 text-slate-800">
-                            Path {pId} • {lp.examWeight}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            {tele.missedQuestionCount > 0 && (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200">
-                                <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
-                                {tele.missedQuestionCount} missed
-                              </span>
-                            )}
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
-                                tele.accuracy >= 80
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : tele.accuracy >= 50
-                                  ? 'bg-amber-100 text-amber-900'
-                                  : 'bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              {tele.attemptedQuestions > 0 ? `${tele.accuracy}% Acc` : 'Not started'}
-                            </span>
-                          </div>
-                        </div>
-
-                        <h4 className="text-xs font-extrabold text-slate-900 leading-snug">
-                          {lp.title}
-                        </h4>
-                        <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-relaxed">
-                          {lp.summary}
-                        </p>
-                      </div>
-
-                      <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between gap-1.5 text-[10px]">
-                        <span className="font-bold text-slate-600">
-                          Modules: {tele.completedModules}/{tele.totalModules} done • {tele.totalQuestionsInBank} Qs
-                        </span>
-
-                        <div className="flex items-center gap-1">
-                          {onRetryIncorrectPath && tele.missedQuestionCount > 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onRetryIncorrectPath(pId);
-                                setIsMobileDetailsOpen(false);
-                              }}
-                              className={`px-2 py-0.5 rounded font-black transition-colors cursor-pointer ${
-                                retryIncorrectPathId === pId
-                                  ? 'bg-rose-600 text-white'
-                                  : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
-                              }`}
-                              title={`Filter quiz to retry ${tele.missedQuestionCount} missed question(s) in Path ${pId}`}
-                            >
-                              Retry {tele.missedQuestionCount} Missed
-                            </button>
-                          )}
-                          {onSelectPath && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onSelectPath(pId);
-                                setActiveTab('quiz');
-                                setIsMobileDetailsOpen(false);
-                              }}
-                              className={`px-2 py-0.5 rounded font-bold transition-colors cursor-pointer ${
-                                isFilterActive
-                                  ? 'bg-[#0078D4] text-white'
-                                  : 'bg-sky-50 hover:bg-sky-100 text-[#0078D4]'
-                              }`}
-                            >
-                              {isFilterActive ? 'Active' : 'Focus Path'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Detailed Breakdown for Inspected Learning Path: Frequently Missed Exam Traps & Modules */}
-              {(() => {
-                const activeIntel = PATH_FREQUENTLY_MISSED_INTEL[inspectedPathInMenu];
-                const activePathObj = LEARNING_PATHS.find((lp) => lp.id === inspectedPathInMenu)!;
-                const activeTele = pathTelemetry[inspectedPathInMenu];
-
-                return (
-                  <div className="rounded-xl bg-white border border-slate-200/90 p-3 space-y-2.5 shadow-2xs">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-md bg-[#0078D4] text-white text-[10px] font-black uppercase">
-                          {activeIntel.code} ({activeIntel.examWeight})
-                        </span>
-                        <span className="text-xs font-extrabold text-slate-900">
-                          Critical Exam Distinctions &amp; Frequently Missed Concepts
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                        <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 font-bold flex items-center gap-1">
-                          <ShieldAlert className="w-3 h-3 text-amber-600" />
-                          <span>Priority Focus: {activeTele.weakestModuleTitle}</span>
-                        </span>
-                        {onSelectModule && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onSelectModule(activeTele.weakestModuleId, inspectedPathInMenu);
-                              setIsMobileDetailsOpen(false);
-                            }}
-                            className="px-2 py-0.5 rounded-md bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                          >
-                            <span>Drill Module {activeTele.weakestModuleId}</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Core Golden Rule Banner for this Path */}
-                    <div className="px-3 py-1.5 rounded-lg bg-amber-50/90 border border-amber-200/80 flex items-center justify-between gap-2 text-[11px] text-amber-950">
-                      <div className="flex items-center gap-1.5 font-bold">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        <span>Golden Exam Rule:</span>
-                        <span className="font-semibold">{activeIntel.hierarchyRule}</span>
-                      </div>
-                    </div>
-
-                    {/* Frequently Missed Exam Traps Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {activeIntel.criticalTraps.map((trap, idx) => (
-                        <div
-                          key={idx}
-                          className="p-2.5 rounded-lg bg-slate-50/90 hover:bg-sky-50/50 border border-slate-200/80 flex flex-col justify-between gap-1.5 transition-colors"
-                        >
-                          <div>
-                            <div className="flex items-center justify-between gap-1 mb-1">
-                              <span className="text-[11px] font-black text-rose-800 flex items-center gap-1">
-                                <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
-                                <span>{trap.concept}</span>
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-700 leading-relaxed">
-                              {trap.distinction}
-                            </p>
-                          </div>
-
-                          {onSelectModule && (
-                            <div className="pt-1 border-t border-slate-200/60 flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-slate-500">
-                                Module {trap.moduleId}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onSelectModule(trap.moduleId, inspectedPathInMenu);
-                                  setIsMobileDetailsOpen(false);
-                                }}
-                                className="text-[10px] font-extrabold text-[#0078D4] hover:underline flex items-center gap-0.5 cursor-pointer"
-                              >
-                                <span>Practice Questions</span>
-                                <ArrowRight className="w-2.5 h-2.5" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Direct Module Pills for this Path */}
-                    <div className="pt-1 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 mr-1">
-                        Path {inspectedPathInMenu} Modules:
-                      </span>
-                      {activePathObj.modules.map((mod) => {
-                        const isDone = (stats.completedModules || []).includes(mod.id);
-                        return (
-                          <button
-                            key={mod.id}
-                            type="button"
-                            onClick={() => {
-                              if (onSelectModule) {
-                                onSelectModule(mod.id, inspectedPathInMenu);
-                                setIsMobileDetailsOpen(false);
-                              }
-                            }}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all flex items-center gap-1 cursor-pointer ${
-                              isDone
-                                ? 'bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100'
-                                : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-sky-50 hover:text-[#0078D4] hover:border-sky-200'
-                            }`}
-                          >
-                            {isDone && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
-                            <span>
-                              M{mod.id}: {mod.title}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Row 3: Daily Learning Goal Progress Ring + Manage Goal + Review Session + Theme + PWA */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
-              <div className="flex flex-wrap items-center gap-2">
-                <DailyStudyStreak
-                  stats={stats}
-                  onUpdateStats={onUpdateStats}
-                  fireStreakTrigger={fireStreakTrigger}
-                />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGoalAlertsModal(true);
-                    setIsMobileDetailsOpen(false);
-                  }}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200/80 text-xs font-bold transition-all shadow-2xs cursor-pointer"
-                >
-                  <Target className="w-3.5 h-3.5 text-orange-600" />
-                  <span>Manage Goal</span>
-                </button>
-
-                {onOpenReviewSession && (
+              {/* LINE 2: Single-Line Key Exam Trap & Weakest Module Quick-Drill */}
+              <div className="flex flex-wrap items-center justify-between gap-2 py-1 border-y border-slate-100 text-[11px]">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span className="font-extrabold text-slate-800 shrink-0">Key Exam Trap:</span>
+                  <span className="text-slate-600 truncate">{activeIntel.keyTrapSummary}</span>
+                </div>
+                {onSelectModule && (
                   <button
                     type="button"
                     onClick={() => {
-                      onOpenReviewSession();
+                      onSelectModule(activeTele.weakestModuleId, inspectedPathInMenu);
                       setIsMobileDetailsOpen(false);
                     }}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200/80 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                    className="px-2 py-0.5 rounded-md bg-sky-50 hover:bg-sky-100 text-[#0078D4] border border-sky-200 font-extrabold flex items-center gap-1 shrink-0 cursor-pointer"
                   >
-                    <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
-                    <span>Personalized Review Session</span>
-                    {missedCount > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white">
-                        {missedCount}
-                      </span>
-                    )}
+                    <span>Drill Weakest (M{activeTele.weakestModuleId})</span>
+                    <ArrowRight className="w-3 h-3" />
                   </button>
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <ThemeToggle />
-                <PWAInstallButton />
+              {/* LINE 3: Daily Goal & Quick Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-slate-700">
+                    Daily Goal: <span className="text-[#0078D4]">{todayAnsweredCount}/{dailyGoal} Qs</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowGoalAlertsModal(true);
+                      setIsMobileDetailsOpen(false);
+                    }}
+                    className="px-2 py-0.5 rounded-md bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Target className="w-3 h-3 text-orange-600" />
+                    <span>Set Goal</span>
+                  </button>
+                  {onOpenReviewSession && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenReviewSession();
+                        setIsMobileDetailsOpen(false);
+                      }}
+                      className="px-2 py-0.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3 text-rose-600" />
+                      <span>Review ({missedCount})</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 lg:hidden">
+                  <ThemeToggle />
+                  <PWAInstallButton />
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Sliding Menu Bar: 50% Lighter Azure Opacity Shade with Azure Patterns & Warrior Motifs */}
         <div

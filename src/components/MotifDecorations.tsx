@@ -338,4 +338,136 @@ export const WavyAzureFabricMotif: React.FC<{ className?: string }> = ({ classNa
   </div>
 );
 
+/**
+ * Randomly Placed African Motifs & Designs for Footer Area Background
+ * Partially animated in light Azure colors (#BAE6FD, #7DD3FC, #38BDF8, #0EA5E9, #0078D4)
+ */
+export const FooterAfricanMotifsBackground: React.FC<{ className?: string }> = ({
+  className = '',
+}) => {
+  const motifs = [
+    { id: 1, type: 'shield', left: '4%', top: '14%', size: 44, anim: 'animate-pulse', delay: '0s', rotate: -12, opacity: 0.24 },
+    { id: 2, type: 'diamond', left: '13%', top: '58%', size: 36, anim: 'animate-bounce', delay: '0.8s', rotate: 18, opacity: 0.22 },
+    { id: 3, type: 'sunburst', left: '24%', top: '20%', size: 48, anim: 'animate-spin', delay: '0.2s', rotate: 0, opacity: 0.20, duration: '26s' },
+    { id: 4, type: 'chevron', left: '35%', top: '64%', size: 42, anim: 'animate-pulse', delay: '1.4s', rotate: -8, opacity: 0.25 },
+    { id: 5, type: 'medallion', left: '48%', top: '16%', size: 40, anim: 'animate-azure-fabric-shimmer', delay: '0.5s', rotate: 15, opacity: 0.22 },
+    { id: 6, type: 'diamond', left: '59%', top: '62%', size: 34, anim: 'animate-pulse', delay: '1.9s', rotate: -22, opacity: 0.20 },
+    { id: 7, type: 'shield', left: '71%', top: '18%', size: 46, anim: 'animate-warrior-vitality', delay: '0.4s', rotate: 14, opacity: 0.24 },
+    { id: 8, type: 'sunburst', left: '83%', top: '54%', size: 42, anim: 'animate-spin', delay: '1.1s', rotate: 0, opacity: 0.22, duration: '32s' },
+    { id: 9, type: 'chevron', left: '92%', top: '22%', size: 38, anim: 'animate-pulse', delay: '0.7s', rotate: 10, opacity: 0.25 },
+  ];
+
+  return (
+    <div
+      className={`pointer-events-none absolute inset-0 overflow-hidden select-none ${className}`}
+      aria-hidden="true"
+    >
+      {/* Subtle Light Azure Ambient Gradient Wash */}
+      <div className="absolute inset-0 bg-gradient-to-r from-sky-50/60 via-white/40 to-blue-50/60" />
+
+      {/* Scattered African Geometric Motifs in Light Azure Palette */}
+      {motifs.map((m) => (
+        <div
+          key={m.id}
+          className={`absolute ${m.anim}`}
+          style={{
+            left: m.left,
+            top: m.top,
+            opacity: m.opacity,
+            transform: `rotate(${m.rotate}deg)`,
+            animationDelay: m.delay,
+            animationDuration: m.duration || '4.5s',
+          }}
+        >
+          {m.type === 'shield' && (
+            <svg width={m.size} height={m.size} viewBox="0 0 48 48" fill="none">
+              <line x1="6" y1="42" x2="42" y2="6" stroke="#7DD3FC" strokeWidth="1.6" strokeLinecap="round" />
+              <line x1="42" y1="42" x2="6" y2="6" stroke="#7DD3FC" strokeWidth="1.6" strokeLinecap="round" />
+              <path
+                d="M24 5 C15 14, 15 34, 24 43 C33 34, 33 14, 24 5 Z"
+                fill="#E0F2FE"
+                stroke="#38BDF8"
+                strokeWidth="1.6"
+              />
+              <path d="M24 7 L24 41" stroke="#0284C7" strokeWidth="1.2" strokeDasharray="3 2" />
+              <circle cx="24" cy="24" r="4" fill="#38BDF8" />
+            </svg>
+          )}
+
+          {m.type === 'diamond' && (
+            <svg width={m.size} height={m.size} viewBox="0 0 44 44" fill="none">
+              <polygon
+                points="22,2 42,22 22,42 2,22"
+                fill="#E0F2FE"
+                stroke="#38BDF8"
+                strokeWidth="1.5"
+              />
+              <polygon
+                points="22,9 35,22 22,35 9,22"
+                fill="none"
+                stroke="#0EA5E9"
+                strokeWidth="1.2"
+                strokeDasharray="2 2"
+              />
+              <circle cx="22" cy="22" r="3.5" fill="#0284C7" />
+            </svg>
+          )}
+
+          {m.type === 'sunburst' && (
+            <svg width={m.size} height={m.size} viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="19" stroke="#38BDF8" strokeWidth="1.5" strokeDasharray="4 3" />
+              <circle cx="24" cy="24" r="13" stroke="#7DD3FC" strokeWidth="1.5" />
+              <circle cx="24" cy="24" r="6" fill="#BAE6FD" stroke="#0284C7" strokeWidth="1.2" />
+              <path d="M24 1 L26 7 H22 Z" fill="#0EA5E9" />
+              <path d="M24 47 L26 41 H22 Z" fill="#0EA5E9" />
+              <path d="M1 24 L7 22 V26 Z" fill="#0EA5E9" />
+              <path d="M47 24 L41 22 V26 Z" fill="#0EA5E9" />
+            </svg>
+          )}
+
+          {m.type === 'chevron' && (
+            <svg width={m.size} height={m.size} viewBox="0 0 48 32" fill="none">
+              <polyline
+                points="2,10 12,2 24,14 36,2 46,10"
+                stroke="#38BDF8"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <polyline
+                points="2,20 12,12 24,24 36,12 46,20"
+                stroke="#0EA5E9"
+                strokeWidth="1.5"
+                strokeDasharray="3 2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <circle cx="24" cy="26" r="2.5" fill="#7DD3FC" />
+            </svg>
+          )}
+
+          {m.type === 'medallion' && (
+            <svg width={m.size} height={m.size} viewBox="0 0 44 44" fill="none">
+              <rect
+                x="7"
+                y="7"
+                width="30"
+                height="30"
+                rx="6"
+                transform="rotate(45 22 22)"
+                fill="#E0F2FE"
+                stroke="#38BDF8"
+                strokeWidth="1.4"
+              />
+              <circle cx="22" cy="22" r="8" stroke="#0284C7" strokeWidth="1.4" strokeDasharray="2 2" />
+              <circle cx="22" cy="22" r="3" fill="#0EA5E9" />
+            </svg>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+
 
