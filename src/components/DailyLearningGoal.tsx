@@ -71,6 +71,18 @@ export const DailyLearningGoal: React.FC<DailyLearningGoalProps> = ({
   const isGoalCompleted = todayAnswered >= dailyGoal && dailyGoal > 0;
   const remainingQuestions = Math.max(0, dailyGoal - todayAnswered);
 
+  // Achievement Milestone Tracker: Exceeding daily quiz target by MORE than 20% (> 1.2 * dailyGoal)
+  const milestoneThreshold = Math.floor(dailyGoal * 1.2) + 1;
+  const isMilestoneAchieved = todayAnswered >= milestoneThreshold && dailyGoal > 0;
+  const milestoneProgressPct = Math.min(
+    100,
+    Math.round((todayAnswered / Math.max(1, milestoneThreshold)) * 100)
+  );
+  const overTargetPct =
+    dailyGoal > 0 && todayAnswered > dailyGoal
+      ? Math.round(((todayAnswered - dailyGoal) / dailyGoal) * 100)
+      : 0;
+
   // Trigger celebratory animation when goal transitions to completed
   const prevCompletedRef = React.useRef<boolean>(isGoalCompleted);
   useEffect(() => {
@@ -79,6 +91,15 @@ export const DailyLearningGoal: React.FC<DailyLearningGoalProps> = ({
     }
     prevCompletedRef.current = isGoalCompleted;
   }, [isGoalCompleted]);
+
+  // Trigger special Achievement Milestone confetti celebration when user exceeds daily target by >20%
+  const prevMilestoneRef = React.useRef<boolean>(isMilestoneAchieved);
+  useEffect(() => {
+    if (isMilestoneAchieved && !prevMilestoneRef.current) {
+      triggerMilestoneCelebration();
+    }
+    prevMilestoneRef.current = isMilestoneAchieved;
+  }, [isMilestoneAchieved]);
 
   const triggerGoalCelebration = () => {
     setIsCelebrating(true);
@@ -95,6 +116,23 @@ export const DailyLearningGoal: React.FC<DailyLearningGoalProps> = ({
     setTimeout(() => {
       setIsCelebrating(false);
     }, 3800);
+  };
+
+  const triggerMilestoneCelebration = () => {
+    setIsCelebrating(true);
+    try {
+      confetti({
+        particleCount: 95,
+        spread: 100,
+        origin: { y: 0.55 },
+        colors: ['#D97706', '#F59E0B', '#0078D4', '#10B981', '#FDE047'],
+      });
+    } catch {
+      // ignore in restricted environments
+    }
+    setTimeout(() => {
+      setIsCelebrating(false);
+    }, 4200);
   };
 
   const handleSaveGoal = (nextTarget: number) => {
@@ -432,6 +470,75 @@ export const DailyLearningGoal: React.FC<DailyLearningGoalProps> = ({
                   <span>Practice Toward Goal</span>
                 </button>
               )}
+            </div>
+
+            {/* Achievement Milestone Tracker (>20% Over Daily Target Celebration) */}
+            <div
+              className={`p-3.5 rounded-xl border transition-all ${
+                isMilestoneAchieved
+                  ? 'bg-gradient-to-r from-amber-50 via-yellow-50/90 to-emerald-50 border-amber-300 shadow-xs'
+                  : 'bg-slate-50/90 border-slate-200/90'
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`p-1.5 rounded-lg ${
+                      isMilestoneAchieved
+                        ? 'bg-amber-500 text-white shadow-2xs animate-bounce'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    <Trophy className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-black text-slate-900">
+                        Achievement Milestone (+20% Over Target)
+                      </span>
+                      {isMilestoneAchieved ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-500 text-slate-950">
+                          Unlocked! +{overTargetPct}% Above Target 🎉
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-slate-600 border border-slate-200">
+                          Reach {milestoneThreshold} Qs (&gt;20% bonus)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {isMilestoneAchieved
+                        ? `Overachiever Milestone reached (${todayAnswered}/${milestoneThreshold} Qs)! Confetti celebration unlocked.`
+                        : `Exceed your ${dailyGoal} Qs/day goal by >20% (${milestoneThreshold} Qs) to unlock the Overachiever Milestone confetti celebration.`}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const needed = Math.max(1, milestoneThreshold - todayAnswered);
+                    setBonusDemoAnswered((prev) => prev + needed);
+                    triggerMilestoneCelebration();
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-extrabold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                  title="Simulate exceeding daily goal by >20% and trigger milestone confetti celebration"
+                >
+                  <PartyPopper className="w-3 h-3 text-amber-600" />
+                  <span>{isMilestoneAchieved ? 'Replay Milestone' : 'Reach +20% Milestone'}</span>
+                </button>
+              </div>
+
+              <div className="mt-2.5 w-full h-2 rounded-full bg-slate-200/80 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    isMilestoneAchieved
+                      ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-emerald-500'
+                      : 'bg-gradient-to-r from-[#0078D4] to-amber-500'
+                  }`}
+                  style={{ width: `${milestoneProgressPct}%` }}
+                />
+              </div>
             </div>
 
             {saveToast && (

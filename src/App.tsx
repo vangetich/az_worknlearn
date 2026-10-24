@@ -20,6 +20,8 @@ import {
   Zap,
   AlertTriangle,
   RotateCcw,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { Header, AppTab } from './components/Header';
 import { QuizCard } from './components/QuizCard';
@@ -133,6 +135,27 @@ export default function App() {
 
   // Focus Mode state (minimizes UI by hiding nav bar and footer)
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
+
+  // Subtle Audio Feedback Mute state (persisted in localStorage, controlled in footer settings)
+  const [isAudioMuted, setIsAudioMuted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('az900_audio_muted') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleAudioMute = () => {
+    setIsAudioMuted((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('az900_audio_muted', String(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+  };
 
   // Slide menu visibility state
   const [isMenuHidden, setIsMenuHidden] = useState<boolean>(false);
@@ -1041,6 +1064,7 @@ export default function App() {
                     incorrectCountInCurrentPath={
                       missedQuestionsByPath[currentQ.learningPathId]?.length || 0
                     }
+                    isAudioMuted={isAudioMuted}
                   />
                 ) : (
                   <div className="bg-white rounded-xl border border-slate-200 card-elevation p-12 text-center space-y-4">
@@ -1113,6 +1137,7 @@ export default function App() {
             onNavigateToHistory={() => setActiveTab('history')}
             onNavigateToPractice={() => setActiveTab('quiz')}
             onOpenPersonalizedReview={() => setShowReviewSession(true)}
+            onSelectModuleForPractice={handleSelectModuleFromTracker}
           />
         )}
 
@@ -1163,10 +1188,10 @@ export default function App() {
 
               <div>
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                  Microsoft Official Exam Simulation
+                  Official Exam Simulation
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">
-                  AZ-900 Microsoft Azure Fundamentals Mock Exam
+                  AZ-900 Azure Fundamentals Mock Exam
                 </h2>
                 <p className="text-sm text-slate-600 max-w-lg mx-auto mt-2 leading-relaxed">
                   Experience the realistic test interface: 45 minutes, weighted domain coverage, and instant score report scaled out of 1000 points.
@@ -1184,7 +1209,7 @@ export default function App() {
                 </div>
                 <div className="space-y-1">
                   <span className="font-bold text-slate-900 block">Exam Weight Balance:</span>
-                  <span className="text-slate-600">Paths 1, 2, &amp; 3 per Microsoft</span>
+                  <span className="text-slate-600">Paths 1, 2, &amp; 3 Official Weights</span>
                 </div>
               </div>
 
@@ -1221,7 +1246,7 @@ export default function App() {
         {/* TAB: STUDY DECKS & MATRIX */}
         {activeTab === 'study-decks' && (
           <div className="max-w-5xl mx-auto">
-            <StudyDeck />
+            <StudyDeck onPracticeModule={handleSelectModuleFromTracker} />
           </div>
         )}
 
@@ -1416,7 +1441,36 @@ export default function App() {
               <span className="text-slate-400">•</span>
               <span>Official Learning Objectives • Offline PWA Enabled</span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Footer Settings: Audio Feedback Mute Toggle */}
+              <button
+                type="button"
+                onClick={handleToggleAudioMute}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
+                  isAudioMuted
+                    ? 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200'
+                    : 'bg-sky-50 text-[#0078D4] border-sky-200 hover:bg-sky-100'
+                }`}
+                title={
+                  isAudioMuted
+                    ? 'Audio Feedback Muted: Click to enable subtle ping/woosh quiz interaction sounds'
+                    : 'Audio Feedback Active: Soft ping on correct, soft woosh on incorrect. Click to mute.'
+                }
+                aria-label="Toggle quiz interaction audio feedback"
+              >
+                {isAudioMuted ? (
+                  <>
+                    <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Audio: Muted</span>
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="w-3.5 h-3.5 text-[#0078D4]" />
+                    <span>Audio SFX: On</span>
+                  </>
+                )}
+              </button>
+              <span className="text-slate-300">|</span>
               <span className="text-amber-700 font-medium">
                 Kenyan Heritage Edition 🇰🇪
               </span>

@@ -74,9 +74,82 @@ interface QuizCardProps {
   onToggleRetryIncorrectInPath?: (pathId: 1 | 2 | 3) => void;
   isRetryingIncorrectInPath?: boolean;
   incorrectCountInCurrentPath?: number;
+  isAudioMuted?: boolean;
 }
 
 const EXAM_SIMULATION_DURATION_SECONDS = 45 * 60; // 45:00 standard AZ-900 exam duration
+
+// Synthesize subtle Web Audio API sound effects ('ping' on correct, 'woosh' on incorrect)
+function playAnswerFeedbackSound(isCorrect: boolean, isMuted: boolean) {
+  if (isMuted || typeof window === 'undefined') return;
+  try {
+    const AudioCtx =
+      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    if (isCorrect) {
+      // Soft harmonic 'ping' chime (D5 -> A5 gentle bell)
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sine';
+      osc2.type = 'triangle';
+      osc1.frequency.setValueAtTime(587.33, now); // D5
+      osc1.frequency.exponentialRampToValueAtTime(880, now + 0.11); // A5
+      osc2.frequency.setValueAtTime(1174.66, now); // D6 harmonic
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.11, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.36);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.38);
+      osc2.stop(now + 0.38);
+      setTimeout(() => ctx.close().catch(() => {}), 450);
+    } else {
+      // Soft low 'woosh' sweep
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(250, now);
+      osc.frequency.exponentialRampToValueAtTime(115, now + 0.26);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.1, now + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.28);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.3);
+      setTimeout(() => ctx.close().catch(() => {}), 380);
+    }
+  } catch {
+    // Ignore audio context restrictions
+  }
+}
+
+// Generate a concise 1-sentence foundational principle of the Azure service in the current question
+function getFoundationalConceptSentence(question: Question): string {
+  const firstSentenceMatch = question.whyCorrect.match(/^[^.!?]+[.!?]/);
+  const coreSentence = firstSentenceMatch ? firstSentenceMatch[0].trim() : question.whyCorrect.trim();
+  const correctOpt = question.options.find((o) => o.letter === question.correctAnswer);
+  const serviceLabel = correctOpt ? correctOpt.text.replace(/\.$/, '') : `Module ${question.moduleId}`;
+  if (coreSentence.toLowerCase().includes(serviceLabel.toLowerCase().slice(0, 12))) {
+    return coreSentence;
+  }
+  return `${serviceLabel} — ${coreSentence}`;
+}
 
 export const QuizCard: React.FC<QuizCardProps> = ({
   question,
@@ -107,6 +180,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   onToggleRetryIncorrectInPath,
   isRetryingIncorrectInPath = false,
   incorrectCountInCurrentPath = 0,
+  isAudioMuted,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
@@ -286,10 +360,34 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     }
   };
 
-  // SpeechRecognition API state for hands-free Study Notes dictation
+  // SpeechRecognition API state for hands-free Study Notes dictation & Voice Option Answering
   const [isRecordingNote, setIsRecordingNote] = useState<boolean>(false);
+  const [isListeningVoiceAnswer, setIsListeningVoiceAnswer] = useState<boolean>(false);
+  const [voiceAnswerTranscript, setVoiceAnswerTranscript] = useState<string | null>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const recognitionRef = React.useRef<any>(null);
+  const voiceAnswerRecognitionRef = React.useRef<any>(null);
+
+  // Concept Summary toggle state (replaces distractor explanations with a 1-sentence foundational principle)
+  const [showConceptSummaryOnly, setShowConceptSummaryOnly] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('az900_concept_summary_toggle') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleConceptSummary = () => {
+    setShowConceptSummaryOnly((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('az900_concept_summary_toggle', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   const [isDeepWorkEnabled, setIsDeepWorkEnabled] = useState<boolean>(() => {
     try {
@@ -345,6 +443,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     setNoteSavedFeedback(false);
     setRetryNoticeMessage(null);
     setSpeechError(null);
+    setVoiceAnswerTranscript(null);
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -352,6 +451,14 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         // ignore
       }
       setIsRecordingNote(false);
+    }
+    if (voiceAnswerRecognitionRef.current) {
+      try {
+        voiceAnswerRecognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      setIsListeningVoiceAnswer(false);
     }
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -568,7 +675,121 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     }
 
     const isCorrect = letter === question.correctAnswer;
+    const effectiveMuted =
+      isAudioMuted !== undefined
+        ? isAudioMuted
+        : typeof window !== 'undefined' && localStorage.getItem('az900_audio_muted') === 'true';
+    playAnswerFeedbackSound(isCorrect, effectiveMuted);
     onAnswer(question.id, letter, isCorrect);
+  };
+
+  // Parse spoken command (e.g., 'Option one', 'Option two', 'Option A') into option letter A/B/C/D
+  const parseSpokenOptionCommand = (transcript: string): 'A' | 'B' | 'C' | 'D' | null => {
+    const clean = transcript.toLowerCase().trim();
+    if (
+      /\b(option\s*(one|1|a)|choice\s*(one|1|a)|first\s*option|number\s*(one|1)|^one$|^1$|^a$)\b/i.test(
+        clean
+      )
+    ) {
+      return 'A';
+    }
+    if (
+      /\b(option\s*(two|to|too|2|b)|choice\s*(two|2|b)|second\s*option|number\s*(two|2)|^two$|^2$|^b$)\b/i.test(
+        clean
+      )
+    ) {
+      return 'B';
+    }
+    if (
+      /\b(option\s*(three|3|c)|choice\s*(three|3|c)|third\s*option|number\s*(three|3)|^three$|^3$|^c$)\b/i.test(
+        clean
+      )
+    ) {
+      return 'C';
+    }
+    if (
+      /\b(option\s*(four|for|4|d)|choice\s*(four|4|d)|fourth\s*option|number\s*(four|4)|^four$|^4$|^d$)\b/i.test(
+        clean
+      )
+    ) {
+      return 'D';
+    }
+    return null;
+  };
+
+  // Toggle SpeechRecognition API for hands-free multiple-choice answering ("Option one", "Option two", etc.)
+  const handleToggleVoiceAnswer = () => {
+    if (hasSubmitted) return;
+    setSpeechError(null);
+
+    if (isListeningVoiceAnswer && voiceAnswerRecognitionRef.current) {
+      try {
+        voiceAnswerRecognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      setIsListeningVoiceAnswer(false);
+      return;
+    }
+
+    const SpeechRecognitionAPI =
+      typeof window !== 'undefined'
+        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        : null;
+
+    if (!SpeechRecognitionAPI) {
+      setSpeechError(
+        'Voice answering (SpeechRecognition API) is not supported in this browser. Try Chrome or Edge.'
+      );
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognitionAPI();
+      recognition.lang = 'en-US';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsListeningVoiceAnswer(true);
+        setVoiceAnswerTranscript('Listening... Say "Option one", "Option two", "Option three", or "Option four"');
+      };
+
+      recognition.onresult = (event: any) => {
+        let heard = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          heard += event.results[i][0].transcript + ' ';
+        }
+        const trimmed = heard.trim();
+        const matchedLetter = parseSpokenOptionCommand(trimmed);
+        if (matchedLetter) {
+          const optIdx = ['A', 'B', 'C', 'D'].indexOf(matchedLetter) + 1;
+          setVoiceAnswerTranscript(`Heard "${trimmed}" → Selected Option ${optIdx} (${matchedLetter})`);
+          handleSelect(matchedLetter);
+        } else {
+          setVoiceAnswerTranscript(
+            `Heard "${trimmed}" — try saying "Option one", "Option two", "Option three", or "Option four".`
+          );
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error !== 'aborted') {
+          setVoiceAnswerTranscript(`Voice command paused (${event.error || 'check mic permission'}).`);
+        }
+        setIsListeningVoiceAnswer(false);
+      };
+
+      recognition.onend = () => {
+        setIsListeningVoiceAnswer(false);
+      };
+
+      voiceAnswerRecognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setVoiceAnswerTranscript('Could not start voice command listener.');
+      setIsListeningVoiceAnswer(false);
+    }
   };
 
   const isAnswered = hasSubmitted && selectedOption !== null;
@@ -1191,15 +1412,58 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               </div>
             </div>
 
-        {/* Actual Exam Question */}
-        <div>
-          <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
-            {question.question}
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Choose the single best answer that meets all architectural criteria:
-          </p>
+        {/* Actual Exam Question + Hands-Free Voice Option Answering Control */}
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+              {question.question}
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Choose the single best answer that meets all architectural criteria (or use Voice Answer and say &ldquo;Option one&rdquo; – &ldquo;Option four&rdquo;):
+            </p>
+          </div>
+
+          {!hasSubmitted && (
+            <button
+              type="button"
+              onClick={handleToggleVoiceAnswer}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold border shrink-0 self-start transition-all cursor-pointer ${
+                isListeningVoiceAnswer
+                  ? 'bg-rose-600 text-white border-rose-700 shadow-xs ring-2 ring-rose-400/40 animate-pulse'
+                  : 'bg-sky-50 hover:bg-sky-100 text-[#0078D4] border-sky-200 shadow-2xs'
+              }`}
+              title='Speak option index (e.g., "Option one", "Option two", "Option three", "Option four") to answer hands-free'
+            >
+              {isListeningVoiceAnswer ? (
+                <>
+                  <MicOff className="w-3.5 h-3.5 text-white" />
+                  <span>Listening (&ldquo;Option 1–4&rdquo;)...</span>
+                </>
+              ) : (
+                <>
+                  <Mic className="w-3.5 h-3.5 text-[#0078D4]" />
+                  <span>Voice Answer</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
+
+        {voiceAnswerTranscript && (
+          <div className="px-3.5 py-2 rounded-xl bg-sky-50/90 border border-sky-200 text-xs font-semibold text-slate-800 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Mic className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+              <span>{voiceAnswerTranscript}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setVoiceAnswerTranscript(null)}
+              className="text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* 4 Choices (A, B, C, D) */}
         <div className="space-y-3">
@@ -1562,26 +1826,69 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               </p>
             </div>
 
-            {/* Why Other Options Are Incorrect (Distractor Breakdown) */}
+            {/* Why Other Options Are Incorrect (Distractor Breakdown) OR 1-Sentence Concept Summary Toggle */}
             <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 animate-cascade-3">
-              <div className="flex items-center gap-2 text-slate-800 font-bold text-sm mb-3">
-                <XCircle className="w-4 h-4 text-slate-500" />
-                <span>Why Other Options Are Incorrect (Exam Distractors):</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+                  {showConceptSummaryOnly ? (
+                    <>
+                      <BookOpen className="w-4 h-4 text-[#0078D4]" />
+                      <span>Foundational Principle (1-Sentence Concept Summary):</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4 text-slate-500" />
+                      <span>Why Other Options Are Incorrect (Exam Distractors):</span>
+                    </>
+                  )}
+                </div>
+
+                {/* Concept Summary Toggle Button */}
+                <button
+                  type="button"
+                  onClick={handleToggleConceptSummary}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                    showConceptSummaryOnly
+                      ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-2xs'
+                      : 'bg-white hover:bg-blue-50 text-[#0078D4] border-sky-200 shadow-2xs'
+                  }`}
+                  title="Toggle Concept Summary: Replace distractor explanations with a 1-sentence foundational principle of the Azure service in this question"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${showConceptSummaryOnly ? 'text-amber-300' : 'text-[#0078D4]'}`} />
+                  <span>Concept Summary</span>
+                  <div
+                    className={`w-6 h-3.5 rounded-full transition-colors flex items-center p-0.5 ${
+                      showConceptSummaryOnly ? 'bg-amber-400' : 'bg-slate-300'
+                    }`}
+                  >
+                    <div
+                      className={`w-2.5 h-2.5 rounded-full bg-white shadow-xs transition-transform duration-200 ${
+                        showConceptSummaryOnly ? 'translate-x-2.5' : 'translate-x-0'
+                      }`}
+                    />
+                  </div>
+                </button>
               </div>
 
-              <div className="space-y-2.5">
-                {question.distractorBreakdown.map((distractor) => (
-                  <div
-                    key={distractor.letter}
-                    className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700 p-2.5 rounded-lg bg-white border border-slate-200/70"
-                  >
-                    <span className="font-bold text-red-600 shrink-0 px-1.5 py-0.5 bg-red-50 rounded border border-red-200 text-xs">
-                      Option {distractor.letter}
-                    </span>
-                    <p className="leading-relaxed font-normal">{distractor.reason}</p>
-                  </div>
-                ))}
-              </div>
+              {showConceptSummaryOnly ? (
+                <div className="p-4 rounded-xl bg-gradient-to-r from-sky-50 via-white to-amber-50/40 border-l-4 border-[#0078D4] border-t border-r border-b border-sky-200/80 text-xs sm:text-sm text-slate-800 font-semibold leading-relaxed shadow-2xs">
+                  {getFoundationalConceptSentence(question)}
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {question.distractorBreakdown.map((distractor) => (
+                    <div
+                      key={distractor.letter}
+                      className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700 p-2.5 rounded-lg bg-white border border-slate-200/70"
+                    >
+                      <span className="font-bold text-red-600 shrink-0 px-1.5 py-0.5 bg-red-50 rounded border border-red-200 text-xs">
+                        Option {distractor.letter}
+                      </span>
+                      <p className="leading-relaxed font-normal">{distractor.reason}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Exam Tip Card - Savannah Gold / Warm Ochre */}

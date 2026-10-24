@@ -30,6 +30,13 @@ interface AdaptiveQuizViewProps {
   onNavigateToHistory: () => void;
   onNavigateToPractice: () => void;
   onOpenPersonalizedReview?: () => void;
+  onSelectModuleForPractice?: (moduleId: number) => void;
+}
+
+interface SessionAttemptItem {
+  question: Question;
+  selectedAnswer: string;
+  isCorrect: boolean;
 }
 
 export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
@@ -39,6 +46,7 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
   onNavigateToHistory,
   onNavigateToPractice,
   onOpenPersonalizedReview,
+  onSelectModuleForPractice,
 }) => {
   const SESSION_LENGTH = 10;
 
@@ -48,18 +56,21 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState<boolean>(false);
   const [sessionCorrectCount, setSessionCorrectCount] = useState<number>(0);
   const [sessionMissedQuestions, setSessionMissedQuestions] = useState<QuizSessionMissedQuestion[]>([]);
+  const [sessionAttemptLog, setSessionAttemptLog] = useState<SessionAttemptItem[]>([]);
   const [isSessionComplete, setIsSessionComplete] = useState<boolean>(false);
   const [sessionStartTime] = useState<number>(Date.now());
   const [usedQuestionIds, setUsedQuestionIds] = useState<Set<string>>(new Set());
+  const [focusedWeakModuleFilter, setFocusedWeakModuleFilter] = useState<number[] | null>(null);
 
   // Current session questions list generated adaptively
   const [sessionQuestions, setSessionQuestions] = useState<Question[]>([]);
   const [adaptiveReasons, setAdaptiveReasons] = useState<string[]>([]);
 
-  // Function to adaptively pick the next best question
+  // Function to adaptively pick the next best question prioritizing weak modules & missed concepts
   const pickNextAdaptiveQuestion = (
     currentUsed: Set<string>,
-    currentStats: UserStats
+    currentStats: UserStats,
+    overrideModules?: number[] | null
   ): { question: Question; reason: string } | null => {
     // 1. Calculate confidence for each of the 12 modules
     const moduleConfidenceMap: Record<number, number> = {};
@@ -83,14 +94,17 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
       });
     });
 
-    // 2. Adaptive weighting: 65% struggling, 25% intermediate, 10% mastered
+    // 2. Determine target module pool (if focused weak modules override is active, prioritize them)
     const roll = Math.random();
     let targetPool: number[] = [];
     let priorityLabel = '';
 
-    if (roll < 0.65 && strugglingModules.length > 0) {
+    if (overrideModules && overrideModules.length > 0) {
+      targetPool = overrideModules;
+      priorityLabel = 'Targeted Weakness Remediation';
+    } else if (roll < 0.65 && strugglingModules.length > 0) {
       targetPool = strugglingModules;
-      priorityLabel = 'High Focus (Struggling/Unattempted Area)';
+      priorityLabel = 'High Focus (Weak / Struggling Module)';
     } else if (roll < 0.90 && intermediateModules.length > 0) {
       targetPool = intermediateModules;
       priorityLabel = 'Reinforcement Focus (Developing Proficiency)';
@@ -102,8 +116,14 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
       priorityLabel = 'Core Azure Curriculum Objective';
     }
 
-    // Pick random module from targetPool
-    const targetModuleId = targetPool[Math.floor(Math.random() * targetPool.length)];
+    // Sort struggling modules so the lowest confidence modules are weighted even higher
+    const sortedPool = [...targetPool].sort(
+      (a, b) => (moduleConfidenceMap[a] ?? 0) - (moduleConfidenceMap[b] ?? 0)
+    );
+    const targetModuleId =
+      sortedPool.length > 1 && Math.random() < 0.6
+        ? sortedPool[0]
+        : sortedPool[Math.floor(Math.random() * sortedPool.length)];
 
     // Filter available unused questions in this module
     let availableQuestions = questions.filter(
@@ -116,13 +136,37 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
     }
 
     if (availableQuestions.length === 0) {
-      // If all questions used, allow reuse
       availableQuestions = questions;
     }
 
-    const selected = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
+    // Prioritize previously missed questions or unattempted questions in that module
+    const previouslyMissedInPool = availableQuestions.filter((q) => {
+      const qAttempts = currentStats.attempts?.[q.id] || [];
+      if (qAttempts.length === 0) return false;
+      const latest = [...qAttempts].sort((a, b) => b.timestamp - a.timestamp)[0];
+      return !latest.isCorrect;
+    });
+
+    const unattemptedInPool = availableQuestions.filter(
+      (q) => !currentStats.attempts?.[q.id] || currentStats.attempts[q.id].length === 0
+    );
+
+    let selected: Question;
+    let conceptNote = priorityLabel;
+
+    if (previouslyMissedInPool.length > 0) {
+      selected =
+        previouslyMissedInPool[Math.floor(Math.random() * previouslyMissedInPool.length)];
+      conceptNote = 'Previously Missed Concept Priority';
+    } else if (unattemptedInPool.length > 0 && Math.random() < 0.75) {
+      selected = unattemptedInPool[Math.floor(Math.random() * unattemptedInPool.length)];
+      conceptNote = `${priorityLabel} • Unseen Concept`;
+    } else {
+      selected = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
+    }
+
     const currentModConf = moduleConfidenceMap[selected.moduleId] ?? 0;
-    const reasonText = `Targeting M${selected.moduleId}: ${selected.moduleTitle} (Confidence: ${currentModConf}% • ${priorityLabel})`;
+    const reasonText = `Targeting M${selected.moduleId}: ${selected.moduleTitle} (Confidence: ${currentModConf}% • ${conceptNote})`;
 
     return { question: selected, reason: reasonText };
   };
@@ -130,14 +174,14 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
   // Initialize first question on mount
   useEffect(() => {
     if (sessionQuestions.length === 0 && questions.length > 0) {
-      const firstPick = pickNextAdaptiveQuestion(usedQuestionIds, stats);
+      const firstPick = pickNextAdaptiveQuestion(usedQuestionIds, stats, focusedWeakModuleFilter);
       if (firstPick) {
         setSessionQuestions([firstPick.question]);
         setAdaptiveReasons([firstPick.reason]);
         setUsedQuestionIds(new Set([firstPick.question.id]));
       }
     }
-  }, [questions, stats]);
+  }, [questions, stats, focusedWeakModuleFilter]);
 
   const currentQuestion = sessionQuestions[sessionQuestionIndex];
   const currentReason = adaptiveReasons[sessionQuestionIndex] || 'Dynamically calibrated for your current mastery level';
@@ -159,6 +203,10 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
 
     const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
     setIsAnswerSubmitted(true);
+    setSessionAttemptLog((prev) => [
+      ...prev,
+      { question: currentQuestion, selectedAnswer, isCorrect },
+    ]);
 
     if (isCorrect) {
       setSessionCorrectCount((prev) => prev + 1);
@@ -216,7 +264,7 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
     }
 
     // Pick next adaptive question with updated stats
-    const nextPick = pickNextAdaptiveQuestion(usedQuestionIds, stats);
+    const nextPick = pickNextAdaptiveQuestion(usedQuestionIds, stats, focusedWeakModuleFilter);
     if (nextPick) {
       setSessionQuestions((prev) => [...prev, nextPick.question]);
       setAdaptiveReasons((prev) => [...prev, nextPick.reason]);
@@ -266,70 +314,318 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
     }
   };
 
-  const handleRestartSession = () => {
+  const handleRestartSession = (targetWeakModules?: number[] | null) => {
+    setFocusedWeakModuleFilter(targetWeakModules ?? null);
     setSessionQuestionIndex(0);
     setSelectedAnswer(null);
     setIsAnswerSubmitted(false);
     setSessionCorrectCount(0);
     setSessionMissedQuestions([]);
+    setSessionAttemptLog([]);
     setIsSessionComplete(false);
     setSessionQuestions([]);
     setAdaptiveReasons([]);
     setUsedQuestionIds(new Set());
   };
 
-  // If session is complete, display results and review prompt
+  // If session is complete, display results + summary of performance by Learning Path and Module
   if (isSessionComplete) {
     const scorePercent = Math.round((sessionCorrectCount / SESSION_LENGTH) * 100);
     const passed = scorePercent >= 70;
 
+    // Compute session performance by Learning Path (1, 2, 3)
+    const pathSummaries = LEARNING_PATHS.map((path) => {
+      const pathSessionAttempts = sessionAttemptLog.filter(
+        (item) => item.question.learningPathId === path.id
+      );
+      const sessionTotal = pathSessionAttempts.length;
+      const sessionCorrect = pathSessionAttempts.filter((i) => i.isCorrect).length;
+      const sessionPct =
+        sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : null;
+
+      // Overall cumulative mastery across modules in this path
+      let cumulativeCorrect = 0;
+      let cumulativeTotal = 0;
+      path.modules.forEach((m) => {
+        const modStats = stats.moduleMastery[m.id] || { correct: 0, total: 0 };
+        cumulativeCorrect += modStats.correct;
+        cumulativeTotal += modStats.total;
+      });
+      const cumulativePct =
+        cumulativeTotal > 0 ? Math.round((cumulativeCorrect / cumulativeTotal) * 100) : 0;
+
+      return {
+        pathId: path.id,
+        title: path.title,
+        weight: path.examWeight,
+        sessionCorrect,
+        sessionTotal,
+        sessionPct,
+        cumulativePct,
+        cumulativeTotal,
+      };
+    });
+
+    // Compute performance by Module (focusing on modules tested in this session + weak modules overall)
+    const allModulesSummary = LEARNING_PATHS.flatMap((path) =>
+      path.modules.map((mod) => {
+        const modSessionAttempts = sessionAttemptLog.filter(
+          (item) => item.question.moduleId === mod.id
+        );
+        const sessionTotal = modSessionAttempts.length;
+        const sessionCorrect = modSessionAttempts.filter((i) => i.isCorrect).length;
+        const sessionPct =
+          sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : null;
+
+        const overallMastery = stats.moduleMastery[mod.id] || { correct: 0, total: 0 };
+        const overallPct =
+          overallMastery.total > 0
+            ? Math.round((overallMastery.correct / overallMastery.total) * 100)
+            : 0;
+
+        const isWeak =
+          (sessionPct !== null && sessionPct < 70) ||
+          (overallMastery.total > 0 && overallPct < 65) ||
+          overallMastery.total === 0;
+
+        return {
+          moduleId: mod.id,
+          title: mod.title,
+          pathId: path.id,
+          sessionCorrect,
+          sessionTotal,
+          sessionPct,
+          overallPct,
+          overallTotal: overallMastery.total,
+          isWeak,
+        };
+      })
+    );
+
+    const testedModulesInSession = allModulesSummary.filter((m) => m.sessionTotal > 0);
+    const prioritizedWeakModules = allModulesSummary
+      .filter((m) => (m.sessionPct !== null && m.sessionPct < 70) || (m.overallTotal > 0 && m.overallPct < 65))
+      .sort((a, b) => (a.sessionPct ?? a.overallPct) - (b.sessionPct ?? b.overallPct));
+
+    const weakModuleIdsForNextSprint =
+      prioritizedWeakModules.length > 0
+        ? prioritizedWeakModules.map((m) => m.moduleId)
+        : allModulesSummary.filter((m) => m.isWeak).map((m) => m.moduleId);
+
     return (
-      <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-300">
-        <div className="bg-white rounded-2xl border border-slate-200 card-elevation overflow-hidden p-6 sm:p-8 text-center space-y-6">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-[#0078D4] to-blue-600 text-white flex items-center justify-center shadow-md">
-            <Zap className="w-8 h-8 text-amber-300" />
+      <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
+        <div className="bg-white rounded-2xl border border-slate-200 card-elevation overflow-hidden p-6 sm:p-8 space-y-6">
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-[#0078D4] to-blue-600 text-white flex items-center justify-center shadow-md">
+              <Zap className="w-8 h-8 text-amber-300" />
+            </div>
+
+            <div className="space-y-2">
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${
+                  passed
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                    : 'bg-amber-50 text-amber-800 border-amber-300'
+                }`}
+              >
+                {passed ? '🎉 Passed Benchmark (70%+)' : 'Adaptive Remediation Queued'}
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
+                Adaptive Learning Path Session Summary
+              </h2>
+              <p className="text-sm text-slate-600 max-w-xl mx-auto">
+                Your performance across Learning Paths and Modules has been analyzed. Weak modules and missed concepts are automatically prioritized for your next adaptive practice session.
+              </p>
+            </div>
+
+            {/* Score Stats Grid */}
+            <div className="grid grid-cols-3 gap-3 max-w-lg mx-auto">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-[11px] font-bold text-slate-500 uppercase block">Session Score</span>
+                <span className="text-3xl font-black text-[#0078D4] mt-1 block">{scorePercent}%</span>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-[11px] font-bold text-slate-500 uppercase block">Correct</span>
+                <span className="text-3xl font-black text-emerald-600 mt-1 block">
+                  {sessionCorrectCount} / {SESSION_LENGTH}
+                </span>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-[11px] font-bold text-slate-500 uppercase block">Priority Weak Areas</span>
+                <span className="text-3xl font-black text-amber-600 mt-1 block">
+                  {prioritizedWeakModules.length}
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${
-                passed
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                  : 'bg-amber-50 text-amber-800 border-amber-300'
-              }`}
-            >
-              {passed ? '🎉 Passed Benchmark (70%+)' : 'Needs Weakness Review'}
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-              Adaptive Sprint Complete!
-            </h2>
-            <p className="text-sm text-slate-600 max-w-lg mx-auto">
-              Your domain confidence was updated in real time. Session results and missed question breakdowns have been archived in your Review History.
-            </p>
+          {/* 1. Performance Summary by Learning Path (Paths 1–3) */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[#0078D4]" />
+                <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                  Performance by Learning Path (Paths 1–3)
+                </h3>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-500">
+                Session Accuracy &amp; Overall Domain Mastery
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              {pathSummaries.map((p) => {
+                const displayPct = p.sessionPct !== null ? p.sessionPct : p.cumulativePct;
+                const isPathStrong = displayPct >= 70;
+                return (
+                  <div
+                    key={p.pathId}
+                    className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5 flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-blue-50 text-[#0078D4] border border-blue-200">
+                          Path {p.pathId} ({p.weight})
+                        </span>
+                        <span
+                          className={`text-xs font-black ${
+                            p.sessionPct === null
+                              ? 'text-slate-500'
+                              : isPathStrong
+                              ? 'text-emerald-600'
+                              : 'text-amber-600'
+                          }`}
+                        >
+                          {p.sessionPct !== null
+                            ? `${p.sessionPct}% (${p.sessionCorrect}/${p.sessionTotal})`
+                            : 'Not Tested in Sprint'}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-extrabold text-slate-800 mt-2 line-clamp-2">
+                        {p.title}
+                      </h4>
+                    </div>
+
+                    <div className="space-y-1.5 pt-1">
+                      <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            isPathStrong ? 'bg-emerald-500' : 'bg-amber-500'
+                          }`}
+                          style={{ width: `${Math.max(6, displayPct)}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold">
+                        <span>Overall Mastery: {p.cumulativePct}%</span>
+                        <span>{p.cumulativeTotal} total attempts</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Score Stats Grid */}
-          <div className="grid grid-cols-3 gap-3 max-w-lg mx-auto">
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-              <span className="text-[11px] font-bold text-slate-500 uppercase block">Score</span>
-              <span className="text-3xl font-black text-[#0078D4] mt-1 block">{scorePercent}%</span>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-              <span className="text-[11px] font-bold text-slate-500 uppercase block">Correct</span>
-              <span className="text-3xl font-black text-emerald-600 mt-1 block">
-                {sessionCorrectCount} / {SESSION_LENGTH}
+          {/* 2. Performance Summary by Module & Adaptive Next-Session Prioritization */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                  Performance by Module &amp; Adaptive Priority Queue
+                </h3>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                Weak areas prioritized next session
               </span>
             </div>
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-              <span className="text-[11px] font-bold text-slate-500 uppercase block">Missed</span>
-              <span className="text-3xl font-black text-rose-600 mt-1 block">
-                {sessionMissedQuestions.length}
-              </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(testedModulesInSession.length > 0 ? testedModulesInSession : allModulesSummary.slice(0, 6)).map(
+                (mod) => {
+                  const accuracy = mod.sessionPct ?? mod.overallPct;
+                  const needsFocus = accuracy < 70;
+                  return (
+                    <div
+                      key={mod.moduleId}
+                      className={`p-3.5 rounded-xl border flex flex-col justify-between gap-2.5 ${
+                        needsFocus
+                          ? 'bg-amber-50/50 border-amber-300/90'
+                          : 'bg-emerald-50/30 border-emerald-200/80'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700">
+                              Path {mod.pathId} • M{mod.moduleId}
+                            </span>
+                            {needsFocus ? (
+                              <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                                Priority Focus Next
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300">
+                                Strong
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="text-xs font-bold text-slate-900 mt-1.5">
+                            {mod.title}
+                          </h4>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span
+                            className={`text-sm font-black block ${
+                              needsFocus ? 'text-amber-700' : 'text-emerald-700'
+                            }`}
+                          >
+                            {mod.sessionPct !== null ? `${mod.sessionPct}%` : `${mod.overallPct}%`}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block">
+                            {mod.sessionTotal > 0
+                              ? `${mod.sessionCorrect}/${mod.sessionTotal} this session`
+                              : `Overall (${mod.overallTotal} Qs)`}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
+                        <span className="text-slate-600 font-medium">
+                          Overall Module Confidence: <strong>{mod.overallPct}%</strong>
+                        </span>
+                        {onSelectModuleForPractice && (
+                          <button
+                            type="button"
+                            onClick={() => onSelectModuleForPractice(mod.moduleId)}
+                            className="text-[#0078D4] hover:underline font-extrabold flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <span>Drill Module {mod.moduleId}</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+              )}
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 pt-2">
+            {weakModuleIdsForNextSprint.length > 0 && (
+              <button
+                onClick={() => handleRestartSession(weakModuleIdsForNextSprint)}
+                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-gradient-to-r from-[#0078D4] to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <Zap className="w-4 h-4 text-amber-300" />
+                <span>
+                  Start Weak-Area Adaptive Sprint ({weakModuleIdsForNextSprint.length} Priority Module{weakModuleIdsForNextSprint.length === 1 ? '' : 's'})
+                </span>
+              </button>
+            )}
+
             {onOpenPersonalizedReview && sessionMissedQuestions.length > 0 && (
               <button
                 onClick={onOpenPersonalizedReview}
@@ -337,32 +633,32 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>
-                  Start Personalized Review Session ({sessionMissedQuestions.length} Wrong)
+                  Review Missed Questions ({sessionMissedQuestions.length} Wrong)
                 </span>
               </button>
             )}
 
             <button
-              onClick={onNavigateToHistory}
-              className="w-full sm:w-auto px-5 py-3 rounded-xl bg-[#0078D4] hover:bg-blue-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
-            >
-              <Award className="w-4 h-4 text-amber-300" />
-              <span>Review Missed in History Tab</span>
-            </button>
-
-            <button
-              onClick={handleRestartSession}
+              onClick={() => handleRestartSession(null)}
               className="w-full sm:w-auto px-5 py-3 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm border border-slate-300 flex items-center justify-center gap-2 transition-colors cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>Start Another Adaptive Sprint</span>
+              <span>Start Balanced Adaptive Sprint</span>
+            </button>
+
+            <button
+              onClick={onNavigateToHistory}
+              className="w-full sm:w-auto px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Award className="w-4 h-4 text-[#0078D4]" />
+              <span>Full History</span>
             </button>
 
             <button
               onClick={onNavigateToPractice}
-              className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition-colors cursor-pointer"
+              className="w-full sm:w-auto px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition-colors cursor-pointer"
             >
-              Back to Practice Modules
+              Back to Practice
             </button>
           </div>
         </div>

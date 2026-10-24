@@ -177,9 +177,12 @@ export const MockExamModal: React.FC<MockExamProps> = ({
               <Award className="w-5 h-5 text-amber-300" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                  Official Exam Simulation
+                </span>
                 <h2 className="font-bold text-base sm:text-lg">
-                  AZ-900 Microsoft Azure Fundamentals
+                  AZ-900 Azure Fundamentals Mock Exam
                 </h2>
                 <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#0078D4] text-white">
                   {examMode === 'mini' ? 'Mini-Mock (15Q)' : 'Full Mock (35Q)'}
@@ -222,11 +225,16 @@ export const MockExamModal: React.FC<MockExamProps> = ({
               <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#0078D4] flex items-center justify-center mx-auto shadow-2xs">
                 <Award className="w-7 h-7 text-amber-500" />
               </div>
-              <h3 className="text-2xl font-black text-slate-900">
-                Official Exam Simulation Setup
-              </h3>
+              <div>
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-block mb-2">
+                  Official Exam Simulation
+                </span>
+                <h3 className="text-2xl font-black text-slate-900">
+                  AZ-900 Azure Fundamentals Mock Exam
+                </h3>
+              </div>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Choose your exam length. Questions are randomly drawn in Microsoft-proportional ratios from all three learning paths:
+                Choose your exam length. Questions are randomly drawn in proportional exam weight ratios from all three learning paths:
               </p>
             </div>
 

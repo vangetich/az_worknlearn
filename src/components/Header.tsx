@@ -749,6 +749,19 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Practice</span>
             </button>
 
+            <button
+              onClick={() => setActiveTab('study-decks')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                activeTab === 'study-decks'
+                  ? 'bg-gradient-to-r from-[#0078D4] to-[#005A9E] text-white shadow-md ring-1 ring-amber-300 font-black scale-102'
+                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+              }`}
+              title="Interactive Study Mode: Select Learning Path & Module to study Unit-by-Unit concepts, Azure services, and examples"
+            >
+              {activeTab === 'study-decks' ? <WarriorSpearBadge size={14} /> : <Layers className="w-3.5 h-3.5 text-[#005A9E] dark:text-sky-300" />}
+              <span>Study Mode</span>
+            </button>
+
             {/* Adaptive Quiz Mode with glowing Zap */}
             <button
               onClick={() => setActiveTab('adaptive')}
