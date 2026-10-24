@@ -116,7 +116,7 @@ export const KnowledgeCheckDrawer: React.FC<KnowledgeCheckDrawerProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-500">
-              Review official Microsoft definitions &amp; common exam traps without losing your quiz position
+              Review Azure Curriculum definitions &amp; common exam traps without losing your quiz position
             </p>
           </div>
         </div>
@@ -219,7 +219,7 @@ export const KnowledgeCheckDrawer: React.FC<KnowledgeCheckDrawerProps> = ({
           <div className="space-y-1">
             <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#0078D4] flex items-center gap-1">
               <BookmarkCheck className="w-3 h-3" />
-              <span>Official Microsoft Definition</span>
+              <span>Azure Curriculum Definition</span>
             </span>
             <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-normal bg-blue-50/40 p-3 rounded-lg border border-blue-100/80">
               {activeConcept.officialDefinition}

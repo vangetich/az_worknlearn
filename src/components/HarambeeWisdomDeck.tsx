@@ -17,6 +17,10 @@ import {
 } from 'lucide-react';
 import { HARAMBEE_SLIDES, VITAL_EXAM_CUES, WisdomSlide, VitalCue } from '../data/harambeeWisdom';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { SwahiliProverbsCarousel } from './SwahiliProverbsCarousel';
+import { StudyPrepMotivationToolkit } from './StudyPrepMotivationToolkit';
+import { WeeklyLearningRoadmap } from './WeeklyLearningRoadmap';
+import { getInitialStats } from '../utils/storage';
 
 interface HarambeeWisdomDeckProps {
   onQuizTopic?: (moduleId: number) => void;
@@ -26,6 +30,7 @@ export const HarambeeWisdomDeck: React.FC<HarambeeWisdomDeckProps> = ({ onQuizTo
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
   const [showVitalCuesDrawer, setShowVitalCuesDrawer] = useState<boolean>(false);
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
+  const stats = React.useMemo(() => getInitialStats(), []);
 
   const currentSlide = HARAMBEE_SLIDES[currentSlideIndex];
 
@@ -39,6 +44,19 @@ export const HarambeeWisdomDeck: React.FC<HarambeeWisdomDeckProps> = ({ onQuizTo
 
   return (
     <div className="space-y-6">
+      {/* Harambee Swahili Proverbs Study Wisdom Carousel */}
+      <SwahiliProverbsCarousel
+        onTakeAction={() => onQuizTopic && onQuizTopic(5)}
+      />
+
+      {/* Harambee Weekly Learning Roadmap (Top 3 Azure Services Each Week + MS Learn Docs) */}
+      <WeeklyLearningRoadmap
+        onSelectModule={(modId) => onQuizTopic && onQuizTopic(modId)}
+      />
+
+      {/* Student Exam Prep & Study Motivation Toolkit (Paper Notes, WhatsApp Reminders & Rituals) */}
+      <StudyPrepMotivationToolkit stats={stats} />
+
       {/* Harambee Technical Wisdom Slide Carousel */}
       <div className="bg-white rounded-2xl border border-slate-200/90 card-elevation overflow-hidden transition-all shadow-md">
         {/* African Kitenge Ribbon */}

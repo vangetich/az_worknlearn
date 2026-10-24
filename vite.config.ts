@@ -32,9 +32,9 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
-          name: 'AZ-900 Microsoft Curriculum Only - Azure Fundamentals',
+          name: 'AZ-900 Azure Curriculum - Azure Fundamentals',
           short_name: 'AZ900 Prep',
-          description: 'Official Microsoft Curriculum Only AZ-900 Study Decks, Flashcards, and Quizzes with offline caching and streak tracking.',
+          description: 'Azure Curriculum AZ-900 Study Decks, Flashcards, and Quizzes with offline caching and streak tracking.',
           theme_color: '#0078D4',
           background_color: '#F8FAFC',
           display: 'standalone',

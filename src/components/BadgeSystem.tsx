@@ -94,7 +94,7 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     id: 'azure-architect',
     title: 'Azure Architect',
     subtitle: 'Passing Grade Mastery',
-    description: 'Maintained 70%+ accuracy with at least 30 questions answered (Microsoft official pass benchmark).',
+    description: 'Maintained 70%+ accuracy with at least 30 questions answered (official pass benchmark).',
     category: 'mastery',
     tier: 'diamond',
     iconName: 'Crown',
@@ -109,7 +109,7 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     id: 'master-of-modules',
     title: 'Master of Modules',
     subtitle: 'Full Curriculum Breadth',
-    description: 'Tackled questions across all 3 official Microsoft Learning Paths (Cloud Concepts, Architecture & Services, Governance & Management).',
+    description: 'Tackled questions across all 3 official Azure Curriculum Learning Paths (Cloud Concepts, Architecture & Services, Governance & Management).',
     category: 'curriculum',
     tier: 'gold',
     iconName: 'Layers',
@@ -160,6 +160,21 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     isUnlocked: (stats) => (stats.streakDays || 1) >= 3,
     getCurrentValue: (stats) => stats.streakDays || 1,
     tipToUnlock: 'Practice at least one question every day for 3 days in a row.',
+  },
+  {
+    id: 'five-day-streak',
+    title: '5-Day Study Streak',
+    subtitle: 'Unbroken 5-Day Momentum',
+    description: 'Completed a 5-day consecutive study streak with steady daily scenario practice.',
+    category: 'consistency',
+    tier: 'silver',
+    iconName: 'Flame',
+    proverbQuote: '“Tone na tone huwa mchirizi” — Drop by drop becomes a steady stream.',
+    targetValue: 5,
+    unit: 'streak days',
+    isUnlocked: (stats) => (stats.streakDays || 1) >= 5,
+    getCurrentValue: (stats) => stats.streakDays || 1,
+    tipToUnlock: 'Practice at least one AZ-900 scenario question daily for 5 consecutive days.',
   },
   {
     id: 'safari-marathon',
@@ -241,6 +256,65 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     isUnlocked: (stats) => (stats.pathMastery?.[3]?.total || 0) >= 5,
     getCurrentValue: (stats) => stats.pathMastery?.[3]?.total || 0,
     tipToUnlock: 'Solve 5 questions from Learning Path 3 (Azure Management & Governance).',
+  },
+  {
+    id: 'early-bird',
+    title: 'Early Bird',
+    subtitle: 'Dawn Discipline',
+    description: 'Started a study session before noon or sustained morning learning momentum.',
+    category: 'consistency',
+    tier: 'silver',
+    iconName: 'Sparkles',
+    proverbQuote: '“The early bird drinks from the purest spring.” — African Proverb',
+    targetValue: 1,
+    unit: 'morning session',
+    isUnlocked: (stats) => {
+      let hasEarly = false;
+      Object.values(stats.attempts || {}).forEach((list) => {
+        list.forEach((att) => {
+          if (att.timestamp) {
+            const h = new Date(att.timestamp).getHours();
+            if (h >= 5 && h < 12) hasEarly = true;
+          }
+        });
+      });
+      return hasEarly || (stats.streakDays || 1) >= 2;
+    },
+    getCurrentValue: (stats) => {
+      let hasEarly = false;
+      Object.values(stats.attempts || {}).forEach((list) => {
+        list.forEach((att) => {
+          if (att.timestamp) {
+            const h = new Date(att.timestamp).getHours();
+            if (h >= 5 && h < 12) hasEarly = true;
+          }
+        });
+      });
+      return hasEarly || (stats.streakDays || 1) >= 2 ? 1 : 0;
+    },
+    tipToUnlock: 'Complete a study question before 12:00 PM or build a 2-day streak.',
+  },
+  {
+    id: 'master-of-governance',
+    title: 'Master of Governance',
+    subtitle: 'Policy, Locks & Cost Mastery',
+    description: 'Answered 10+ questions in Path 3 (Azure Management & Governance) with 70%+ accuracy.',
+    category: 'curriculum',
+    tier: 'gold',
+    iconName: 'ShieldCheck',
+    proverbQuote: '“Wise governance ensures the community prospers for generations.” — Swahili Proverb',
+    targetValue: 10,
+    unit: 'Path 3 questions',
+    isUnlocked: (stats) => {
+      const p3 = stats.pathMastery?.[3] || { correct: 0, total: 0 };
+      const acc = p3.total > 0 ? (p3.correct / p3.total) * 100 : 0;
+      return p3.total >= 10 && acc >= 70;
+    },
+    getCurrentValue: (stats) => {
+      const p3 = stats.pathMastery?.[3] || { correct: 0, total: 0 };
+      return p3.total;
+    },
+    tipToUnlock: 'Answer at least 10 questions in Path 3 (Management & Governance) with 70%+ accuracy.',
   },
 ];
 
@@ -439,7 +513,7 @@ export const BadgeSystem: React.FC<BadgeSystemProps> = ({ stats, onExplorePracti
               <MaasaiMedallion size={24} />
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Earn authentic cloud credentials as you solve practice scenarios, maintain your daily study streak, and master all three Microsoft AZ-900 domains.
+              Earn authentic cloud credentials as you solve practice scenarios, maintain your daily study streak, and master all three Azure Curriculum domains.
             </p>
           </div>
 
@@ -482,26 +556,68 @@ export const BadgeSystem: React.FC<BadgeSystemProps> = ({ stats, onExplorePracti
           </div>
         </div>
 
-        {/* Next closest badge callout */}
-        {nextBadgeToUnlock && (
-          <div className="mt-5 pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        {/* Next closest badge callout & Milestone Celebration Replay Bar */}
+        <div className="mt-5 pt-4 border-t border-white/10 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs">
+          {nextBadgeToUnlock ? (
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
               <span className="text-slate-300">
                 Next up to unlock: <strong className="text-white font-bold">{nextBadgeToUnlock.title}</strong> ({nextBadgeToUnlock.progress}% complete)
               </span>
             </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className="text-emerald-300 font-bold">
+                All AZ-900 Milestone Badges Unlocked! Hongera!
+              </span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent('az900_trigger_achievement_overlay', {
+                    detail: { badgeId: 'master-of-governance' },
+                  })
+                )
+              }
+              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-amber-300 border border-amber-400/30 font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Preview celebratory badge unlock animation for Master of Governance"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span>Celebrate: Master of Governance</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent('az900_trigger_achievement_overlay', {
+                    detail: { badgeId: 'five-day-streak' },
+                  })
+                )
+              }
+              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sky-300 border border-sky-400/30 font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Preview celebratory badge unlock animation for 5-Day Study Streak"
+            >
+              <Flame className="w-3.5 h-3.5 text-orange-400" />
+              <span>Celebrate: 5-Day Streak</span>
+            </button>
+
             {onExplorePractice && (
               <button
                 onClick={onExplorePractice}
-                className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
               >
                 <span>Continue Practice</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Filter and Category Controls */}
@@ -744,25 +860,44 @@ export const BadgeSystem: React.FC<BadgeSystemProps> = ({ stats, onExplorePracti
               </div>
 
               {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                 <button
-                  onClick={() => setSelectedBadge(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+                  type="button"
+                  onClick={() => {
+                    const idToTrigger = selectedBadge.id;
+                    setSelectedBadge(null);
+                    window.dispatchEvent(
+                      new CustomEvent('az900_trigger_achievement_overlay', {
+                        detail: { badgeId: idToTrigger },
+                      })
+                    );
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  Close
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Celebrate Unlock</span>
                 </button>
-                {onExplorePractice && (
+
+                <div className="flex items-center gap-2.5 ml-auto">
                   <button
-                    onClick={() => {
-                      setSelectedBadge(null);
-                      onExplorePractice();
-                    }}
-                    className="px-4 py-2 rounded-xl bg-[#0078D4] hover:bg-blue-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                    onClick={() => setSelectedBadge(null)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                   >
-                    <span>Practice Now</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    Close
                   </button>
-                )}
+                  {onExplorePractice && (
+                    <button
+                      onClick={() => {
+                        setSelectedBadge(null);
+                        onExplorePractice();
+                      }}
+                      className="px-4 py-2 rounded-xl bg-[#0078D4] hover:bg-blue-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                    >
+                      <span>Practice Now</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
+@theme {
+  --breakpoint-xs: 400px;
+}
+
 :root {
+  /* Brand Core Colors */
   --color-azure: #0078d4;
   --color-azure-dark: #005a9e;
   --color-azure-light: #ebf3fc;
@@ -10,20 +15,166 @@
   --color-slate-dark: #1e293b;
   --color-bg-light: #f8f9fa;
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Theme Semantic Variables: Light Mode */
+  --theme-bg-body: #f8f9fa;
+  --theme-bg-card: #ffffff;
+  --theme-bg-card-elevated: #ffffff;
+  --theme-bg-surface-subtle: #f1f5f9;
+  --theme-bg-header: rgba(255, 255, 255, 0.95);
+  --theme-text-primary: #0f172a;
+  --theme-text-secondary: #334155;
+  --theme-text-muted: #64748b;
+  --theme-border: #e2e8f0;
+  --theme-border-strong: #cbd5e1;
+  --theme-border-azure: rgba(0, 120, 212, 0.3);
+  --theme-accent-azure: #0078d4;
+  --theme-accent-glow: rgba(0, 120, 212, 0.15);
+  --theme-card-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  --theme-card-shadow-hover: 0 8px 30px rgba(0, 120, 212, 0.12);
+  --theme-input-bg: #ffffff;
+  --theme-kitenge-dot: #c2410c;
+  --theme-kitenge-bg: #f8f9fa;
+  --theme-focus-ring: #0078d4;
+}
+
+/* Midnight Azure Dark Theme (CSS Variables & High-Contrast Accessibility) */
+[data-theme="midnight-azure"],
+.dark {
+  /* Deep Midnight Azure Canvas & Surfaces */
+  --theme-bg-body: #060b14;
+  --theme-bg-card: #0b1526;
+  --theme-bg-card-elevated: #101e36;
+  --theme-bg-surface-subtle: #132238;
+  --theme-bg-header: rgba(11, 21, 38, 0.94);
+  
+  /* High-Contrast Accessible Typography (Exceeds WCAG AAA requirements) */
+  --theme-text-primary: #f8fafc;
+  --theme-text-secondary: #cbd5e1;
+  --theme-text-muted: #94a3b8;
+  
+  /* Luminous Azure Borders */
+  --theme-border: #1a2f4d;
+  --theme-border-strong: #26456f;
+  --theme-border-azure: rgba(56, 189, 248, 0.45);
+  
+  /* High-Contrast Luminous Accents */
+  --theme-accent-azure: #38bdf8;
+  --theme-accent-glow: rgba(56, 189, 248, 0.3);
+  --theme-card-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(56, 189, 248, 0.2);
+  --theme-card-shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.75), 0 0 20px rgba(56, 189, 248, 0.35);
+  --theme-input-bg: #08101d;
+  --theme-kitenge-dot: #fb923c;
+  --theme-kitenge-bg: #060b14;
+  --theme-focus-ring: #38bdf8;
 }
 
 body {
-  background-color: #f8f9fa;
-  color: #1e293b;
+  background-color: var(--theme-bg-body);
+  color: var(--theme-text-primary);
   min-height: 100vh;
   margin: 0;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Midnight Azure High-Contrast Overrides */
+[data-theme="midnight-azure"] {
+  color-scheme: dark;
+}
+
+[data-theme="midnight-azure"] .bg-white {
+  background-color: var(--theme-bg-card) !important;
+}
+
+[data-theme="midnight-azure"] .bg-slate-50 {
+  background-color: var(--theme-bg-surface-subtle) !important;
+}
+
+[data-theme="midnight-azure"] .bg-slate-100 {
+  background-color: #15243b !important;
+}
+
+[data-theme="midnight-azure"] .border-slate-200,
+[data-theme="midnight-azure"] .border-slate-200\/80,
+[data-theme="midnight-azure"] .border-slate-100 {
+  border-color: var(--theme-border) !important;
+}
+
+[data-theme="midnight-azure"] .border-slate-300 {
+  border-color: var(--theme-border-strong) !important;
+}
+
+[data-theme="midnight-azure"] .text-slate-900,
+[data-theme="midnight-azure"] .text-slate-800 {
+  color: var(--theme-text-primary) !important;
+}
+
+[data-theme="midnight-azure"] .text-slate-700,
+[data-theme="midnight-azure"] .text-slate-600 {
+  color: var(--theme-text-secondary) !important;
+}
+
+[data-theme="midnight-azure"] .text-slate-500,
+[data-theme="midnight-azure"] .text-slate-400 {
+  color: var(--theme-text-muted) !important;
+}
+
+[data-theme="midnight-azure"] header {
+  background-color: var(--theme-bg-header) !important;
+  border-bottom-color: var(--theme-border) !important;
+}
+
+[data-theme="midnight-azure"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="midnight-azure"] textarea,
+[data-theme="midnight-azure"] select {
+  background-color: var(--theme-input-bg) !important;
+  color: var(--theme-text-primary) !important;
+  border-color: var(--theme-border-strong) !important;
+}
+
+[data-theme="midnight-azure"] input:focus,
+[data-theme="midnight-azure"] textarea:focus,
+[data-theme="midnight-azure"] select:focus {
+  border-color: var(--theme-accent-azure) !important;
+  outline-color: var(--theme-accent-azure) !important;
+}
+
+[data-theme="midnight-azure"] .card-elevation {
+  box-shadow: var(--theme-card-shadow);
+  border-color: var(--theme-border);
+}
+
+[data-theme="midnight-azure"] .bg-white\/95,
+[data-theme="midnight-azure"] .bg-white\/90 {
+  background-color: var(--theme-bg-header) !important;
+}
+
+[data-theme="midnight-azure"] .bg-white\/80 {
+  background-color: rgba(16, 30, 54, 0.85) !important;
+}
+
+[data-theme="midnight-azure"] .hover\:bg-slate-100:hover {
+  background-color: #1a2f4e !important;
+}
+
+[data-theme="midnight-azure"] .hover\:bg-slate-50:hover {
+  background-color: #15253e !important;
+}
+
+[data-theme="midnight-azure"] .hover\:bg-slate-200:hover,
+[data-theme="midnight-azure"] .hover\:bg-slate-200\/80:hover {
+  background-color: #213b62 !important;
+}
+
+[data-theme="midnight-azure"] .card-elevation-hover:hover {
+  box-shadow: var(--theme-card-shadow-hover);
 }
 
 /* Kenyan Kitenge Geometric Watermark Pattern (Diamond Step Weave) */
 .pattern-kitenge {
-  background-image: radial-gradient(#d97706 0.75px, transparent 0.75px),
-    radial-gradient(#c2410c 0.75px, #f8f9fa 0.75px);
+  background-image: radial-gradient(var(--theme-kitenge-dot) 0.75px, transparent 0.75px),
+    radial-gradient(#c2410c 0.75px, var(--theme-kitenge-bg) 0.75px);
   background-size: 24px 24px;
   background-position: 0 0, 12px 12px;
 }
@@ -333,4 +484,90 @@ body {
 
 .animate-azure-glow {
   animation: azureBorderGlow 3s ease-in-out infinite;
+}
+
+/* Kenyan Warrior Motif Animations for Tabs Menu Bar */
+@keyframes warriorVitality {
+  0%, 100% {
+    transform: scale(1) translateY(0);
+    filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.4));
+  }
+  50% {
+    transform: scale(1.08) translateY(-1px);
+    filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.85));
+  }
+}
+
+.animate-warrior-vitality {
+  animation: warriorVitality 3s ease-in-out infinite;
+}
+
+@keyframes warriorShieldFloat {
+  0%, 100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  50% {
+    transform: rotate(3deg) translateY(-2px);
+  }
+}
+
+.animate-warrior-shield {
+  animation: warriorShieldFloat 4s ease-in-out infinite;
+}
+
+/* Wavy African Fabric Motif Animations in Multiple Opacities of Azure */
+@keyframes azureFabricWavePrimary {
+  0% {
+    transform: translateX(0%) translateY(0px) scaleY(1);
+  }
+  50% {
+    transform: translateX(-25%) translateY(2px) scaleY(1.06);
+  }
+  100% {
+    transform: translateX(-50%) translateY(0px) scaleY(1);
+  }
+}
+
+@keyframes azureFabricWaveSecondary {
+  0% {
+    transform: translateX(-50%) translateY(1px) scaleY(1);
+  }
+  50% {
+    transform: translateX(-25%) translateY(-2px) scaleY(0.95);
+  }
+  100% {
+    transform: translateX(0%) translateY(1px) scaleY(1);
+  }
+}
+
+@keyframes azureFabricShimmer {
+  0%, 100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+.animate-azure-fabric-wave-1 {
+  width: 200%;
+  animation: azureFabricWavePrimary 18s ease-in-out infinite;
+}
+
+.animate-azure-fabric-wave-2 {
+  width: 200%;
+  animation: azureFabricWaveSecondary 14s ease-in-out infinite;
+}
+
+.animate-azure-fabric-wave-3 {
+  width: 200%;
+  animation: azureFabricWavePrimary 24s linear infinite;
+}
+
+.animate-azure-fabric-shimmer {
+  animation: azureFabricShimmer 6s ease-in-out infinite;
+}
+
+[data-theme="midnight-azure"] .studio-subtitle-standout {
+  background-image: linear-gradient(90deg, #38bdf8 0%, #7dd3fc 50%, #fbbf24 100%) !important;
 }

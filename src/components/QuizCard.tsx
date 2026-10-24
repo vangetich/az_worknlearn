@@ -16,11 +16,25 @@ import {
   BookOpen,
   Maximize2,
   Minimize2,
+  FileText,
+  Zap,
+  Users,
+  Volume2,
+  VolumeX,
+  Square,
+  Share2,
+  Clock,
+  Timer,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
 import { KeyConceptSidePanel, extractScenarioTerminology } from './KeyConceptSidePanel';
 import { ScenarioTextWithTooltips } from './ScenarioTextWithTooltips';
+import { QuickNotesDrawer } from './QuickNotesDrawer';
+import { getQuestionNote } from '../utils/storage';
+import { ShareQuestionModal } from './ShareQuestionModal';
+import { QuickStudyOverlay } from './QuickStudyOverlay';
+import { DeepWorkTimerWidget } from './DeepWorkTimerWidget';
 
 interface QuizCardProps {
   question: Question;
@@ -35,6 +49,11 @@ interface QuizCardProps {
   stats?: UserStats;
   isFocusMode?: boolean;
   onToggleFocusMode?: () => void;
+  dynamicDifficulty?: 'Fundamental' | 'Intermediate' | 'Advanced';
+  consecutiveStreak?: number;
+  isDynamicDifficultyEnabled?: boolean;
+  onToggleDynamicDifficulty?: () => void;
+  onOpenStudyRoom?: () => void;
 }
 
 export const QuizCard: React.FC<QuizCardProps> = ({
@@ -47,28 +66,185 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   onBookmark,
   isBookmarked,
   onAskTutorAboutQuestion,
+  stats,
   isFocusMode = false,
   onToggleFocusMode,
+  dynamicDifficulty,
+  consecutiveStreak = 0,
+  isDynamicDifficultyEnabled = false,
+  onToggleDynamicDifficulty,
+  onOpenStudyRoom,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
   const [showKnowledgeCheck, setShowKnowledgeCheck] = useState<boolean>(false);
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
+  const [showQuickNotes, setShowQuickNotes] = useState<boolean>(false);
+  const [hasNote, setHasNote] = useState<boolean>(() => Boolean(getQuestionNote(question.id)));
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [showShareModal, setShowShareModal] = useState<boolean>(false);
+  const [showQuickStudy, setShowQuickStudy] = useState<boolean>(false);
+  const [isDeepWorkEnabled, setIsDeepWorkEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('az900_deep_work_enabled') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleDeepWork = () => {
+    setIsDeepWorkEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('az900_deep_work_enabled', String(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+  };
+
+  // Per-Question Exam Readiness Timer & Rolling Average Completion Time
+  const QUESTION_TIMING_STORAGE_KEY = 'az900_question_timing_v1';
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  const [avgCompletionSeconds, setAvgCompletionSeconds] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(QUESTION_TIMING_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.count > 0 && parsed.totalSeconds > 0) {
+          return Math.max(10, Math.round(parsed.totalSeconds / parsed.count));
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return 45; // Default AZ-900 exam benchmark: 45s per question
+  });
 
   const scenarioConcepts = React.useMemo(() => extractScenarioTerminology(question), [question]);
 
-  // Reset when question changes
+  // Reset state, question timer & cancel audio when question changes
   React.useEffect(() => {
     setSelectedOption(null);
     setHasSubmitted(false);
+    setElapsedSeconds(0);
     setShowKnowledgeCheck(false);
     setSelectedConceptId(null);
+    setHasNote(Boolean(getQuestionNote(question.id)));
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
   }, [question.id]);
+
+  // Increment per-question timer every second until user submits an answer
+  React.useEffect(() => {
+    if (hasSubmitted) return;
+    const interval = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [hasSubmitted, question.id]);
+
+  // Cancel speech on unmount
+  React.useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const formatTimer = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remSecs = secs % 60;
+    return `${mins}:${remSecs < 10 ? '0' : ''}${remSecs}`;
+  };
+
+  // Color-code timer (Green -> Amber -> Red) based on average completion time
+  const timerRatio = avgCompletionSeconds > 0 ? elapsedSeconds / avgCompletionSeconds : 0;
+  const timerPaceZone: 'green' | 'amber' | 'red' =
+    timerRatio <= 0.75 ? 'green' : timerRatio <= 1.15 ? 'amber' : 'red';
+
+  const timerColorConfig = {
+    green: {
+      badge: 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-500/20',
+      icon: 'text-emerald-600',
+      dot: 'bg-emerald-500',
+      bar: 'from-emerald-500 to-teal-500',
+      label: 'Optimal Exam Pace',
+    },
+    amber: {
+      badge: 'bg-amber-50 text-amber-900 border-amber-300 ring-1 ring-amber-500/25',
+      icon: 'text-amber-600',
+      dot: 'bg-amber-500',
+      bar: 'from-amber-400 to-orange-500',
+      label: 'Near Average Pace',
+    },
+    red: {
+      badge: 'bg-rose-50 text-rose-900 border-rose-300 ring-2 ring-rose-500/25',
+      icon: 'text-rose-600 animate-pulse',
+      dot: 'bg-rose-600 animate-ping',
+      bar: 'from-rose-500 to-red-600',
+      label: 'Over Average Time',
+    },
+  }[timerPaceZone];
+
+  const handleToggleReadQuestion = () => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return;
+    }
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const optionsText = question.options
+      .map((o) => `Option ${o.letter}: ${o.text}`)
+      .join('. ');
+    const speechText = `Scenario context: ${question.scenario}. Question: ${question.question}. Choices: ${optionsText}`;
+
+    const utterance = new SpeechSynthesisUtterance(speechText);
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+    };
+
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
 
   const handleSelect = (letter: string) => {
     if (hasSubmitted) return;
     setSelectedOption(letter);
     setHasSubmitted(true);
+
+    // Record question completion time to update rolling average
+    try {
+      const timeSpent = Math.max(1, Math.min(300, elapsedSeconds));
+      const raw = localStorage.getItem(QUESTION_TIMING_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : { totalSeconds: 45, count: 1 };
+      const nextTotal = (parsed.totalSeconds || 45) + timeSpent;
+      const nextCount = (parsed.count || 1) + 1;
+      localStorage.setItem(
+        QUESTION_TIMING_STORAGE_KEY,
+        JSON.stringify({ totalSeconds: nextTotal, count: nextCount })
+      );
+      setAvgCompletionSeconds(Math.max(10, Math.round(nextTotal / nextCount)));
+    } catch {
+      // ignore storage errors
+    }
+
     const isCorrect = letter === question.correctAnswer;
     onAnswer(question.id, letter, isCorrect);
   };
@@ -115,6 +291,30 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               AI Scenario
             </span>
           )}
+
+          {/* Dynamic Difficulty Scaling Indicator */}
+          {isDynamicDifficultyEnabled && dynamicDifficulty && (
+            <button
+              type="button"
+              onClick={onToggleDynamicDifficulty}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border transition-all cursor-pointer ${
+                dynamicDifficulty === 'Advanced'
+                  ? 'bg-purple-100/90 text-purple-900 border-purple-300 shadow-2xs'
+                  : dynamicDifficulty === 'Intermediate'
+                  ? 'bg-blue-100/90 text-blue-900 border-blue-300 shadow-2xs'
+                  : 'bg-emerald-100/90 text-emerald-900 border-emerald-300 shadow-2xs'
+              }`}
+              title="Dynamic Difficulty: Automatically adjusts based on your consecutive answers. Click to toggle."
+            >
+              <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
+              <span>Dynamic: {dynamicDifficulty}</span>
+              {consecutiveStreak > 0 && (
+                <span className="text-[10px] font-black bg-amber-200/90 text-amber-950 px-1 rounded-sm">
+                  {consecutiveStreak}🔥
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Counter, Focus Mode Toggle and Bookmark */}
@@ -149,6 +349,139 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             </button>
           )}
 
+          {/* Read Question (SpeechSynthesis API) Button */}
+          <button
+            type="button"
+            onClick={handleToggleReadQuestion}
+            className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              isSpeaking
+                ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs ring-2 ring-emerald-400/40'
+                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+            }`}
+            title={
+              isSpeaking
+                ? 'Stop reading question audio'
+                : 'Read question aloud with browser SpeechSynthesis for accessibility'
+            }
+          >
+            {isSpeaking ? (
+              <>
+                <Square className="w-3.5 h-3.5 fill-current text-white" />
+                <span>Stop</span>
+                <span className="flex items-center gap-0.5 ml-0.5">
+                  <span className="w-1 h-2.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1 h-3.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="w-3.5 h-3.5 text-[#0078D4]" />
+                <span className="hidden sm:inline">Read Question</span>
+                <span className="sm:hidden">Read</span>
+              </>
+            )}
+          </button>
+
+          {/* Quick Notes Slide-Out Trigger */}
+          <button
+            type="button"
+            onClick={() => setShowQuickNotes(true)}
+            className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              hasNote
+                ? 'bg-amber-50 text-amber-900 border-amber-300 shadow-2xs ring-1 ring-amber-400/30'
+                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+            }`}
+            title={
+              hasNote
+                ? 'View/edit saved personal mnemonic note for this Azure question'
+                : 'Add personal quick note or mnemonic for this Azure question'
+            }
+          >
+            <FileText className={`w-3.5 h-3.5 ${hasNote ? 'text-amber-600' : 'text-slate-400'}`} />
+            <span>Notes</span>
+            {hasNote && (
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            )}
+          </button>
+
+          {/* Virtual Study Room Trigger */}
+          {onOpenStudyRoom && (
+            <button
+              type="button"
+              onClick={onOpenStudyRoom}
+              className="px-2.5 py-1 rounded-lg border border-sky-200 bg-sky-50/80 hover:bg-sky-100 text-[#0078D4] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Open Virtual Study Room to discuss this question with peers"
+            >
+              <Users className="w-3.5 h-3.5 text-[#0078D4]" />
+              <span className="hidden sm:inline">Study Room</span>
+            </button>
+          )}
+
+          {/* Quick Study Toggle: Frequently Missed Key Terms */}
+          <button
+            type="button"
+            onClick={() => setShowQuickStudy(!showQuickStudy)}
+            className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              showQuickStudy
+                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white border-amber-600 shadow-xs ring-2 ring-amber-400/40'
+                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+            }`}
+            title={showQuickStudy ? 'Hide Quick Study overlay' : 'Toggle Quick Study: displays only the most frequently missed key terms for this module'}
+          >
+            <Zap className={`w-3.5 h-3.5 ${showQuickStudy ? 'text-amber-200 fill-amber-200' : 'text-amber-500'}`} />
+            <span className="hidden sm:inline">Quick Study</span>
+            <span className="sm:hidden">Terms</span>
+            {showQuickStudy && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+          </button>
+
+          {/* Share Question Button (Copyable Link & QR Code) */}
+          <button
+            type="button"
+            onClick={() => setShowShareModal(true)}
+            className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="Share Question: Generate a copyable link or QR code containing this scenario context to discuss with study peers"
+          >
+            <Share2 className="w-3.5 h-3.5 text-[#0078D4]" />
+            <span className="hidden sm:inline">Share</span>
+          </button>
+
+          {/* Deep Work Timer Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleDeepWork}
+            className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              isDeepWorkEnabled
+                ? 'bg-gradient-to-r from-blue-700 to-indigo-800 text-white border-blue-600 shadow-xs ring-2 ring-blue-400/40'
+                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+            }`}
+            title={
+              isDeepWorkEnabled
+                ? 'Hide Deep Work timer'
+                : 'Enable Deep Work timer: tracks active study time per module session and provides gentle daily goal summary'
+            }
+          >
+            <Clock className={`w-3.5 h-3.5 ${isDeepWorkEnabled ? 'text-blue-200' : 'text-[#0078D4]'}`} />
+            <span className="hidden sm:inline">Deep Work</span>
+            <span className="sm:hidden">Timer</span>
+            {isDeepWorkEnabled && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+          </button>
+
+          {/* Visible Color-Coded Question Timer Badge (Green -> Amber -> Red) */}
+          <div
+            className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold transition-colors duration-300 flex items-center gap-1.5 shadow-2xs ${timerColorConfig.badge}`}
+            title={`Question Timer: ${formatTimer(elapsedSeconds)} spent vs. ${formatTimer(
+              avgCompletionSeconds
+            )} average completion time (${timerColorConfig.label})`}
+          >
+            <Timer className={`w-3.5 h-3.5 ${timerColorConfig.icon}`} />
+            <span className="font-mono tracking-tight">{formatTimer(elapsedSeconds)}</span>
+            <span className="text-[10px] opacity-75 hidden md:inline">
+              / avg {formatTimer(avgCompletionSeconds)}
+            </span>
+            <span className={`w-1.5 h-1.5 rounded-full ${timerColorConfig.dot}`} />
+          </div>
+
           <span className="text-xs font-bold text-slate-500">
             Question {questionIndex + 1} of {totalQuestions}
           </span>
@@ -166,7 +499,58 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
       </div>
 
+      {/* Live Color-Coded Question Pace Bar (Green -> Amber -> Red Exam Readiness Indicator) */}
+      <div className="px-6 py-2 bg-slate-50/90 border-b border-slate-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-slate-700 flex items-center gap-1">
+            <Timer className={`w-3.5 h-3.5 ${timerColorConfig.icon}`} />
+            <span>Question Timer:</span>
+          </span>
+          <span className="font-mono font-black text-slate-900">
+            {formatTimer(elapsedSeconds)}
+          </span>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${timerColorConfig.badge}`}
+          >
+            {hasSubmitted ? `Completed in ${formatTimer(elapsedSeconds)}` : timerColorConfig.label}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2.5 grow sm:grow-0 sm:min-w-[240px]">
+          <div className="w-full sm:w-36 h-2 rounded-full bg-slate-200/90 overflow-hidden">
+            <div
+              className={`h-full rounded-full bg-gradient-to-r ${timerColorConfig.bar} transition-all duration-500`}
+              style={{
+                width: `${Math.min(100, Math.round((elapsedSeconds / (avgCompletionSeconds * 1.4)) * 100))}%`,
+              }}
+            />
+          </div>
+          <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">
+            Avg Pace: <strong className="text-slate-700">{formatTimer(avgCompletionSeconds)}</strong>
+          </span>
+        </div>
+      </div>
+
       <div className="p-6 sm:p-8">
+        {/* Optional Deep Work Timer Widget */}
+        <DeepWorkTimerWidget
+          moduleId={question.moduleId}
+          moduleTitle={question.moduleTitle}
+          stats={stats}
+          isEnabled={isDeepWorkEnabled}
+          onToggleEnabled={handleToggleDeepWork}
+          className="mb-5"
+        />
+
+        {/* Quick Study Non-Obtrusive Overlay: Most Frequently Missed Key Terms for Current Module */}
+        {showQuickStudy && (
+          <QuickStudyOverlay
+            moduleId={question.moduleId}
+            moduleTitle={question.moduleTitle}
+            onClose={() => setShowQuickStudy(false)}
+          />
+        )}
+
         <div className={`grid gap-6 ${showKnowledgeCheck ? 'grid-cols-1 lg:grid-cols-12 items-start' : 'grid-cols-1'}`}>
           {/* Main Question & Answering Column */}
           <div className={`space-y-6 ${showKnowledgeCheck ? 'lg:col-span-8' : 'w-full'}`}>
@@ -317,7 +701,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                       : `Not Quite. The correct answer is ${question.correctAnswer}`}
                   </h4>
                   <p className="text-xs text-slate-600 mt-0.5">
-                    Review the official Microsoft architecture breakdown below:
+                    Review the Azure Curriculum architecture breakdown below:
                   </p>
                 </div>
               </div>
@@ -451,21 +835,36 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
       </div>
 
-      {/* Right Side-Panel: Concise Key Concept Definition specifically for this scenario */}
-      {showKnowledgeCheck && (
-        <div className="lg:col-span-4 sticky top-4">
-          <KeyConceptSidePanel
-            question={question}
-            isOpen={showKnowledgeCheck}
-            onClose={() => setShowKnowledgeCheck(false)}
-            selectedConceptId={selectedConceptId}
-            onSelectConceptId={setSelectedConceptId}
-            onAskTutor={onAskTutorAboutQuestion}
-          />
-        </div>
-      )}
+        {/* Right Side-Panel: Concise Key Concept Definition specifically for this scenario */}
+        {showKnowledgeCheck && (
+          <div className="lg:col-span-4 sticky top-4">
+            <KeyConceptSidePanel
+              question={question}
+              isOpen={showKnowledgeCheck}
+              onClose={() => setShowKnowledgeCheck(false)}
+              selectedConceptId={selectedConceptId}
+              onSelectConceptId={setSelectedConceptId}
+              onAskTutor={onAskTutorAboutQuestion}
+            />
+          </div>
+        )}
+      </div>
     </div>
+
+    {/* Quick Notes Slide-Out Panel */}
+    <QuickNotesDrawer
+      question={question}
+      isOpen={showQuickNotes}
+      onClose={() => setShowQuickNotes(false)}
+      onNoteSaved={(txt) => setHasNote(Boolean(txt.trim()))}
+    />
+
+    {/* Share Question Modal (Link & QR Code) */}
+    <ShareQuestionModal
+      question={question}
+      isOpen={showShareModal}
+      onClose={() => setShowShareModal(false)}
+    />
   </div>
-</div>
 );
 };

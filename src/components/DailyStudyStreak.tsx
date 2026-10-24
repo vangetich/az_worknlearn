@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Flame,
   CheckCircle2,
@@ -17,11 +18,13 @@ import { setDailyGoal } from '../utils/storage';
 interface DailyStudyStreakProps {
   stats: UserStats;
   onUpdateStats?: (newStats: UserStats) => void;
+  fireStreakTrigger?: number;
 }
 
 export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
   stats,
   onUpdateStats,
+  fireStreakTrigger = 0,
 }) => {
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
   const [isEditingGoal, setIsEditingGoal] = useState<boolean>(false);
@@ -32,6 +35,44 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
   const [saveFeedback, setSaveFeedback] = useState<boolean>(false);
   const [isIncrementing, setIsIncrementing] = useState<boolean>(false);
   const [justReachedGoal, setJustReachedGoal] = useState<boolean>(false);
+  const [isFireStreakActive, setIsFireStreakActive] = useState<boolean>(false);
+
+  // Trigger fire-streak celebratory animation whenever a quiz question is completed
+  const prevTriggerRef = React.useRef<number>(fireStreakTrigger);
+  const prevTotalRef = React.useRef<number>(stats.totalAnswered);
+
+  const triggerFireStreak = React.useCallback(() => {
+    setIsFireStreakActive(true);
+    const timer = setTimeout(() => {
+      setIsFireStreakActive(false);
+    }, 2400);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (fireStreakTrigger > prevTriggerRef.current) {
+      triggerFireStreak();
+      prevTriggerRef.current = fireStreakTrigger;
+    }
+  }, [fireStreakTrigger, triggerFireStreak]);
+
+  useEffect(() => {
+    if (stats.totalAnswered > prevTotalRef.current) {
+      triggerFireStreak();
+      prevTotalRef.current = stats.totalAnswered;
+    }
+  }, [stats.totalAnswered, triggerFireStreak]);
+
+  // Listen to global question completion event
+  useEffect(() => {
+    const handleQuestionCompleted = () => {
+      triggerFireStreak();
+    };
+    window.addEventListener('az900_question_completed', handleQuestionCompleted);
+    return () => {
+      window.removeEventListener('az900_question_completed', handleQuestionCompleted);
+    };
+  }, [triggerFireStreak]);
 
   // Sync goalInput whenever stats.dailyGoal updates externally
   useEffect(() => {
@@ -39,6 +80,41 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
       setGoalInput(String(stats.dailyGoal));
     }
   }, [stats.dailyGoal]);
+
+  // Allow external triggers (such as Study Hub Features dropdown) to open the goal configuration modal
+  useEffect(() => {
+    const handleOpenGoalModal = () => {
+      setShowDropdown(true);
+      setIsEditingGoal(true);
+    };
+    window.addEventListener('az900_open_daily_goal_modal', handleOpenGoalModal);
+    return () => {
+      window.removeEventListener('az900_open_daily_goal_modal', handleOpenGoalModal);
+    };
+  }, []);
+
+  // Listen for Daily Learning Goal saves from Header Configuration Modal (DailyGoalAlertsModal)
+  useEffect(() => {
+    const handleGoalSaved = (e: Event) => {
+      const customEvent = e as CustomEvent<{ goal?: number }>;
+      const newGoal = customEvent.detail?.goal;
+      if (newGoal) {
+        setGoalInput(String(newGoal));
+      }
+      setIsIncrementing(true);
+      setSaveFeedback(true);
+      setGoalFeedback(
+        newGoal ? `Goal set to ${newGoal} questions/day!` : 'Daily Goal Updated!'
+      );
+      setTimeout(() => setIsIncrementing(false), 1400);
+      setTimeout(() => setSaveFeedback(false), 3200);
+      setTimeout(() => setGoalFeedback(null), 3200);
+    };
+    window.addEventListener('az900_daily_goal_saved', handleGoalSaved);
+    return () => {
+      window.removeEventListener('az900_daily_goal_saved', handleGoalSaved);
+    };
+  }, []);
 
   // Today's attempts calculation (dynamic session progress)
   const todayKey = new Date().toISOString().split('T')[0];
@@ -127,11 +203,13 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
     }
     setGoalInput(String(cleanGoal));
     setIsEditingGoal(false);
+    setIsIncrementing(true);
+    setTimeout(() => setIsIncrementing(false), 1200);
     setSaveFeedback(true);
-    setTimeout(() => setSaveFeedback(false), 2000);
+    setTimeout(() => setSaveFeedback(false), 2800);
     if (showToast) {
       setGoalFeedback(`Goal set to ${cleanGoal} questions/day!`);
-      setTimeout(() => setGoalFeedback(null), 2500);
+      setTimeout(() => setGoalFeedback(null), 2800);
     }
   };
 
@@ -173,25 +251,74 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
 
   return (
     <div className="relative">
-      {/* Header Widget: Flame Progress Ring + Streak + Direct Daily Goal Input */}
+      {/* Header Widget: Daily Learning Goal Progress Ring with Fire-Streak & Immediate Goal Save Feedback */}
       <div
-        className={`flex items-center rounded-xl border transition-all ${
-          isGoalReached
+        className={`relative flex items-center rounded-xl border transition-all duration-300 ${
+          isFireStreakActive
+            ? 'bg-gradient-to-r from-amber-100 via-orange-100 to-amber-100 border-orange-400 text-orange-950 shadow-[0_0_18px_rgba(249,115,22,0.5)] ring-2 ring-orange-400/80 scale-[1.02]'
+            : saveFeedback
+            ? 'bg-gradient-to-r from-blue-50 via-emerald-50 to-blue-50 border-[#0078D4] text-slate-900 ring-2 ring-[#0078D4]/40 scale-[1.03]'
+            : isGoalReached
             ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-emerald-300 text-emerald-950 shadow-2xs'
             : 'bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border-orange-200/80 text-orange-950 shadow-2xs'
         }`}
       >
-        {/* Clickable Area: Visual Progress Ring around Flame & Streak Stats */}
+        {/* Visual Fire-Streak Animation Celebration when user completes a quiz question */}
+        {isFireStreakActive && (
+          <div className="absolute inset-0 pointer-events-none overflow-visible z-50">
+            {/* 1. Celebratory Momentum Floating Pill */}
+            <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 via-orange-600 to-red-600 text-white text-[11px] font-black shadow-lg shadow-orange-500/50 flex items-center gap-1.5 animate-bounce z-50 border border-yellow-200/50">
+              <Flame className="w-3.5 h-3.5 fill-yellow-200 text-yellow-100 animate-pulse" />
+              <span>Momentum Streak! +1</span>
+              <Sparkles className="w-3 h-3 text-yellow-200" />
+            </div>
+
+            {/* 2. Expanding Fiery Shockwave Ring */}
+            <div className="absolute -inset-2 rounded-xl border-2 border-orange-500 animate-ping opacity-75" />
+
+            {/* 3. Glowing Fiery Aura Pulse */}
+            <div className="absolute -inset-1 rounded-xl bg-orange-400/25 blur-xs animate-pulse" />
+
+            {/* 4. Rising Embers & Spark Particles */}
+            <span className="absolute -top-3 left-1 text-amber-400 animate-ember-1">
+              <svg className="w-3 h-3 fill-amber-300 drop-shadow-sm" viewBox="0 0 24 24">
+                <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
+              </svg>
+            </span>
+            <span className="absolute -top-4 right-1 text-orange-500 animate-ember-2">
+              <svg className="w-3.5 h-3.5 fill-orange-400 drop-shadow-sm" viewBox="0 0 24 24">
+                <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
+              </svg>
+            </span>
+            <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-yellow-300 animate-ember-3">
+              <svg className="w-2.5 h-2.5 fill-yellow-200" viewBox="0 0 24 24">
+                <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
+              </svg>
+            </span>
+            <span className="absolute top-1 -left-2 text-red-500 animate-ember-1">
+              <span className="block w-2 h-2 rounded-full bg-gradient-to-tr from-red-500 to-orange-400 shadow-xs shadow-orange-500/80" />
+            </span>
+            <span className="absolute top-1 -right-2 text-amber-500 animate-ember-2">
+              <span className="block w-2 h-2 rounded-full bg-gradient-to-tr from-amber-400 to-yellow-300 shadow-xs shadow-amber-400/80" />
+            </span>
+          </div>
+        )}
+
+        {/* Clickable Area: Visual Progress Ring around Flame & Daily Goal Counts */}
         <button
           type="button"
           onClick={() => setShowDropdown(!showDropdown)}
-          className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-black/5 rounded-l-xl transition-colors cursor-pointer group"
-          title={`Daily Streak: ${streak} days. Progress: ${todayAnswered}/${dailyGoal} questions (${goalPercent}%). Click to view streak calendar and milestone badges.`}
+          className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-black/5 rounded-xl transition-colors cursor-pointer group"
+          title={`Daily Learning Goal: ${todayAnswered}/${dailyGoal} questions completed today (${goalPercent}%). Click to directly edit your Daily Learning Goal.`}
         >
-          {/* Flame icon with Smooth Circular Visual Progress Ring & Sparkle Effect */}
+          {/* Flame icon with Smooth Circular Visual Progress Ring & Celebration Effects */}
           <div
             className={`relative flex items-center justify-center w-8 h-8 transition-transform duration-300 ${
-              isGoalReached ? 'animate-goal-glow rounded-full' : ''
+              isFireStreakActive || saveFeedback
+                ? 'scale-115 animate-pulse'
+                : isGoalReached
+                ? 'animate-goal-glow rounded-full'
+                : ''
             } ${isIncrementing ? 'animate-ring-pulse' : ''}`}
           >
             <svg
@@ -204,7 +331,15 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
                 cy="18"
                 r={ringRadius}
                 fill="none"
-                stroke={isGoalReached ? '#A7F3D0' : '#FED7AA'}
+                stroke={
+                  isFireStreakActive
+                    ? '#FED7AA'
+                    : saveFeedback
+                    ? '#BAE6FD'
+                    : isGoalReached
+                    ? '#A7F3D0'
+                    : '#FED7AA'
+                }
                 strokeWidth="3.2"
               />
               {/* Animated Dynamic Progress Ring with Smooth Settle Curve */}
@@ -213,7 +348,15 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
                 cy="18"
                 r={ringRadius}
                 fill="none"
-                stroke={isGoalReached ? '#16A34A' : '#EA580C'}
+                stroke={
+                  isFireStreakActive
+                    ? '#EA580C'
+                    : saveFeedback
+                    ? '#0078D4'
+                    : isGoalReached
+                    ? '#16A34A'
+                    : '#EA580C'
+                }
                 strokeWidth="3.2"
                 strokeDasharray={ringCircumference}
                 strokeDashoffset={ringOffset}
@@ -221,78 +364,70 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
                 style={{
                   transition:
                     'stroke-dashoffset 0.85s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.4s ease',
+                  filter: isFireStreakActive
+                    ? 'drop-shadow(0 0 5px rgba(234, 88, 12, 0.9))'
+                    : saveFeedback
+                    ? 'drop-shadow(0 0 4px rgba(0, 120, 212, 0.7))'
+                    : undefined,
                 }}
               />
             </svg>
 
-            {/* Centered Flame Icon */}
+            {/* Centered Flame Icon with momentum fire leap */}
             <div className="absolute inset-0 flex items-center justify-center">
               <Flame
-                className={`w-4 h-4 group-hover:scale-110 transition-transform ${
-                  isGoalReached
-                    ? 'text-emerald-600 fill-emerald-500 animate-pulse'
-                    : 'text-orange-600 fill-orange-500'
+                className={`transition-all duration-300 ${
+                  isFireStreakActive
+                    ? 'w-5 h-5 text-amber-500 fill-orange-500 scale-125 -rotate-6 filter drop-shadow-[0_0_8px_rgba(245,158,11,1)]'
+                    : saveFeedback
+                    ? 'w-4 h-4 text-[#0078D4] fill-sky-400 scale-110'
+                    : isGoalReached
+                    ? 'w-4 h-4 text-emerald-600 fill-emerald-500 group-hover:scale-110 animate-pulse'
+                    : 'w-4 h-4 text-orange-600 fill-orange-500 group-hover:scale-110'
                 }`}
               />
             </div>
 
-            {/* Subtle Sparkle Motif Particles when Goal is Reached */}
-            {isGoalReached && (
-              <div
-                className="absolute inset-0 pointer-events-none overflow-visible"
-                aria-hidden="true"
+            {/* Goal Completed or Saved Check Badge */}
+            {(isGoalReached || saveFeedback) && !isFireStreakActive && (
+              <span
+                className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 border border-white rounded-full flex items-center justify-center text-white shadow-2xs z-10 ${
+                  saveFeedback ? 'bg-[#0078D4]' : 'bg-emerald-500'
+                }`}
               >
-                {/* Sparkle 1 (Top Right) */}
-                <span className="absolute -top-1.5 -right-1 text-amber-500 animate-sparkle-1">
-                  <svg className="w-2.5 h-2.5 fill-amber-400 drop-shadow-xs" viewBox="0 0 24 24">
-                    <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
-                  </svg>
-                </span>
-                {/* Sparkle 2 (Bottom Left) */}
-                <span className="absolute -bottom-1 -left-1.5 text-emerald-500 animate-sparkle-2">
-                  <svg className="w-2.5 h-2.5 fill-emerald-400 drop-shadow-xs" viewBox="0 0 24 24">
-                    <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
-                  </svg>
-                </span>
-                {/* Sparkle 3 (Top Left) */}
-                <span className="absolute -top-1 -left-1 text-amber-300 animate-sparkle-3">
-                  <svg className="w-2 h-2 fill-yellow-400" viewBox="0 0 24 24">
-                    <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
-                  </svg>
-                </span>
-                {/* Sparkle 4 (Bottom Right) */}
-                <span className="absolute -bottom-1.5 -right-0.5 text-amber-400 animate-sparkle-1">
-                  <svg className="w-2 h-2 fill-amber-300" viewBox="0 0 24 24">
-                    <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
-                  </svg>
-                </span>
-              </div>
-            )}
-
-            {/* Goal Completed Check Badge */}
-            {isGoalReached && (
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border border-white rounded-full flex items-center justify-center text-white shadow-2xs z-10">
                 <Check className="w-2 h-2 stroke-[3]" />
               </span>
             )}
           </div>
 
-          {/* Streak and Progress Counts */}
+          {/* Daily Learning Goal Progress Counts */}
           <div className="flex flex-col text-left">
             <div className="flex items-center gap-1">
-              <span className="font-black text-xs text-slate-900">
-                {streak}d
-              </span>
+              <span className="text-[11px] font-extrabold text-slate-500">Goal</span>
               <span
                 className={`text-xs font-black transition-colors duration-500 ${
-                  isGoalReached ? 'text-emerald-700' : 'text-orange-800'
+                  isFireStreakActive
+                    ? 'text-orange-950 font-black'
+                    : saveFeedback
+                    ? 'text-[#0078D4]'
+                    : isGoalReached
+                    ? 'text-emerald-700'
+                    : 'text-orange-900'
                 }`}
               >
-                ({todayAnswered}/{dailyGoal})
+                {todayAnswered}/{dailyGoal}
               </span>
             </div>
             <span className="text-[10px] font-bold text-slate-500 leading-none flex items-center gap-0.5">
-              {isGoalReached ? (
+              {isFireStreakActive ? (
+                <span className="text-orange-600 font-extrabold animate-pulse">
+                  🔥 +1 Momentum!
+                </span>
+              ) : saveFeedback ? (
+                <span className="text-[#0078D4] font-extrabold">
+                  ✓ Ring Updated ({goalPercent}%)
+                </span>
+              ) : isGoalReached ? (
                 <>
                   <Sparkles className="w-2.5 h-2.5 text-amber-500 inline" />
                   <span className="text-emerald-700 font-extrabold">Done! ✨</span>
@@ -309,58 +444,24 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
             }`}
           />
         </button>
-
-        {/* Direct Input Field in App Header to set Daily Learning Goal */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-l border-orange-200/60 dark:border-slate-200/60">
-          <label
-            htmlFor="header-daily-goal-input"
-            className="text-[11px] font-bold text-slate-600 hidden sm:inline whitespace-nowrap"
-            title="Daily questions target"
-          >
-            Goal:
-          </label>
-          <div className="relative flex items-center">
-            <input
-              id="header-daily-goal-input"
-              type="number"
-              min={1}
-              max={100}
-              value={goalInput}
-              onChange={handleHeaderGoalChange}
-              onBlur={handleHeaderGoalBlur}
-              onKeyDown={handleHeaderGoalKeyDown}
-              title="Set your Daily Learning Goal (questions per day). Persists automatically in localStorage."
-              aria-label="Set Daily Learning Goal questions per day"
-              className="w-12 h-7 px-1 text-center font-black text-xs text-slate-900 bg-white border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#0078D4] focus:border-[#0078D4] shadow-2xs transition-all"
-            />
-            <span className="ml-1 text-[11px] text-slate-500 font-semibold hidden md:inline">
-              q/day
-            </span>
-            {saveFeedback && (
-              <span
-                className="ml-1 text-[10px] font-black text-emerald-600 flex items-center gap-0.5 animate-in fade-in"
-                title="Saved to localStorage!"
-              >
-                <Check className="w-3 h-3 stroke-[3]" />
-              </span>
-            )}
-          </div>
-        </div>
       </div>
 
-      {/* Popover Dropdown Card */}
-      {showDropdown && (
-        <>
+      {/* Centered Modal Card in Viewable Space */}
+      {showDropdown &&
+        typeof document !== 'undefined' &&
+        createPortal(
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150"
             onClick={() => {
               setShowDropdown(false);
               setIsEditingGoal(false);
             }}
-          />
-
-          <div className="absolute right-0 mt-2 w-88 bg-white rounded-2xl border border-slate-200 card-elevation shadow-2xl p-5 z-50 animate-in fade-in-50 zoom-in-95 duration-150 space-y-4">
-            {/* Header with Title and Close Button */}
+          >
+            <div
+              className="w-full max-w-md max-h-[88vh] overflow-y-auto bg-white rounded-2xl border border-slate-200 card-elevation shadow-2xl p-5 animate-in zoom-in-95 duration-150 space-y-4 text-left"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header with Title and Close Button */}
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div
@@ -402,139 +503,182 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
               </button>
             </div>
 
-            {/* Daily Goal Visual Progress Card */}
+            {/* Daily Learning Goal Direct Editor & Progress Card */}
             <div
-              className={`rounded-xl p-4 border space-y-3 ${
+              className={`rounded-2xl p-4.5 border space-y-4 ${
                 isGoalReached
-                  ? 'bg-gradient-to-br from-emerald-50 via-teal-50/60 to-emerald-50 border-emerald-200'
-                  : 'bg-gradient-to-br from-orange-50/80 via-amber-50/50 to-yellow-50/40 border-orange-200/80'
+                  ? 'bg-gradient-to-br from-emerald-50 via-teal-50/60 to-emerald-50 border-emerald-300 shadow-2xs'
+                  : 'bg-gradient-to-br from-blue-50/80 via-sky-50/50 to-white border-sky-200 shadow-2xs'
               }`}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Target
-                    className={`w-4 h-4 ${
-                      isGoalReached ? 'text-emerald-600' : 'text-orange-600'
-                    }`}
-                  />
-                  <span className="text-xs font-bold text-slate-800">
-                    Today&apos;s Target Progress
-                  </span>
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-[#0078D4] text-white">
+                    <Target className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-slate-900 block">
+                      Daily Learning Goal Target
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Questions to answer each day
+                    </span>
+                  </div>
                 </div>
 
-                <button
-                  onClick={() => setIsEditingGoal(!isEditingGoal)}
-                  className="text-[11px] font-bold text-[#0078D4] hover:underline flex items-center gap-1"
-                >
-                  {isEditingGoal ? 'Cancel' : 'Change Goal'}
-                </button>
-              </div>
-
-              {/* Progress Count & Percentage */}
-              <div className="flex items-baseline justify-between">
-                <div className="flex items-baseline gap-1.5">
-                  <span
-                    className={`text-2xl font-black ${
-                      isGoalReached ? 'text-emerald-800' : 'text-orange-950'
-                    }`}
-                  >
-                    {todayAnswered}
-                  </span>
-                  <span className="text-xs font-medium text-slate-500">
-                    / {dailyGoal} questions answered
-                  </span>
-                </div>
                 <span
-                  className={`text-xs font-black ${
-                    isGoalReached ? 'text-emerald-700' : 'text-orange-700'
+                  className={`text-xs font-extrabold px-2 py-0.5 rounded-full ${
+                    isGoalReached
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-blue-100 text-[#0078D4] border border-blue-200'
                   }`}
                 >
-                  {goalPercent}%
+                  {isGoalReached ? 'Completed! ✨' : `${goalPercent}% today`}
                 </span>
               </div>
 
-              {/* Progress Bar */}
-              <div className="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    isGoalReached
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
-                      : 'bg-gradient-to-r from-orange-500 to-amber-500'
-                  }`}
-                  style={{ width: `${goalPercent}%` }}
-                />
-              </div>
-
-              {/* Motivational Status Text */}
-              <div className="text-xs font-medium">
-                {isGoalReached ? (
-                  <p className="text-emerald-800 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      <strong>Goal reached!</strong> Every extra scenario completed today cements your mastery for exam day.
+              {/* Progress Count & Visual Ring / Bar */}
+              <div className="space-y-1.5 bg-white/80 p-3 rounded-xl border border-slate-200/70">
+                <div className="flex items-baseline justify-between">
+                  <div className="flex items-baseline gap-1.5">
+                    <span
+                      className={`text-2xl font-black ${
+                        isGoalReached ? 'text-emerald-700' : 'text-[#0078D4]'
+                      }`}
+                    >
+                      {todayAnswered}
                     </span>
-                  </p>
-                ) : (
-                  <p className="text-slate-600 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span>
-                      {dailyGoal - todayAnswered} more {dailyGoal - todayAnswered === 1 ? 'question' : 'questions'} needed to hit today&apos;s goal. Keep going!
+                    <span className="text-xs font-semibold text-slate-500">
+                      / {dailyGoal} questions answered today
                     </span>
-                  </p>
-                )}
-              </div>
-
-              {/* Goal Input & Quick Preset Selectors */}
-              {isEditingGoal && (
-                <div className="pt-2 border-t border-slate-200/80 space-y-2.5 animate-in fade-in duration-200">
-                  <label className="block text-[11px] font-bold text-slate-700">
-                    Set Target Questions Per Day:
-                  </label>
-
-                  {/* Preset Pills */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {[5, 10, 15, 20, 30].map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => commitGoal(preset)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${
-                          dailyGoal === preset
-                            ? 'bg-[#0078D4] text-white border-[#0078D4]'
-                            : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        {preset} / day
-                      </button>
-                    ))}
                   </div>
+                  <span className="text-xs font-black text-slate-700">
+                    {goalPercent}%
+                  </span>
+                </div>
 
-                  {/* Custom Input */}
-                  <div className="flex items-center gap-2 pt-1">
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ${
+                      isGoalReached
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                        : 'bg-gradient-to-r from-[#0078D4] to-sky-400'
+                    }`}
+                    style={{ width: `${goalPercent}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Direct Goal Editor: Stepper + Presets */}
+              <div className="space-y-2.5 pt-1">
+                <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-700">
+                  <span>Select Target Questions / Day:</span>
+                  <span className="text-slate-400 font-normal">Min 1 • Max 100</span>
+                </div>
+
+                {/* Stepper & Input */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = parseInt(goalInput, 10) || dailyGoal;
+                      const next = Math.max(1, cur - 1);
+                      setGoalInput(String(next));
+                      commitGoal(next, true);
+                    }}
+                    className="w-9 h-9 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 font-black text-slate-700 flex items-center justify-center text-sm shadow-2xs cursor-pointer active:scale-95 transition-transform"
+                    title="Decrease daily goal by 1"
+                  >
+                    -
+                  </button>
+
+                  <div className="relative grow">
                     <input
                       type="number"
                       min={1}
                       max={100}
                       value={goalInput}
                       onChange={(e) => setGoalInput(e.target.value)}
-                      placeholder="e.g. 15"
-                      className="w-24 px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#0078D4]"
+                      onBlur={() => {
+                        const parsed = parseInt(goalInput, 10);
+                        if (!isNaN(parsed) && parsed >= 1) {
+                          commitGoal(parsed, true);
+                        } else {
+                          setGoalInput(String(dailyGoal));
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const parsed = parseInt(goalInput, 10);
+                          if (!isNaN(parsed) && parsed >= 1) {
+                            commitGoal(parsed, true);
+                          }
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      className="w-full h-9 px-3 text-center font-black text-sm text-slate-900 bg-white border border-slate-300 rounded-xl focus:border-[#0078D4] focus:ring-2 focus:ring-[#0078D4]/20 shadow-2xs focus:outline-hidden"
                     />
-                    <button
-                      onClick={() => commitGoal(parseInt(goalInput, 10))}
-                      className="px-3 py-1.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-bold flex items-center gap-1 transition-colors"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Save Goal</span>
-                    </button>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
+                      q/day
+                    </span>
                   </div>
-                </div>
-              )}
 
-              {goalFeedback && (
-                <p className="text-[11px] font-bold text-emerald-700 animate-in fade-in">
-                  ✓ {goalFeedback}
-                </p>
-              )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = parseInt(goalInput, 10) || dailyGoal;
+                      const next = Math.min(100, cur + 1);
+                      setGoalInput(String(next));
+                      commitGoal(next, true);
+                    }}
+                    className="w-9 h-9 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 font-black text-slate-700 flex items-center justify-center text-sm shadow-2xs cursor-pointer active:scale-95 transition-transform"
+                    title="Increase daily goal by 1"
+                  >
+                    +
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parsed = parseInt(goalInput, 10);
+                      if (!isNaN(parsed) && parsed >= 1) {
+                        commitGoal(parsed, true);
+                      }
+                    }}
+                    className="px-3.5 h-9 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold text-xs flex items-center gap-1 shadow-xs transition-colors cursor-pointer shrink-0"
+                  >
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>Save</span>
+                  </button>
+                </div>
+
+                {/* Quick Presets Pills */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  {[5, 10, 15, 20, 25, 30].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => commitGoal(preset, true)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border transition-all cursor-pointer ${
+                        dailyGoal === preset
+                          ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-xs'
+                          : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                      }`}
+                    >
+                      {preset} / day
+                    </button>
+                  ))}
+                </div>
+
+                {/* Direct Feedback Banner */}
+                {goalFeedback && (
+                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-in fade-in duration-200">
+                    <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-600 shrink-0" />
+                    <span>{goalFeedback} Header progress ring updated immediately.</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Streak Number Big Display */}
@@ -613,7 +757,8 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
               </div>
             </div>
           </div>
-        </>
+        </div>,
+        document.body
       )}
     </div>
   );

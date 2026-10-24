@@ -198,7 +198,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#0078D4] text-white tracking-wide uppercase">
-                Microsoft Curriculum Only
+                Azure Curriculum
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30">
                 Front / Back Core Review
@@ -208,7 +208,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
               AZ-900 Concept Flashcards
             </h1>
             <p className="text-sm text-slate-300 max-w-xl">
-              Rapidly reinforce core definitions and tricky exam traps aligned strictly with the official Microsoft curriculum. Priority cards surface definitions from your quiz error patterns.
+              Rapidly reinforce core definitions and tricky exam traps aligned strictly with the Azure Curriculum. Priority cards surface definitions from your quiz error patterns.
             </p>
           </div>
 
@@ -436,7 +436,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
 
                   <div className="flex items-center gap-2 pt-2 text-xs text-slate-400 font-medium">
                     <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Click anywhere or press Space to reveal the Microsoft official definition and exam trap!</span>
+                    <span>Click anywhere or press Space to reveal the Azure Curriculum definition and exam trap!</span>
                   </div>
                 </div>
               ) : (
@@ -445,7 +445,7 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
                   <div className="flex items-center justify-between">
                     <div className="text-xs uppercase font-extrabold text-emerald-700 tracking-wider flex items-center gap-1.5">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>Microsoft Official Definition</span>
+                      <span>Azure Curriculum Definition</span>
                     </div>
                     <span className="text-xs font-bold text-slate-500">{currentCard.term}</span>
                   </div>

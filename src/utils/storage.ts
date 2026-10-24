@@ -1,4 +1,4 @@
-import { UserStats, QuestionAttempt } from '../types/quiz';
+import { UserStats, QuestionAttempt, QuizSessionRecord } from '../types/quiz';
 
 const STORAGE_KEY = 'az900_quiz_builder_stats_v1';
 
@@ -111,6 +111,9 @@ export function saveUserAttempt(
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('az900_question_completed'));
+    }
   } catch (e) {
     console.error('Failed to save to localStorage', e);
   }
@@ -238,3 +241,177 @@ export function resetModuleConfidence(
 
   return updated;
 }
+
+const SESSIONS_STORAGE_KEY = 'az900_quiz_sessions_v1';
+
+export function getPastQuizSessions(): QuizSessionRecord[] {
+  try {
+    const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error('Failed to read quiz sessions', e);
+  }
+
+  // Provide initial baseline session for realistic trajectory demonstration if first time
+  const baselineSessions: QuizSessionRecord[] = [
+    {
+      id: 'session-demo-1',
+      timestamp: Date.now() - 1000 * 60 * 60 * 22,
+      dateStr: new Date(Date.now() - 1000 * 60 * 60 * 22).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      title: 'Adaptive Sprint • Cloud Architecture & Services',
+      mode: 'adaptive',
+      totalQuestions: 10,
+      correctCount: 8,
+      scorePercent: 80,
+      passed: true,
+      durationSeconds: 380,
+      missedQuestions: [
+        {
+          questionId: 'm4-q2',
+          scenario: 'A retail company needs to connect their on-premises datacenter to Azure over a dedicated private connection that completely bypasses the public internet with speeds up to 100 Gbps.',
+          question: 'Which Azure hybrid networking service should they deploy to meet these requirements?',
+          selectedAnswer: 'B',
+          selectedAnswerText: 'Azure VPN Gateway with IPsec',
+          correctAnswer: 'A',
+          correctAnswerText: 'Azure ExpressRoute',
+          whyCorrect: 'Azure ExpressRoute provides dedicated, private layer 3 connectivity directly to Microsoft cloud services bypassing the public Internet, supporting high bandwidth up to 100 Gbps.',
+          examTip: 'Exam Anchor: Whenever a scenario demands bypassing the public internet with dedicated bandwidth, the answer is always ExpressRoute.',
+          moduleId: 4,
+          moduleTitle: 'Azure Networking Core',
+          learningPathTitle: 'Azure Architecture & Services',
+        },
+        {
+          questionId: 'm5-q1',
+          scenario: 'An accounting firm requires high-durability storage in a single region that protects against localized datacenter outages by synchronously replicating data across three separate physical availability zones.',
+          question: 'Which Azure Storage redundancy tier must be configured?',
+          selectedAnswer: 'A',
+          selectedAnswerText: 'Locally Redundant Storage (LRS)',
+          correctAnswer: 'B',
+          correctAnswerText: 'Zone-Redundant Storage (ZRS)',
+          whyCorrect: 'Zone-Redundant Storage (ZRS) synchronously replicates data across three Azure availability zones in the primary region, safeguarding data against datacenter-level hardware failures.',
+          examTip: 'Remember: LRS = 1 datacenter, 3 copies. ZRS = 3 zones, 1 region. GRS = 2 regions, 6 copies.',
+          moduleId: 5,
+          moduleTitle: 'Azure Storage & Redundancy',
+          learningPathTitle: 'Azure Architecture & Services',
+        },
+      ],
+    },
+    {
+      id: 'session-demo-2',
+      timestamp: Date.now() - 1000 * 60 * 60 * 48,
+      dateStr: new Date(Date.now() - 1000 * 60 * 60 * 48).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      title: 'Practice Drill • Cloud Concepts & Shared Responsibility',
+      mode: 'practice',
+      totalQuestions: 8,
+      correctCount: 7,
+      scorePercent: 88,
+      passed: true,
+      durationSeconds: 240,
+      missedQuestions: [
+        {
+          questionId: 'm1-q3',
+          scenario: 'An IT director asks who is responsible for physical server hardware maintenance and host operating system patching when deploying Azure SQL Database.',
+          question: 'Under the cloud Shared Responsibility Model, which party owns host maintenance in a PaaS model?',
+          selectedAnswer: 'A',
+          selectedAnswerText: 'The Customer',
+          correctAnswer: 'B',
+          correctAnswerText: 'The Cloud Provider (Microsoft)',
+          whyCorrect: 'In Platform as a Service (PaaS), the cloud provider manages physical hardware, network infrastructure, virtualization layer, and operating system updates.',
+          examTip: 'PaaS Rule: Customer only manages data, application code, and user identity.',
+          moduleId: 1,
+          moduleTitle: 'Cloud Models & Benefits',
+          learningPathTitle: 'Cloud Concepts',
+        },
+      ],
+    },
+  ];
+
+  try {
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(baselineSessions));
+  } catch (e) {}
+
+  return baselineSessions;
+}
+
+export function saveQuizSession(session: QuizSessionRecord): QuizSessionRecord[] {
+  const current = getPastQuizSessions();
+  const updated = [session, ...current.filter((s) => s.id !== session.id)].slice(0, 50);
+
+  try {
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to save quiz session to localStorage', e);
+  }
+
+  return updated;
+}
+
+export function deleteQuizSession(sessionId: string): QuizSessionRecord[] {
+  const current = getPastQuizSessions();
+  const updated = current.filter((s) => s.id !== sessionId);
+
+  try {
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to delete quiz session', e);
+  }
+
+  return updated;
+}
+
+const QUESTION_NOTES_STORAGE_KEY = 'az900_question_notes_v1';
+
+export function getQuestionNote(questionId: string): string {
+  try {
+    const raw = localStorage.getItem(QUESTION_NOTES_STORAGE_KEY);
+    if (raw) {
+      const notes = JSON.parse(raw);
+      return notes[questionId] || '';
+    }
+  } catch (e) {
+    console.error('Failed to get question note', e);
+  }
+  return '';
+}
+
+export function saveQuestionNote(questionId: string, text: string): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(QUESTION_NOTES_STORAGE_KEY);
+    const notes: Record<string, string> = raw ? JSON.parse(raw) : {};
+    const trimmed = text.trim();
+    if (trimmed) {
+      notes[questionId] = trimmed;
+    } else {
+      delete notes[questionId];
+    }
+    localStorage.setItem(QUESTION_NOTES_STORAGE_KEY, JSON.stringify(notes));
+    return notes;
+  } catch (e) {
+    console.error('Failed to save question note', e);
+    return {};
+  }
+}
+
+export function getAllQuestionNotes(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(QUESTION_NOTES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+
