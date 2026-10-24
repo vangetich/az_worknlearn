@@ -7,33 +7,34 @@ import {
   PolarRadiusAxis,
   ResponsiveContainer,
   Tooltip,
-  Legend,
 } from 'recharts';
 import {
   TrendingUp,
-  Target,
-  Award,
   AlertTriangle,
   CheckCircle2,
-  Sparkles,
   Zap,
   ArrowRight,
-  Shield,
   Layers,
   Compass,
+  Minimize2,
+  Maximize2,
+  Filter,
+  Target,
 } from 'lucide-react';
 import { UserStats } from '../types/quiz';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { calculateDomainConfidence } from '../utils/storage';
-import { MaasaiMedallion } from './MotifDecorations';
 
 interface DomainConfidenceRadarProps {
   stats: UserStats;
   onDrillDomain?: (moduleIds: number[]) => void;
+  onSelectModule?: (moduleId: number) => void;
   compact?: boolean;
+  embedded?: boolean;
 }
 
 type RadarViewMode = 'domains' | 'paths' | 'modules';
+type StatusFilter = 'all' | 'weak' | 'passing';
 
 interface RadarDataPoint {
   subject: string;
@@ -50,9 +51,13 @@ interface RadarDataPoint {
 export const DomainConfidenceRadar: React.FC<DomainConfidenceRadarProps> = ({
   stats,
   onDrillDomain,
+  onSelectModule,
   compact = false,
+  embedded = false,
 }) => {
   const [viewMode, setViewMode] = useState<RadarViewMode>('domains');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [isExpanded, setIsExpanded] = useState<boolean>(true);
 
   // Compute domain data points based on user stats
   const radarData: RadarDataPoint[] = useMemo(() => {
@@ -163,6 +168,17 @@ export const DomainConfidenceRadar: React.FC<DomainConfidenceRadarProps> = ({
     });
   }, [stats, viewMode]);
 
+  // Filtered list for breakdown menu
+  const filteredList = useMemo(() => {
+    if (statusFilter === 'weak') {
+      return radarData.filter((d) => d.score < 70 || d.total === 0);
+    }
+    if (statusFilter === 'passing') {
+      return radarData.filter((d) => d.score >= 70 && d.total > 0);
+    }
+    return radarData;
+  }, [radarData, statusFilter]);
+
   // Determine strongest and weakest tested domains
   const testedDomains = useMemo(() => {
     return radarData.filter((d) => d.total > 0);
@@ -191,11 +207,11 @@ export const DomainConfidenceRadar: React.FC<DomainConfidenceRadarProps> = ({
       const isAboveTarget = data.score >= 70;
 
       return (
-        <div className="bg-slate-900/95 backdrop-blur-md text-white rounded-xl p-3 shadow-2xl border border-sky-400/30 text-xs min-w-50 z-50">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-700/80 pb-1.5 mb-2">
-            <span className="font-extrabold text-sky-200">{data.subject}</span>
+        <div className="bg-slate-900/95 backdrop-blur-md text-white rounded-xl p-2.5 shadow-2xl border border-sky-400/30 text-xs min-w-44 z-50">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-700/80 pb-1 mb-1.5">
+            <span className="font-extrabold text-sky-200 truncate">{data.subject}</span>
             <span
-              className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+              className={`px-1.5 py-0.5 rounded text-[10px] font-black shrink-0 ${
                 data.score >= 85
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                   : data.score >= 70
@@ -209,26 +225,21 @@ export const DomainConfidenceRadar: React.FC<DomainConfidenceRadarProps> = ({
             </span>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1 text-[11px]">
             <div className="flex items-center justify-between text-slate-300">
-              <span>Your Confidence:</span>
-              <span className="font-black text-white text-sm">{data.score}%</span>
+              <span>Confidence:</span>
+              <span className="font-black text-white">{data.score}%</span>
             </div>
 
-            <div className="flex items-center justify-between text-slate-400 text-[11px]">
-              <span>Passing Target:</span>
-              <span className="font-semibold text-emerald-400">70% passing</span>
-            </div>
-
-            <div className="flex items-center justify-between text-slate-400 text-[11px]">
-              <span>Question History:</span>
+            <div className="flex items-center justify-between text-slate-400">
+              <span>Answered:</span>
               <span className="font-medium text-slate-200">
-                {data.correct} / {data.total} correct
+                {data.correct}/{data.total} correct
               </span>
             </div>
 
             <div className="pt-1 border-t border-slate-800 text-[10px] flex items-center justify-between">
-              <span className="text-slate-400">Gap to Target:</span>
+              <span className="text-slate-400">vs 70% Pass:</span>
               <span
                 className={`font-black ${
                   isAboveTarget ? 'text-emerald-400' : 'text-amber-400'
@@ -247,226 +258,308 @@ export const DomainConfidenceRadar: React.FC<DomainConfidenceRadarProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 card-elevation overflow-hidden p-5 sm:p-6 space-y-5">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#0078D4] to-blue-700 text-white shadow-xs">
-            <TrendingUp className="w-5 h-5" />
+    <div
+      className={
+        embedded
+          ? 'bg-white rounded-xl border border-slate-200/90 overflow-hidden'
+          : 'bg-white rounded-2xl border border-slate-200 card-elevation overflow-hidden'
+      }
+    >
+      {/* Compact Responsive Header Bar */}
+      <div className="px-3 sm:px-4 py-2.5 bg-slate-50/90 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#0078D4] to-blue-700 text-white shadow-2xs shrink-0">
+            <TrendingUp className="w-4 h-4" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-black text-base sm:text-lg text-slate-900">
-                Domain Confidence Radar
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h3 className="font-black text-xs sm:text-sm text-slate-900 truncate">
+                Multi-Axial Confidence Mesh
               </h3>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-[#0078D4] border border-blue-200">
-                Live Poly-Mesh
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black bg-blue-50 text-[#0078D4] border border-blue-200 shrink-0">
+                Avg {averageScore}%
+              </span>
+              <span className="hidden sm:inline-block text-[11px] text-slate-500">
+                • 70% Target Threshold
               </span>
             </div>
-            <p className="text-xs text-slate-500">
-              Multi-axial visualization of Azure readiness against the 70% passing threshold
-            </p>
           </div>
         </div>
 
-        {/* View Mode Switcher */}
-        <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/80 text-xs font-bold self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => setViewMode('domains')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              viewMode === 'domains'
-                ? 'bg-[#0078D4] text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+        {/* Right Controls: Axis View Switcher + Compact/Expand Toggle */}
+        <div className="flex items-center gap-1.5 flex-wrap ml-auto">
+          <div
+            className="flex items-center p-0.5 bg-slate-200/75 rounded-lg border border-slate-300/60 text-[11px] font-bold"
+            role="tablist"
+            aria-label="Radar Axis Granularity"
           >
-            6 Core Domains
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('paths')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              viewMode === 'paths'
-                ? 'bg-[#0078D4] text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            3 Paths
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('modules')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              viewMode === 'modules'
-                ? 'bg-[#0078D4] text-white shadow-2xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            12 Modules
-          </button>
-        </div>
-      </div>
-
-      {/* Main Grid: Radar Chart & Metrics Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-        {/* Radar Chart Container */}
-        <div className="lg:col-span-7 flex flex-col items-center justify-center relative min-h-[300px] sm:min-h-[340px]">
-          <div className="w-full h-[300px] sm:h-[340px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart
-                cx="50%"
-                cy="50%"
-                outerRadius={compact ? '70%' : '75%'}
-                data={radarData}
-              >
-                <PolarGrid stroke="#E2E8F0" strokeDasharray="3 3" />
-                <PolarAngleAxis
-                  dataKey="shortSubject"
-                  tick={{ fill: '#334155', fontSize: 11, fontWeight: 700 }}
-                />
-                <PolarRadiusAxis
-                  angle={30}
-                  domain={[0, 100]}
-                  stroke="#94A3B8"
-                  tick={{ fontSize: 9, fill: '#64748B' }}
-                />
-                <Tooltip content={<CustomRadarTooltip />} />
-                {/* Benchmark line: 70% passing threshold */}
-                <Radar
-                  name="Exam Passing Target (70%)"
-                  dataKey="benchmark"
-                  stroke="#16A34A"
-                  strokeDasharray="4 4"
-                  strokeWidth={1.5}
-                  fill="#16A34A"
-                  fillOpacity={0.06}
-                />
-                {/* User Confidence Radar Polygon */}
-                <Radar
-                  name="Your Confidence Score"
-                  dataKey="score"
-                  stroke="#0078D4"
-                  strokeWidth={2.5}
-                  fill="#0078D4"
-                  fillOpacity={0.35}
-                />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Radar Legend & Key Indicators */}
-          <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-semibold text-slate-600 pt-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-[#0078D4] border border-blue-600 inline-block" />
-              <span>Your Confidence Score</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-0.5 border-t-2 border-dashed border-emerald-600 inline-block" />
-              <span>Target Benchmark (70%)</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Diagnostic Breakdown & Quick Drill Action */}
-        <div className="lg:col-span-5 space-y-3.5 bg-slate-50/80 rounded-2xl p-4 border border-slate-200/80">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-wider text-slate-600">
-              Radar Diagnostics
-            </span>
-            <span className="text-xs font-extrabold text-[#0078D4]">
-              Avg: {averageScore}%
-            </span>
-          </div>
-
-          {/* Quick Metrics Cards */}
-          <div className="grid grid-cols-2 gap-2.5">
-            {/* Strongest Domain */}
-            <div className="bg-white p-3 rounded-xl border border-emerald-200/80 shadow-2xs space-y-1">
-              <div className="flex items-center gap-1.5 text-emerald-700">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-wide">
-                  Top Strength
-                </span>
-              </div>
-              <p className="font-extrabold text-xs text-slate-900 truncate">
-                {strongestDomain ? strongestDomain.subject : 'Take a quiz to score'}
-              </p>
-              <p className="text-[11px] font-bold text-emerald-600">
-                {strongestDomain ? `${strongestDomain.score}% accuracy` : '0%'}
-              </p>
-            </div>
-
-            {/* Weakest / Focus Area */}
-            <div className="bg-white p-3 rounded-xl border border-rose-200/80 shadow-2xs space-y-1">
-              <div className="flex items-center gap-1.5 text-rose-700">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-wide">
-                  Focus Priority
-                </span>
-              </div>
-              <p className="font-extrabold text-xs text-slate-900 truncate">
-                {weakestDomain ? weakestDomain.subject : 'No weaknesses yet'}
-              </p>
-              <p className="text-[11px] font-bold text-rose-600">
-                {weakestDomain ? `${weakestDomain.score}% accuracy` : '0%'}
-              </p>
-            </div>
-          </div>
-
-          {/* Domain Breakdown Mini-List */}
-          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 scrollbar-thin">
-            {radarData.map((d, idx) => {
-              const isPassing = d.score >= 70;
-              return (
-                <div
-                  key={idx}
-                  className="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-between text-xs"
-                >
-                  <div className="flex items-center gap-2 truncate pr-2">
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: d.color }}
-                    />
-                    <span className="font-bold text-slate-800 truncate">
-                      {d.subject}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[11px] text-slate-500 font-medium">
-                      {d.total > 0 ? `${d.correct}/${d.total}` : 'Unanswered'}
-                    </span>
-                    <span
-                      className={`font-black text-xs px-1.5 py-0.5 rounded ${
-                        d.total === 0
-                          ? 'bg-slate-100 text-slate-500'
-                          : isPassing
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-rose-100 text-rose-800'
-                      }`}
-                    >
-                      {d.total > 0 ? `${d.score}%` : '—'}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Drill Weakest Domain Action */}
-          {weakestDomain && onDrillDomain && (
             <button
               type="button"
-              onClick={() => onDrillDomain(weakestDomain.moduleIds)}
-              className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#0078D4] to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+              role="tab"
+              aria-selected={viewMode === 'domains'}
+              onClick={() => {
+                setViewMode('domains');
+                if (!isExpanded) setIsExpanded(true);
+              }}
+              className={`px-2 sm:px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                viewMode === 'domains'
+                  ? 'bg-[#0078D4] text-white shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
-              <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
-              <span>Drill Priority: {weakestDomain.subject}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              6 Domains
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'paths'}
+              onClick={() => {
+                setViewMode('paths');
+                if (!isExpanded) setIsExpanded(true);
+              }}
+              className={`px-2 sm:px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                viewMode === 'paths'
+                  ? 'bg-[#0078D4] text-white shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              3 Paths
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'modules'}
+              onClick={() => {
+                setViewMode('modules');
+                if (!isExpanded) setIsExpanded(true);
+              }}
+              className={`px-2 sm:px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                viewMode === 'modules'
+                  ? 'bg-[#0078D4] text-white shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              12 Modules
+            </button>
+          </div>
+
+          {!embedded && (
+            <button
+              type="button"
+              onClick={() => setIsExpanded((prev) => !prev)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-bold transition-colors cursor-pointer"
+              title={isExpanded ? 'Collapse Radar Mesh' : 'Expand Radar Mesh'}
+            >
+              {isExpanded ? (
+                <>
+                  <Minimize2 className="w-3 h-3 text-[#0078D4]" />
+                  <span className="hidden sm:inline">Compact</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3 h-3 text-[#0078D4]" />
+                  <span className="hidden sm:inline">Expand</span>
+                </>
+              )}
             </button>
           )}
         </div>
       </div>
+
+      {/* Expandable Body: Responsive 12-Col Split across Tablet & Laptop, Compact Stack on Mobile */}
+      {isExpanded && (
+        <div className="p-3 sm:p-4 grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 items-center">
+          {/* Left Column: Responsive Radar Chart Container */}
+          <div className="md:col-span-6 lg:col-span-6 flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-slate-100 p-2">
+            <div className="w-full h-[220px] sm:h-[250px] lg:h-[270px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={compact ? '68%' : '72%'}
+                  data={radarData}
+                >
+                  <PolarGrid stroke="#CBD5E1" strokeDasharray="3 3" />
+                  <PolarAngleAxis
+                    dataKey="shortSubject"
+                    tick={{ fill: '#1E293B', fontSize: 10, fontWeight: 700 }}
+                  />
+                  <PolarRadiusAxis
+                    angle={30}
+                    domain={[0, 100]}
+                    stroke="#94A3B8"
+                    tick={{ fontSize: 8, fill: '#64748B' }}
+                  />
+                  <Tooltip content={<CustomRadarTooltip />} />
+                  {/* Benchmark line: 70% passing threshold */}
+                  <Radar
+                    name="Exam Passing Target (70%)"
+                    dataKey="benchmark"
+                    stroke="#16A34A"
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    fill="#16A34A"
+                    fillOpacity={0.06}
+                  />
+                  {/* User Confidence Radar Polygon */}
+                  <Radar
+                    name="Your Confidence Score"
+                    dataKey="score"
+                    stroke="#0078D4"
+                    strokeWidth={2.2}
+                    fill="#0078D4"
+                    fillOpacity={0.35}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Compact Legend */}
+            <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] font-semibold text-slate-600 pb-1">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#0078D4] inline-block" />
+                <span>Your Score</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-0.5 border-t-2 border-dashed border-emerald-600 inline-block" />
+                <span>Pass Target (70%)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Compact Diagnostics, Filter Pills & Interactive Domain Drill List */}
+          <div className="md:col-span-6 lg:col-span-6 space-y-2.5 bg-slate-50/80 rounded-xl p-3 border border-slate-200/80">
+            {/* Top Strength & Focus Priority Mini Cards */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white p-2.5 rounded-lg border border-emerald-200/80 shadow-2xs">
+                <div className="flex items-center justify-between gap-1 text-emerald-700">
+                  <span className="text-[10px] font-black uppercase tracking-wide flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                    <span>Top Strength</span>
+                  </span>
+                  <span className="text-[10px] font-black text-emerald-600">
+                    {strongestDomain ? `${strongestDomain.score}%` : '—'}
+                  </span>
+                </div>
+                <p className="font-extrabold text-xs text-slate-900 truncate mt-0.5">
+                  {strongestDomain ? strongestDomain.subject : 'Solve Qs to rank'}
+                </p>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-lg border border-rose-200/80 shadow-2xs">
+                <div className="flex items-center justify-between gap-1 text-rose-700">
+                  <span className="text-[10px] font-black uppercase tracking-wide flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    <span>Priority Gap</span>
+                  </span>
+                  <span className="text-[10px] font-black text-rose-600">
+                    {weakestDomain ? `${weakestDomain.score}%` : '—'}
+                  </span>
+                </div>
+                <p className="font-extrabold text-xs text-slate-900 truncate mt-0.5">
+                  {weakestDomain ? weakestDomain.subject : 'No weak areas yet'}
+                </p>
+              </div>
+            </div>
+
+            {/* Filter Bar for Axis List */}
+            <div className="flex items-center justify-between gap-2 pt-0.5">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                <Filter className="w-3 h-3 text-[#0078D4]" />
+                <span>Interactive Axis Drill ({filteredList.length})</span>
+              </span>
+              <div className="flex items-center gap-1 text-[10px] font-bold">
+                {(
+                  [
+                    { id: 'all', label: 'All' },
+                    { id: 'weak', label: '<70%' },
+                    { id: 'passing', label: '≥70%' },
+                  ] as const
+                ).map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setStatusFilter(f.id)}
+                    className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                      statusFilter === f.id
+                        ? 'bg-slate-800 text-white'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Domain Breakdown Interactive Mini-List */}
+            <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1 scrollbar-thin">
+              {filteredList.length === 0 ? (
+                <div className="text-center py-4 text-xs text-slate-500 bg-white rounded-lg border border-slate-200/70">
+                  No domains match this filter.
+                </div>
+              ) : (
+                filteredList.map((d, idx) => {
+                  const isPassing = d.score >= 70;
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        if (onSelectModule && d.moduleIds.length === 1) {
+                          onSelectModule(d.moduleIds[0]);
+                        } else if (onDrillDomain) {
+                          onDrillDomain(d.moduleIds);
+                        }
+                      }}
+                      className="bg-white hover:bg-blue-50/40 p-2 rounded-lg border border-slate-200/90 hover:border-[#0078D4] flex items-center justify-between text-xs transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2 truncate pr-2 min-w-0">
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: d.color }}
+                        />
+                        <span className="font-bold text-slate-800 group-hover:text-[#0078D4] truncate">
+                          {d.subject}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {d.total > 0 ? `${d.correct}/${d.total}` : '0/0'}
+                        </span>
+                        <span
+                          className={`font-black text-[11px] px-1.5 py-0.5 rounded min-w-10 text-center ${
+                            d.total === 0
+                              ? 'bg-slate-100 text-slate-500'
+                              : isPassing
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {d.total > 0 ? `${d.score}%` : 'New'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Drill Weakest Domain Action */}
+            {weakestDomain && onDrillDomain && (
+              <button
+                type="button"
+                onClick={() => onDrillDomain(weakestDomain.moduleIds)}
+                className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-[#0078D4] to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300 shrink-0" />
+                <span className="truncate">Drill Priority: {weakestDomain.subject}</span>
+                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

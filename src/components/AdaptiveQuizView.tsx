@@ -29,6 +29,7 @@ interface AdaptiveQuizViewProps {
   onUpdateStats: (newStats: UserStats) => void;
   onNavigateToHistory: () => void;
   onNavigateToPractice: () => void;
+  onOpenPersonalizedReview?: () => void;
 }
 
 export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
@@ -37,6 +38,7 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
   onUpdateStats,
   onNavigateToHistory,
   onNavigateToPractice,
+  onOpenPersonalizedReview,
 }) => {
   const SESSION_LENGTH = 10;
 
@@ -327,7 +329,19 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 pt-2">
+            {onOpenPersonalizedReview && sessionMissedQuestions.length > 0 && (
+              <button
+                onClick={onOpenPersonalizedReview}
+                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>
+                  Start Personalized Review Session ({sessionMissedQuestions.length} Wrong)
+                </span>
+              </button>
+            )}
+
             <button
               onClick={onNavigateToHistory}
               className="w-full sm:w-auto px-5 py-3 rounded-xl bg-[#0078D4] hover:bg-blue-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"

@@ -25,13 +25,16 @@ import {
   Share2,
   Clock,
   Timer,
+  StickyNote,
+  Trash2,
+  Filter,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
 import { KeyConceptSidePanel, extractScenarioTerminology } from './KeyConceptSidePanel';
 import { ScenarioTextWithTooltips } from './ScenarioTextWithTooltips';
 import { QuickNotesDrawer } from './QuickNotesDrawer';
-import { getQuestionNote } from '../utils/storage';
+import { getQuestionNote, saveQuestionNote } from '../utils/storage';
 import { ShareQuestionModal } from './ShareQuestionModal';
 import { QuickStudyOverlay } from './QuickStudyOverlay';
 import { DeepWorkTimerWidget } from './DeepWorkTimerWidget';
@@ -54,6 +57,13 @@ interface QuizCardProps {
   isDynamicDifficultyEnabled?: boolean;
   onToggleDynamicDifficulty?: () => void;
   onOpenStudyRoom?: () => void;
+  onFinishSession?: () => void;
+  onOpenPersonalizedReview?: () => void;
+  unresolvedMistakesCount?: number;
+  sessionAnsweredCount?: number;
+  onToggleRetryIncorrectInPath?: (pathId: 1 | 2 | 3) => void;
+  isRetryingIncorrectInPath?: boolean;
+  incorrectCountInCurrentPath?: number;
 }
 
 export const QuizCard: React.FC<QuizCardProps> = ({
@@ -74,13 +84,23 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   isDynamicDifficultyEnabled = false,
   onToggleDynamicDifficulty,
   onOpenStudyRoom,
+  onFinishSession,
+  onOpenPersonalizedReview,
+  unresolvedMistakesCount = 0,
+  sessionAnsweredCount = 0,
+  onToggleRetryIncorrectInPath,
+  isRetryingIncorrectInPath = false,
+  incorrectCountInCurrentPath = 0,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
   const [showKnowledgeCheck, setShowKnowledgeCheck] = useState<boolean>(false);
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
   const [showQuickNotes, setShowQuickNotes] = useState<boolean>(false);
+  const [questionNoteText, setQuestionNoteText] = useState<string>(() => getQuestionNote(question.id));
   const [hasNote, setHasNote] = useState<boolean>(() => Boolean(getQuestionNote(question.id)));
+  const [noteSavedFeedback, setNoteSavedFeedback] = useState<boolean>(false);
+  const [retryNoticeMessage, setRetryNoticeMessage] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const [showQuickStudy, setShowQuickStudy] = useState<boolean>(false);
@@ -124,19 +144,50 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
   const scenarioConcepts = React.useMemo(() => extractScenarioTerminology(question), [question]);
 
-  // Reset state, question timer & cancel audio when question changes
+  // Reset state, question timer, study note & cancel audio when question changes
   React.useEffect(() => {
     setSelectedOption(null);
     setHasSubmitted(false);
     setElapsedSeconds(0);
     setShowKnowledgeCheck(false);
     setSelectedConceptId(null);
-    setHasNote(Boolean(getQuestionNote(question.id)));
+    const savedNote = getQuestionNote(question.id);
+    setQuestionNoteText(savedNote);
+    setHasNote(Boolean(savedNote.trim()));
+    setNoteSavedFeedback(false);
+    setRetryNoticeMessage(null);
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
   }, [question.id]);
+
+  const handleInlineNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const nextVal = e.target.value;
+    setQuestionNoteText(nextVal);
+    saveQuestionNote(question.id, nextVal);
+    setHasNote(Boolean(nextVal.trim()));
+    setNoteSavedFeedback(true);
+  };
+
+  const handleClearInlineNote = () => {
+    setQuestionNoteText('');
+    saveQuestionNote(question.id, '');
+    setHasNote(false);
+    setNoteSavedFeedback(false);
+  };
+
+  const handleRetryIncorrectClick = () => {
+    if (!onToggleRetryIncorrectInPath) return;
+    if (!isRetryingIncorrectInPath && incorrectCountInCurrentPath === 0) {
+      setRetryNoticeMessage(
+        `You currently have 0 missed questions in Learning Path ${question.learningPathId}. Answer questions in this path first—any missed questions will automatically be queued for Retry Incorrect!`
+      );
+      return;
+    }
+    setRetryNoticeMessage(null);
+    onToggleRetryIncorrectInPath(question.learningPathId);
+  };
 
   // Increment per-question timer every second until user submits an answer
   React.useEffect(() => {
@@ -394,8 +445,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             }`}
             title={
               hasNote
-                ? 'View/edit saved personal mnemonic note for this Azure question'
-                : 'Add personal quick note or mnemonic for this Azure question'
+                ? 'Open all saved study notes drawer'
+                : 'Open study notes drawer'
             }
           >
             <FileText className={`w-3.5 h-3.5 ${hasNote ? 'text-amber-600' : 'text-slate-400'}`} />
@@ -404,6 +455,48 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
             )}
           </button>
+
+          {/* Retry Incorrect in Current Learning Path Button */}
+          {onToggleRetryIncorrectInPath && (
+            <button
+              type="button"
+              onClick={handleRetryIncorrectClick}
+              className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                isRetryingIncorrectInPath
+                  ? 'bg-rose-600 text-white border-rose-700 shadow-xs ring-2 ring-rose-400/40'
+                  : incorrectCountInCurrentPath > 0
+                  ? 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-300 shadow-2xs'
+                  : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200 shadow-2xs'
+              }`}
+              title={
+                isRetryingIncorrectInPath
+                  ? `Showing only missed questions in Learning Path ${question.learningPathId}. Click to restore all path questions.`
+                  : `Filter this quiz session to only show your previously missed questions in Learning Path ${question.learningPathId} (${incorrectCountInCurrentPath} missed)`
+              }
+            >
+              <RotateCcw
+                className={`w-3.5 h-3.5 ${
+                  isRetryingIncorrectInPath
+                    ? 'text-white'
+                    : incorrectCountInCurrentPath > 0
+                    ? 'text-rose-600'
+                    : 'text-slate-400'
+                }`}
+              />
+              <span>{isRetryingIncorrectInPath ? 'Exit Retry Incorrect' : 'Retry Incorrect'}</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                  isRetryingIncorrectInPath
+                    ? 'bg-white/25 text-white'
+                    : incorrectCountInCurrentPath > 0
+                    ? 'bg-rose-600 text-white'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {incorrectCountInCurrentPath} • P{question.learningPathId}
+              </span>
+            </button>
+          )}
 
           {/* Virtual Study Room Trigger */}
           {onOpenStudyRoom && (
@@ -677,6 +770,110 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           })}
         </div>
 
+        {/* Active 'Retry Incorrect' Filter Banner or Info Notice */}
+        {(isRetryingIncorrectInPath || retryNoticeMessage) && (
+          <div
+            className={`p-3.5 rounded-xl border flex flex-wrap items-center justify-between gap-2.5 text-xs ${
+              isRetryingIncorrectInPath
+                ? 'bg-rose-50/90 border-rose-300 text-rose-900'
+                : 'bg-amber-50/90 border-amber-300 text-amber-900'
+            }`}
+          >
+            <div className="flex items-center gap-2 font-semibold">
+              <Filter
+                className={`w-4 h-4 shrink-0 ${
+                  isRetryingIncorrectInPath ? 'text-rose-600' : 'text-amber-600'
+                }`}
+              />
+              <span>
+                {isRetryingIncorrectInPath
+                  ? `Filtered to Previously Missed Questions in Learning Path ${question.learningPathId} (${questionIndex + 1} of ${totalQuestions})`
+                  : retryNoticeMessage}
+              </span>
+            </div>
+            {isRetryingIncorrectInPath ? (
+              <button
+                type="button"
+                onClick={() =>
+                  onToggleRetryIncorrectInPath &&
+                  onToggleRetryIncorrectInPath(question.learningPathId)
+                }
+                className="px-2.5 py-1 rounded-lg bg-white hover:bg-rose-100 text-rose-800 border border-rose-300 font-bold text-[11px] transition-colors cursor-pointer"
+              >
+                Show All Path {question.learningPathId} Questions
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setRetryNoticeMessage(null)}
+                className="px-2 py-0.5 rounded bg-white/80 hover:bg-white text-amber-900 border border-amber-300 font-bold text-[11px] cursor-pointer"
+              >
+                Dismiss
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* INLINE PERSONAL STUDY NOTES TEXT-AREA (Persisted to LocalStorage per Question) */}
+        <div className="rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50/60 via-white to-orange-50/40 p-4 space-y-2.5 shadow-2xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label
+              htmlFor={`study-note-textarea-${question.id}`}
+              className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-amber-900 cursor-pointer"
+            >
+              <span className="p-1.5 rounded-lg bg-amber-100 text-amber-700 border border-amber-200/80">
+                <StickyNote className="w-3.5 h-3.5" />
+              </span>
+              <span>Personal Study Notes • Question {question.id.toUpperCase()}</span>
+              {hasNote && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  <Check className="w-2.5 h-2.5" />
+                  {noteSavedFeedback ? 'Saved to LocalStorage' : 'Saved Note'}
+                </span>
+              )}
+            </label>
+
+            <div className="flex items-center gap-2">
+              {hasNote && (
+                <button
+                  type="button"
+                  onClick={handleClearInlineNote}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
+                  title="Clear personal note for this question"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowQuickNotes(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-amber-50 text-amber-900 border border-amber-200 text-[11px] font-bold transition-colors shadow-2xs cursor-pointer"
+              >
+                <FileText className="w-3 h-3 text-amber-600" />
+                <span>All Saved Notes</span>
+              </button>
+            </div>
+          </div>
+
+          <textarea
+            id={`study-note-textarea-${question.id}`}
+            value={questionNoteText}
+            onChange={handleInlineNoteChange}
+            rows={2}
+            placeholder={`Attach your personal study notes, memory hooks, or key Azure distinctions for ${question.moduleTitle} (${question.id.toUpperCase()})... Automatically saved to local storage.`}
+            className="w-full rounded-lg border border-amber-200/90 bg-white/95 px-3.5 py-2.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0078D4] focus:border-[#0078D4] transition-all resize-y leading-relaxed"
+          />
+
+          <div className="flex items-center justify-between text-[11px] text-slate-500">
+            <span>
+              Persisted automatically in browser local storage for Question{' '}
+              <strong className="text-slate-700">{question.id.toUpperCase()}</strong>
+            </span>
+            <span>{questionNoteText.length} chars</span>
+          </div>
+        </div>
+
         {/* INSTANT FEEDBACK & BREAKDOWN ENGINE */}
         {isAnswered && (
           <div className="mt-8 space-y-5 animate-feedback-entrance">
@@ -798,39 +995,75 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         )}
 
         {/* Footer Navigation Buttons */}
-        <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+        <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <button
             onClick={onPrev}
             disabled={questionIndex === 0}
-            className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+            className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Previous</span>
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Direct 'Retry Incorrect' Button in Footer for Current Learning Path */}
+            {onToggleRetryIncorrectInPath && (
+              <button
+                type="button"
+                onClick={handleRetryIncorrectClick}
+                className={`px-3.5 py-2 rounded-lg border text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isRetryingIncorrectInPath
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700 shadow-xs'
+                    : incorrectCountInCurrentPath > 0
+                    ? 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-300 shadow-2xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200'
+                }`}
+                title={`Filter current quiz session to only show previously missed questions in Learning Path ${question.learningPathId}`}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>
+                  {isRetryingIncorrectInPath
+                    ? `Exit Retry Incorrect (Path ${question.learningPathId})`
+                    : `Retry Incorrect (${incorrectCountInCurrentPath} in Path ${question.learningPathId})`}
+                </span>
+              </button>
+            )}
+
             {isAnswered && (
               <button
                 onClick={() => {
                   setSelectedOption(null);
                   setHasSubmitted(false);
                 }}
-                className="px-3 py-2 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 text-xs font-medium flex items-center gap-1 transition-colors"
-                title="Retry this question"
+                className="px-3 py-2 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                title="Reset and re-attempt this specific question"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Retry</span>
+                <span>Re-Attempt Question</span>
               </button>
             )}
 
-            <button
-              onClick={onNext}
-              disabled={questionIndex === totalQuestions - 1}
-              className="px-5 py-2.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-sm font-semibold flex items-center gap-2 shadow-xs disabled:opacity-40 disabled:pointer-events-none transition-all"
-            >
-              <span>Next Question</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            {onFinishSession && (isAnswered || sessionAnsweredCount > 0 || questionIndex === totalQuestions - 1) && (
+              <button
+                type="button"
+                onClick={onFinishSession}
+                className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-rose-600 to-orange-600 hover:from-rose-700 hover:to-orange-700 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                title="Conclude this quiz session, identify your lowest-scoring modules, and generate a separate Weak-Area Review question set"
+              >
+                <Sparkles className="w-4 h-4 text-amber-200" />
+                <span>Finish Session &amp; Review Weak Areas</span>
+              </button>
+            )}
+
+            {questionIndex < totalQuestions - 1 && (
+              <button
+                onClick={onNext}
+                className="px-5 py-2.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-sm font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+              >
+                <span>Next Question</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -856,7 +1089,10 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       question={question}
       isOpen={showQuickNotes}
       onClose={() => setShowQuickNotes(false)}
-      onNoteSaved={(txt) => setHasNote(Boolean(txt.trim()))}
+      onNoteSaved={(txt) => {
+        setQuestionNoteText(txt);
+        setHasNote(Boolean(txt.trim()));
+      }}
     />
 
     {/* Share Question Modal (Link & QR Code) */}

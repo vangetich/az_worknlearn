@@ -17,6 +17,9 @@ export function getInitialStats(): UserStats {
       2: { correct: 0, total: 0 },
       3: { correct: 0, total: 0 },
     },
+    completedModules: [],
+    reviewedMistakeIds: [],
+    reviewedMistakeTimestamps: {},
   };
 
   try {
@@ -82,8 +85,11 @@ export function saveUserAttempt(
     total: currentPath.total + 1,
   };
 
-  // Update mistakes history if incorrect
+  // Update mistakes history & reviewedMistakeIds
   let mistakesHistory = stats.mistakesHistory || [];
+  let reviewedMistakeIds = stats.reviewedMistakeIds || [];
+  const reviewedMistakeTimestamps = { ...(stats.reviewedMistakeTimestamps || {}) };
+
   if (!attempt.isCorrect) {
     const mistakeEntry = {
       questionId: attempt.questionId,
@@ -93,10 +99,17 @@ export function saveUserAttempt(
       timestamp: attempt.timestamp,
       trapType: attempt.trapType || 'Conceptual Gap',
     };
-    mistakesHistory = [mistakeEntry, ...mistakesHistory.filter(m => m.questionId !== attempt.questionId)].slice(0, 25);
+    mistakesHistory = [mistakeEntry, ...mistakesHistory.filter(m => m.questionId !== attempt.questionId)].slice(0, 50);
+    // Since user just got it wrong again, remove from reviewedMistakeIds so it appears in review sessions
+    reviewedMistakeIds = reviewedMistakeIds.filter(id => id !== attempt.questionId);
+    delete reviewedMistakeTimestamps[attempt.questionId];
   } else {
-    // If user answered correctly, remove from immediate active mistake review
+    // If user answered correctly, remove from active mistake review and record as reviewed
     mistakesHistory = mistakesHistory.filter(m => m.questionId !== attempt.questionId);
+    if (!reviewedMistakeIds.includes(attempt.questionId)) {
+      reviewedMistakeIds = [...reviewedMistakeIds, attempt.questionId];
+    }
+    reviewedMistakeTimestamps[attempt.questionId] = attempt.timestamp;
   }
 
   const updated: UserStats = {
@@ -107,6 +120,8 @@ export function saveUserAttempt(
     moduleMastery,
     pathMastery,
     mistakesHistory,
+    reviewedMistakeIds,
+    reviewedMistakeTimestamps,
   };
 
   try {
@@ -116,6 +131,124 @@ export function saveUserAttempt(
     }
   } catch (e) {
     console.error('Failed to save to localStorage', e);
+  }
+
+  return updated;
+}
+
+export function markQuestionReviewedSuccessfully(
+  stats: UserStats,
+  questionId: string
+): UserStats {
+  const now = Date.now();
+  const mistakesHistory = (stats.mistakesHistory || []).filter(
+    (m) => m.questionId !== questionId
+  );
+  const existingReviewed = stats.reviewedMistakeIds || [];
+  const reviewedMistakeIds = existingReviewed.includes(questionId)
+    ? existingReviewed
+    : [...existingReviewed, questionId];
+  const reviewedMistakeTimestamps = {
+    ...(stats.reviewedMistakeTimestamps || {}),
+    [questionId]: now,
+  };
+
+  const updated: UserStats = {
+    ...stats,
+    mistakesHistory,
+    reviewedMistakeIds,
+    reviewedMistakeTimestamps,
+  };
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to save reviewed mistake status', e);
+  }
+
+  return updated;
+}
+
+export function getUnresolvedMistakesMap(
+  stats: UserStats
+): Map<string, { lastWrongAnswer: string; timestamp: number; trapType?: string }> {
+  const wrongMap = new Map<
+    string,
+    { lastWrongAnswer: string; timestamp: number; trapType?: string }
+  >();
+  const reviewedSet = new Set(stats.reviewedMistakeIds || []);
+  const reviewedTimestamps = stats.reviewedMistakeTimestamps || {};
+
+  // 1. Check stats.attempts
+  if (stats.attempts) {
+    Object.entries(stats.attempts).forEach(([qId, attempts]) => {
+      if (attempts && attempts.length > 0) {
+        const sorted = [...attempts].sort((a, b) => b.timestamp - a.timestamp);
+        const latest = sorted[0];
+        const reviewedAt = reviewedTimestamps[qId] || 0;
+        if (!latest.isCorrect && (!reviewedSet.has(qId) || latest.timestamp > reviewedAt)) {
+          wrongMap.set(qId, {
+            lastWrongAnswer: latest.selectedAnswer,
+            timestamp: latest.timestamp,
+            trapType: latest.trapType,
+          });
+        }
+      }
+    });
+  }
+
+  // 2. Check stats.mistakesHistory
+  if (stats.mistakesHistory && stats.mistakesHistory.length > 0) {
+    stats.mistakesHistory.forEach((m) => {
+      const reviewedAt = reviewedTimestamps[m.questionId] || 0;
+      if (reviewedSet.has(m.questionId) && m.timestamp <= reviewedAt) {
+        return;
+      }
+      // Also check if latest attempt in stats.attempts was actually correct
+      const qAttempts = stats.attempts?.[m.questionId];
+      if (qAttempts && qAttempts.length > 0) {
+        const latest = [...qAttempts].sort((a, b) => b.timestamp - a.timestamp)[0];
+        if (latest.isCorrect && latest.timestamp >= m.timestamp) {
+          return;
+        }
+      }
+      const existing = wrongMap.get(m.questionId);
+      if (!existing || m.timestamp > existing.timestamp) {
+        wrongMap.set(m.questionId, {
+          lastWrongAnswer: m.wrongChoice,
+          timestamp: m.timestamp,
+          trapType: m.trapType,
+        });
+      }
+    });
+  }
+
+  return wrongMap;
+}
+
+export function getUnresolvedMissedQuestionsCount(stats: UserStats): number {
+  return getUnresolvedMistakesMap(stats).size;
+}
+
+export function toggleModuleCompletion(
+  stats: UserStats,
+  moduleId: number
+): UserStats {
+  const current = stats.completedModules || [];
+  const exists = current.includes(moduleId);
+  const completedModules = exists
+    ? current.filter((id) => id !== moduleId)
+    : [...current, moduleId].sort((a, b) => a - b);
+
+  const updated: UserStats = {
+    ...stats,
+    completedModules,
+  };
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to save module completion', e);
   }
 
   return updated;

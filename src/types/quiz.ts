@@ -80,6 +80,9 @@ export interface UserStats {
     timestamp: number;
     trapType: string;
   }[];
+  completedModules?: number[]; // Module IDs (1..12) marked complete by user
+  reviewedMistakeIds?: string[]; // Question IDs reviewed successfully and removed from future review sessions
+  reviewedMistakeTimestamps?: Record<string, number>; // questionId -> timestamp when reviewed successfully
 }
 
 export interface CheatSheetItem {

@@ -37,7 +37,14 @@ app.get('/api/health', (req, res) => {
 // API: Generate scenario-based AZ-900 quiz question(s)
 app.post('/api/generate-scenario', async (req, res) => {
   try {
-    const { pathId, moduleId, difficulty = 'Intermediate', customPrompt = '', count = 1 } = req.body;
+    const {
+      pathId,
+      moduleId,
+      difficulty = 'Intermediate',
+      customPrompt = '',
+      count = 1,
+      weakModules = [],
+    } = req.body;
 
     if (!process.env.GEMINI_API_KEY) {
       return res.status(503).json({
@@ -64,12 +71,23 @@ Question requirements:
    - "moduleTitle": Official Module title.
    - "difficulty": "Fundamental", "Intermediate", or "Advanced".`;
 
+    const weakModulesText =
+      Array.isArray(weakModules) && weakModules.length > 0
+        ? `\nTargeted Weak Modules from User's Recent Quiz Session (distribute questions across these lowest-scoring modules):\n` +
+          weakModules
+            .map(
+              (wm: any) =>
+                `- Module ${wm.moduleId}: ${wm.moduleTitle} (Path ${wm.pathId}: ${wm.pathTitle}, Current Score: ${wm.accuracy}%)`
+            )
+            .join('\n')
+        : '';
+
     const promptText = `Generate ${count} scenario-based AZ-900 exam question(s).
 Focus:
-- Learning Path: ${pathId ? `Path ${pathId}` : 'Any official AZ-900 path'}
-- Module: ${moduleId ? `Module ${moduleId}` : 'Any relevant AZ-900 module'}
+- Learning Path: ${pathId ? `Path ${pathId}` : 'Official AZ-900 paths'}
+- Module: ${moduleId ? `Module ${moduleId}` : 'Targeted weak modules listed below'}
 - Target Difficulty: ${difficulty}
-${customPrompt ? `- Specific Scenario/Topic focus: "${customPrompt}"` : ''}
+${customPrompt ? `- Specific Scenario/Topic focus: "${customPrompt}"` : ''}${weakModulesText}
 
 Ensure distractors are plausible real Azure services that test genuine conceptual understanding.`;
 

@@ -19,6 +19,7 @@ import {
   Minimize2,
   Zap,
   AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import { Header, AppTab } from './components/Header';
 import { QuizCard } from './components/QuizCard';
@@ -47,11 +48,23 @@ import { ReviewSessionModal } from './components/ReviewSessionModal';
 import { WeeklyLearningRoadmap } from './components/WeeklyLearningRoadmap';
 import { ProfileView } from './components/ProfileView';
 import { AchievementOverlay } from './components/AchievementOverlay';
+import { PostSessionWeakAreaReview } from './components/PostSessionWeakAreaReview';
+import { AzureCloudExplorer } from './components/AzureCloudExplorer';
 import { AfricanWatermarkPattern, KitengeRibbon, MaasaiMedallion } from './components/MotifDecorations';
 import { BUILTIN_QUESTIONS } from './data/questionBank';
 import { LEARNING_PATHS } from './data/curriculum';
 import { Question, UserStats, QuestionAttempt } from './types/quiz';
-import { getInitialStats, saveUserAttempt, toggleBookmark, resetModuleConfidence, saveQuizSession } from './utils/storage';
+import {
+  getInitialStats,
+  saveUserAttempt,
+  toggleBookmark,
+  resetModuleConfidence,
+  saveQuizSession,
+  toggleModuleCompletion,
+  markQuestionReviewedSuccessfully,
+  getUnresolvedMissedQuestionsCount,
+  getUnresolvedMistakesMap,
+} from './utils/storage';
 import { ThemeToggle } from './components/ThemeToggle';
 import { getStoredTheme, applyTheme } from './utils/theme';
 
@@ -85,6 +98,8 @@ export default function App() {
   const [selectedModuleId, setSelectedModuleId] = useState<number | 'all'>('all');
   const [onlyBookmarks, setOnlyBookmarks] = useState<boolean>(false);
   const [onlyAiGenerated, setOnlyAiGenerated] = useState<boolean>(false);
+  const [retryIncorrectPathId, setRetryIncorrectPathId] = useState<1 | 2 | 3 | null>(null);
+  const [retryIncorrectSnapshotIds, setRetryIncorrectSnapshotIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [pendingJumpQuestionId, setPendingJumpQuestionId] = useState<string | null>(null);
 
@@ -99,6 +114,8 @@ export default function App() {
 
   // Engagement & Anti-fatigue states
   const [sessionAnswerCount, setSessionAnswerCount] = useState<number>(0);
+  const [sessionAttempts, setSessionAttempts] = useState<QuestionAttempt[]>([]);
+  const [showPostSessionReview, setShowPostSessionReview] = useState<boolean>(false);
   const [showStudyBreak, setShowStudyBreak] = useState<boolean>(false);
   const [showMicroDrill, setShowMicroDrill] = useState<number | false>(false);
   const [microDrillTargetModuleId, setMicroDrillTargetModuleId] = useState<number>(5);
@@ -148,10 +165,74 @@ export default function App() {
     setStats(updated);
   };
 
+  // Previously missed question IDs grouped by Learning Path (1, 2, 3)
+  const missedQuestionsByPath = useMemo(() => {
+    const unresolvedMap = getUnresolvedMistakesMap(stats);
+    const grouped: Record<1 | 2 | 3, string[]> = { 1: [], 2: [], 3: [] };
+
+    ([1, 2, 3] as const).forEach((pId) => {
+      const pathQs = questions.filter((q) => q.learningPathId === pId);
+      // Primary: unresolved mistakes or latest attempt is incorrect
+      const primaryMissed = pathQs
+        .filter((q) => {
+          if (unresolvedMap.has(q.id)) return true;
+          const atts = stats.attempts?.[q.id] || [];
+          if (atts.length > 0) {
+            const latest = [...atts].sort((a, b) => b.timestamp - a.timestamp)[0];
+            if (!latest.isCorrect) return true;
+          }
+          return false;
+        })
+        .map((q) => q.id);
+
+      if (primaryMissed.length > 0) {
+        grouped[pId] = primaryMissed;
+      } else {
+        // Fallback: any question in this path that was previously missed at least once
+        grouped[pId] = pathQs
+          .filter((q) => (stats.attempts?.[q.id] || []).some((a) => !a.isCorrect))
+          .map((q) => q.id);
+      }
+    });
+
+    return grouped;
+  }, [questions, stats]);
+
+  // Toggle 'Retry Incorrect' filter for a specific Learning Path
+  const handleToggleRetryIncorrectInPath = (pathId: 1 | 2 | 3) => {
+    if (retryIncorrectPathId === pathId) {
+      setRetryIncorrectPathId(null);
+      setRetryIncorrectSnapshotIds([]);
+      setCurrentQuestionIndex(0);
+      return;
+    }
+
+    const missedIds = missedQuestionsByPath[pathId] || [];
+    if (missedIds.length === 0) return;
+
+    setRetryIncorrectPathId(pathId);
+    setRetryIncorrectSnapshotIds(missedIds);
+    setSelectedPathId(pathId);
+    setSelectedModuleId('all');
+    setOnlyBookmarks(false);
+    setOnlyAiGenerated(false);
+    setCurrentQuestionIndex(0);
+    setShowPostSessionReview(false);
+    setActiveTab('quiz');
+  };
+
   // Filtered question set with dynamic difficulty prioritization and global search query
   const filteredQuestions = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
     const list = questions.filter((q) => {
+      if (retryIncorrectPathId !== null) {
+        if (q.learningPathId !== retryIncorrectPathId) return false;
+        const allowedIds =
+          retryIncorrectSnapshotIds.length > 0
+            ? retryIncorrectSnapshotIds
+            : missedQuestionsByPath[retryIncorrectPathId] || [];
+        if (!allowedIds.includes(q.id)) return false;
+      }
       if (selectedPathId !== 'all' && q.learningPathId !== selectedPathId) {
         return false;
       }
@@ -194,7 +275,20 @@ export default function App() {
     }
 
     return list;
-  }, [questions, selectedPathId, selectedModuleId, onlyBookmarks, onlyAiGenerated, searchQuery, stats.bookmarks, isDynamicDifficultyEnabled, dynamicDifficulty]);
+  }, [
+    questions,
+    retryIncorrectPathId,
+    retryIncorrectSnapshotIds,
+    missedQuestionsByPath,
+    selectedPathId,
+    selectedModuleId,
+    onlyBookmarks,
+    onlyAiGenerated,
+    searchQuery,
+    stats.bookmarks,
+    isDynamicDifficultyEnabled,
+    dynamicDifficulty,
+  ]);
 
   // Handle jumping directly to a specific question selected in GlobalSearchBar
   useEffect(() => {
@@ -245,9 +339,10 @@ export default function App() {
   const handleAnswerQuestion = (
     questionId: string,
     selectedAnswer: string,
-    isCorrect: boolean
+    isCorrect: boolean,
+    customQuestionObj?: Question
   ) => {
-    const targetQ = questions.find((q) => q.id === questionId);
+    const targetQ = customQuestionObj || questions.find((q) => q.id === questionId);
     if (!targetQ) return;
 
     const attempt: QuestionAttempt = {
@@ -261,6 +356,7 @@ export default function App() {
 
     const updatedStats = saveUserAttempt(stats, attempt);
     setStats(updatedStats);
+    setSessionAttempts((prev) => [...prev, attempt]);
 
     // Dynamic Difficulty Adjustment:
     // If user answers consecutively correct (>=2), step up difficulty: Fundamental -> Intermediate -> Advanced
@@ -307,6 +403,23 @@ export default function App() {
     const updated = toggleBookmark(stats, questionId);
     setStats(updated);
   };
+
+  // Module completion toggle (Curriculum Progress Tracker)
+  const handleToggleModuleComplete = (moduleId: number) => {
+    const updated = toggleModuleCompletion(stats, moduleId);
+    setStats(updated);
+  };
+
+  // Mark a missed question as reviewed successfully to remove from future review sessions
+  const handleMarkQuestionReviewed = (questionId: string) => {
+    const updated = markQuestionReviewedSuccessfully(stats, questionId);
+    setStats(updated);
+  };
+
+  const unresolvedMistakesCount = useMemo(
+    () => getUnresolvedMissedQuestionsCount(stats),
+    [stats]
+  );
 
   // Add newly generated AI question
   const handleQuestionGenerated = (newQ: Question) => {
@@ -374,7 +487,11 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           selectedPathId={selectedPathId}
-          onSelectPath={(p) => setSelectedPathId(p)}
+          onSelectPath={(p) => {
+            setRetryIncorrectPathId(null);
+            setRetryIncorrectSnapshotIds([]);
+            setSelectedPathId(p);
+          }}
           stats={stats}
           onOpenExport={() => setShowExportModal(true)}
           onUpdateStats={setStats}
@@ -391,6 +508,8 @@ export default function App() {
           }}
           onSelectQuestion={(targetQ) => {
             setSearchQuery('');
+            setRetryIncorrectPathId(null);
+            setRetryIncorrectSnapshotIds([]);
             setSelectedPathId('all');
             setSelectedModuleId('all');
             setOnlyBookmarks(false);
@@ -400,6 +519,8 @@ export default function App() {
           }}
           onSelectModule={(modId, pathId) => {
             setSearchQuery('');
+            setRetryIncorrectPathId(null);
+            setRetryIncorrectSnapshotIds([]);
             setSelectedPathId(pathId);
             setSelectedModuleId(modId);
             setOnlyBookmarks(false);
@@ -407,6 +528,8 @@ export default function App() {
             setCurrentQuestionIndex(0);
             setActiveTab('quiz');
           }}
+          onRetryIncorrectPath={handleToggleRetryIncorrectInPath}
+          retryIncorrectPathId={retryIncorrectPathId}
         />
       )}
 
@@ -452,22 +575,20 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 relative z-10">
         {/* TAB 1: PRACTICE MODULES */}
         {activeTab === 'quiz' && (
-          <div className="space-y-6">
-            {/* Centered Hero Section with Light Azure Shimmer, Glassy Dropdown Menu & AZ-900 at the top (Hidden in Focus Mode) */}
+          <div className="space-y-4 sm:space-y-5">
+            {/* Compact Responsive Hero Section + Glassy Study Hub Dropdown (Hidden in Focus Mode) */}
             {!isFocusMode && (
-              <div className="text-center py-2 sm:py-4 space-y-4 max-w-4xl mx-auto relative z-20">
-                {/* AZ-900 Azure fundamentals at the top */}
-                <div className="flex items-center justify-center gap-2">
-                  <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-black bg-gradient-to-r from-blue-500/10 via-sky-500/20 to-blue-500/10 text-[#0078D4] border border-sky-300/60 shadow-2xs backdrop-blur-xs">
-                    <MaasaiMedallion size={16} />
-                    <span className="tracking-wide uppercase font-extrabold">AZ-900 Azure Fundamentals</span>
+              <div className="text-center py-1 sm:py-2 space-y-2.5 max-w-5xl mx-auto relative z-20">
+                {/* Top Row: AZ-900 Badge + Glassy Study Hub Dropdown */}
+                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-blue-500/10 via-sky-500/20 to-blue-500/10 text-[#0078D4] border border-sky-300/60 shadow-2xs backdrop-blur-xs">
+                    <MaasaiMedallion size={14} />
+                    <span className="tracking-wide uppercase font-extrabold">
+                      AZ-900 Azure Cloud Explorer
+                    </span>
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-slate-600 font-semibold text-[11px] hidden sm:inline">Azure Curriculum</span>
                   </div>
-                </div>
 
-                {/* Centred below nav menu and between nav menu and the Heading: Semi-transparent glassy dropdown-menu */}
-                <div className="flex justify-center">
                   <GlassyStudyHubDropdown
                     stats={stats}
                     activeTab={activeTab}
@@ -489,96 +610,129 @@ export default function App() {
                   />
                 </div>
 
-                {/* Heading: Centred as well and font enlarged, looking nice with a light azure blue vibrant shimmer */}
-                <div className="space-y-2">
-                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight animate-azure-shimmer text-center">
+                {/* Compact Responsive Heading */}
+                <div className="space-y-1">
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight animate-azure-shimmer text-center">
                     AZ-900 Azure Fundamentals Practice Studio
                   </h1>
-                  <p className="text-xs sm:text-sm md:text-base text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal">
-                    Master official scenario-based questions with instant architectural breakdowns ("why it's right" vs. "why others are wrong"), exam anchor tips, and distraction-free Focus Mode.
+                  <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal">
+                    Explore official Azure Learning Paths, interactive service definitions, and scenario-based exam questions with instant distractor breakdowns.
                   </p>
-                </div>
-
-                {/* Quick Actions Centered */}
-                <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
-                  <button
-                    onClick={() => setActiveTab('adaptive')}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#0078D4] to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-                  >
-                    <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-                    <span>Adaptive Quiz Mode</span>
-                  </button>
-
-                  <button
-                    onClick={() => setShowWeakAreasReview(true)}
-                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-                    title="Launch targeted 5-10 question drill on your lowest scoring modules"
-                  >
-                    <AlertTriangle className="w-4 h-4 text-rose-200" />
-                    <span>Weak Areas Review</span>
-                  </button>
-
-                  <button
-                    onClick={() => setShowStudyRoom(true)}
-                    className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-                    title="Join small group virtual study room with peer learners"
-                  >
-                    <Users className="w-4 h-4 text-sky-200" />
-                    <span>Virtual Study Room</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('flashcards')}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-300" />
-                    <span>Concept Flashcards</span>
-                  </button>
-
-                  <button
-                    onClick={() => setShowMockExam(true)}
-                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-                  >
-                    <Award className="w-4 h-4" />
-                    <span>Launch Mock Exam</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('ai-builder')}
-                    className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-600" />
-                    <span>Create AI Scenario</span>
-                  </button>
                 </div>
               </div>
             )}
 
-            {/* Learning Path Overview Section */}
+            {/* Functional, Compact & CSS-Responsive Azure Cloud Explorer Menus Window */}
             {!isFocusMode && (
-              <LearningPathOverview
+              <AzureCloudExplorer
                 selectedPathId={selectedPathId}
+                selectedModuleId={selectedModuleId}
                 onSelectPath={(pathId) => {
                   setSelectedPathId(pathId);
+                  setSelectedModuleId('all');
+                  setCurrentQuestionIndex(0);
+                  setShowPostSessionReview(false);
+                }}
+                onSelectModule={(modId, pathId) => {
+                  if (pathId !== undefined) setSelectedPathId(pathId);
+                  setSelectedModuleId(modId);
+                  setCurrentQuestionIndex(0);
+                  setShowPostSessionReview(false);
+                }}
+                stats={stats}
+                questionCountByModule={questionCountByModule}
+                searchQuery={searchQuery}
+                onSearchQueryChange={(q) => {
+                  setSearchQuery(q);
                   setCurrentQuestionIndex(0);
                 }}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                onToggleModuleComplete={handleToggleModuleComplete}
+                onOpenPersonalizedReview={() => setShowReviewSession(true)}
+                onOpenWeakAreasReview={() => setShowPostSessionReview(true)}
+                onOpenStudyRoom={() => setShowStudyRoom(true)}
+                onOpenMockExam={() => setShowMockExam(true)}
+                unresolvedMistakesCount={unresolvedMistakesCount}
+                isSidebarHidden={isMenuHidden}
+                onToggleSidebar={() => setIsMenuHidden((prev) => !prev)}
               />
             )}
 
-            {/* Main Studio Grid: Curriculum Sidebar + Quiz Card (Left sidebar hidden in Focus Mode) */}
-            <div className={isFocusMode ? "max-w-4xl mx-auto w-full" : "grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"}>
-              {/* Left Column: Navigator & Filters (4 cols, hidden during Focus Mode) */}
-              {!isFocusMode && (
-                <div className="lg:col-span-4 space-y-4">
+            {/* Interactive Learning Path Navigation System & Prominent Active Path Display */}
+            {!isFocusMode && (
+              <LearningPathOverview
+                selectedPathId={selectedPathId}
+                selectedModuleId={selectedModuleId}
+                onSelectPath={(pathId) => {
+                  setSelectedPathId(pathId);
+                  setSelectedModuleId('all');
+                  setCurrentQuestionIndex(0);
+                  setShowPostSessionReview(false);
+                }}
+                onSelectModule={(modId, pathId) => {
+                  if (pathId !== undefined) setSelectedPathId(pathId);
+                  setSelectedModuleId(modId);
+                  setCurrentQuestionIndex(0);
+                  setShowPostSessionReview(false);
+                }}
+                stats={stats}
+                sessionAttempts={sessionAttempts}
+                onFinishSessionAndReviewWeakAreas={() => setShowPostSessionReview(true)}
+                onStartPersonalizedReview={() => setShowReviewSession(true)}
+                onToggleModuleComplete={handleToggleModuleComplete}
+                filteredQuestionsCount={filteredQuestions.length}
+                currentQuestionIndex={currentQuestionIndex}
+              />
+            )}
+
+            {/* Separate Post-Session Weak-Area Review & Practice Question Generator */}
+            {showPostSessionReview ? (
+              <PostSessionWeakAreaReview
+                stats={stats}
+                sessionAttempts={sessionAttempts}
+                allQuestions={questions}
+                selectedPathId={selectedPathId}
+                onAnswerReviewQuestion={handleAnswerQuestion}
+                onAddGeneratedQuestionsToBank={(newQs) => {
+                  setQuestions((prev) => {
+                    const existingIds = new Set(prev.map((q) => q.id));
+                    const uniqueNew = newQs.filter((q) => !existingIds.has(q.id));
+                    const updated = [...uniqueNew, ...prev];
+                    try {
+                      const customOnly = updated.filter((q) => q.isAiGenerated);
+                      localStorage.setItem('az900_custom_questions_v1', JSON.stringify(customOnly));
+                    } catch (e) {
+                      console.error(e);
+                    }
+                    return updated;
+                  });
+                }}
+                onSelectPathForPractice={(pId, mId = 'all') => {
+                  setSelectedPathId(pId);
+                  setSelectedModuleId(mId);
+                  setCurrentQuestionIndex(0);
+                  setShowPostSessionReview(false);
+                }}
+                onStartPersonalizedReview={() => setShowReviewSession(true)}
+                unresolvedMistakesCount={unresolvedMistakesCount}
+                onClose={() => setShowPostSessionReview(false)}
+              />
+            ) : (
+            /* Main Studio Grid: Curriculum Sidebar + Quiz Card (Left sidebar hidden in Focus Mode or when collapsed) */
+            <div className={isFocusMode ? "max-w-4xl mx-auto w-full" : "grid grid-cols-1 lg:grid-cols-12 gap-5 items-start"}>
+              {/* Left Column: Navigator & Filters (4 cols, hidden during Focus Mode or when sidebar is collapsed) */}
+              {!isFocusMode && !isMenuHidden && (
+                <div className="lg:col-span-4 space-y-3.5">
                 {/* Quick Filters */}
-                <div className="bg-white rounded-xl border border-slate-200 p-4 card-elevation flex items-center justify-between gap-2">
+                <div className="bg-white rounded-xl border border-slate-200 p-3 card-elevation flex items-center justify-between gap-2">
                   <button
                     onClick={() => {
                       setOnlyBookmarks(!onlyBookmarks);
                       setOnlyAiGenerated(false);
                       setCurrentQuestionIndex(0);
                     }}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                    className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
                       onlyBookmarks
                         ? 'bg-amber-500 text-white shadow-2xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -594,7 +748,7 @@ export default function App() {
                       setOnlyBookmarks(false);
                       setCurrentQuestionIndex(0);
                     }}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                    className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
                       onlyAiGenerated
                         ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-2xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -619,25 +773,27 @@ export default function App() {
                   }}
                   stats={stats}
                   questionCountByModule={questionCountByModule}
+                  onToggleModuleComplete={handleToggleModuleComplete}
+                  onHideSidebar={() => setIsMenuHidden(true)}
                 />
 
                 {/* African Proverb & Focus Card */}
-                <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/80 p-4">
-                  <div className="flex items-start gap-3">
-                    <MaasaiMedallion size={30} className="shrink-0 mt-0.5" />
+                <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/80 p-3.5">
+                  <div className="flex items-start gap-2.5">
+                    <MaasaiMedallion size={26} className="shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-amber-900">
+                      <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-amber-900">
                         Harambee • Exam Wisdom
                       </h4>
-                      <p className="text-xs text-amber-950 mt-1 italic leading-relaxed">
-                        "Little by little, a little becomes a lot." — Swahili Proverb. Master 5 scenarios daily to guarantee your Azure AZ-900 certification!
+                      <p className="text-xs text-amber-950 mt-0.5 italic leading-relaxed">
+                        "Little by little, a little becomes a lot." — Master 5 scenarios daily!
                       </p>
                       <button
                         onClick={() => setActiveTab('wisdom')}
-                        className="mt-2.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-2xs transition-colors"
+                        className="mt-2 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
                       >
-                        <Sparkles className="w-3.5 h-3.5 fill-amber-200" />
-                        <span>View Technical Wisdom Slides</span>
+                        <Sparkles className="w-3 h-3 fill-amber-200" />
+                        <span>Wisdom Slides</span>
                         <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
@@ -646,8 +802,8 @@ export default function App() {
               </div>
             )}
 
-              {/* Right Column: Active Scenario Question Card (Takes full width in Focus Mode) */}
-              <div className={isFocusMode ? "w-full" : "lg:col-span-8"}>
+              {/* Right Column: Active Scenario Question Card (Takes full width in Focus Mode or when sidebar is collapsed) */}
+              <div className={isFocusMode || isMenuHidden ? "w-full lg:col-span-12" : "lg:col-span-8"}>
                 {/* Sequential Path Focus & Progress Bar when a specific Learning Path is selected */}
                 {selectedPathId !== 'all' && (
                   <div className="mb-4 p-4 rounded-xl border bg-gradient-to-r from-slate-50 to-blue-50/60 border-blue-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -752,6 +908,17 @@ export default function App() {
                       setIsDynamicDifficultyEnabled(!isDynamicDifficultyEnabled)
                     }
                     onOpenStudyRoom={() => setShowStudyRoom(true)}
+                    onFinishSession={() => setShowPostSessionReview(true)}
+                    onOpenPersonalizedReview={() => setShowReviewSession(true)}
+                    unresolvedMistakesCount={unresolvedMistakesCount}
+                    sessionAnsweredCount={sessionAttempts.length}
+                    onToggleRetryIncorrectInPath={handleToggleRetryIncorrectInPath}
+                    isRetryingIncorrectInPath={
+                      retryIncorrectPathId === currentQ.learningPathId
+                    }
+                    incorrectCountInCurrentPath={
+                      missedQuestionsByPath[currentQ.learningPathId]?.length || 0
+                    }
                   />
                 ) : (
                   <div className="bg-white rounded-xl border border-slate-200 card-elevation p-12 text-center space-y-4">
@@ -764,6 +931,8 @@ export default function App() {
                     <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
                       {searchQuery.trim()
                         ? `No questions matched "${searchQuery}". Try another Azure service or clear the search filter.`
+                        : retryIncorrectPathId !== null
+                        ? `No previously missed questions remain in Learning Path ${retryIncorrectPathId}.`
                         : onlyBookmarks
                         ? "You haven't bookmarked any questions yet. Click the bookmark icon on any question to review it here."
                         : onlyAiGenerated
@@ -774,6 +943,8 @@ export default function App() {
                       onClick={() => {
                         setSelectedPathId('all');
                         setSelectedModuleId('all');
+                        setRetryIncorrectPathId(null);
+                        setRetryIncorrectSnapshotIds([]);
                         setOnlyBookmarks(false);
                         setOnlyAiGenerated(false);
                         setSearchQuery('');
@@ -788,6 +959,7 @@ export default function App() {
                 )}
               </div>
             </div>
+            )}
 
             {/* Harambee Weekly Learning Roadmap (Curated Top 3 Azure Services per Week + Docs Links) */}
             {!isFocusMode && (
@@ -815,6 +987,7 @@ export default function App() {
             onUpdateStats={setStats}
             onNavigateToHistory={() => setActiveTab('history')}
             onNavigateToPractice={() => setActiveTab('quiz')}
+            onOpenPersonalizedReview={() => setShowReviewSession(true)}
           />
         )}
 
@@ -957,9 +1130,30 @@ export default function App() {
             onNavigateToPractice={() => setActiveTab('quiz')}
             onNavigateToMock={() => setShowMockExam(true)}
             onOpenManageGoal={() => {
-              // Scroll to header or open goal config
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
+            onSelectPath={(pathId) => {
+              setSelectedPathId(pathId);
+              setSelectedModuleId('all');
+              setCurrentQuestionIndex(0);
+              setShowPostSessionReview(false);
+            }}
+            onSelectModule={(modId, pathId) => {
+              if (pathId !== undefined) setSelectedPathId(pathId);
+              setSelectedModuleId(modId);
+              setCurrentQuestionIndex(0);
+              setShowPostSessionReview(false);
+            }}
+            onToggleModuleComplete={handleToggleModuleComplete}
+            onSearchService={(term) => {
+              setSearchQuery(term);
+              setCurrentQuestionIndex(0);
+            }}
+            onOpenPersonalizedReview={() => setShowReviewSession(true)}
+            onOpenWeakAreasReview={() => setShowWeakAreasReview(true)}
+            setActiveTab={setActiveTab}
+            unresolvedMistakesCount={unresolvedMistakesCount}
+            questionCountByModule={questionCountByModule}
           />
         )}
       </main>
@@ -1057,13 +1251,14 @@ export default function App() {
         onAnswerQuestion={handleAnswerQuestion}
       />
 
-      {/* Review Session Modal: Last 10 Incorrectly Answered Questions with Re-Test */}
+      {/* Personalized Review Session Modal: Incorrectly Answered Questions & Explanations */}
       <ReviewSessionModal
         stats={stats}
         allQuestions={questions}
         isOpen={showReviewSession}
         onClose={() => setShowReviewSession(false)}
         onAnswerQuestion={handleAnswerQuestion}
+        onMarkQuestionReviewed={handleMarkQuestionReviewed}
       />
 
       {/* Celebratory Achievement Unlock Overlay (Master of Governance, 5-Day Streak, etc.) */}

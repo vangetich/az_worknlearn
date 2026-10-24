@@ -177,38 +177,43 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
 
         {/* Semi-transparent Glassy Dropdown Panel */}
         {isOpen && (
-          <div className="absolute left-1/2 -translate-x-1/2 mt-2.5 w-88 sm:w-104 rounded-2xl bg-white/95 backdrop-blur-xl border border-sky-200/80 shadow-2xl shadow-blue-500/15 p-3.5 z-50 space-y-2 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto scrollbar-thin">
+          <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-[calc(100vw-1.5rem)] max-w-[380px] sm:max-w-[440px] rounded-2xl bg-white/98 backdrop-blur-xl border border-sky-200/80 shadow-2xl shadow-blue-500/15 p-3 z-50 space-y-2.5 animate-in fade-in zoom-in-95 duration-150 max-h-[80vh] overflow-y-auto scrollbar-thin">
             {/* Header Note */}
-            <div className="px-2.5 py-2 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-2 py-1.5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <MaasaiMedallion size={16} />
+                <MaasaiMedallion size={15} />
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
-                  Study Hub Features &amp; Tools
+                  Azure Cloud Explorer • Study Hub
                 </span>
               </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0078D4] border border-blue-200/60">
-                AZ-900 Prep
-              </span>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
+                aria-label="Close Study Hub menu"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            {/* FEATURE 1: Daily Learning Goals & Streak (Interactive Card) */}
-            <div className="p-3 rounded-xl bg-gradient-to-br from-orange-50/90 via-amber-50/60 to-white border border-orange-200/80 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-2xs">
-                    <Flame className="w-4 h-4 fill-current" />
+            {/* FEATURE 1: Daily Learning Goals & Streak (Compact Interactive Card) */}
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-orange-50/90 via-amber-50/60 to-white border border-orange-200/80 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-2xs shrink-0">
+                    <Flame className="w-3.5 h-3.5 fill-current" />
                   </div>
-                  <div>
-                    <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                      <span>Daily Learning Goal &amp; Streak</span>
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5 truncate">
+                      <span>Daily Goal &amp; Streak</span>
                       {isGoalReached && (
                         <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-black">
                           Hit! ✨
                         </span>
                       )}
                     </h4>
-                    <p className="text-[11px] text-slate-500">
-                      {stats.streakDays} Day Streak • {todayAnswered} of {dailyGoal} completed today
+                    <p className="text-[10px] text-slate-500 truncate">
+                      {stats.streakDays}d Streak • {todayAnswered}/{dailyGoal} today ({goalPercent}%)
                     </p>
                   </div>
                 </div>
@@ -216,43 +221,37 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
                 <button
                   type="button"
                   onClick={handleOpenGoalModal}
-                  className="px-2.5 py-1 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
+                  className="px-2 py-1 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[10px] font-bold shadow-2xs transition-colors flex items-center gap-1 cursor-pointer shrink-0"
                   title="Open full configuration modal"
                 >
                   <Target className="w-3 h-3" />
-                  <span>Configure</span>
+                  <span>Alerts</span>
                 </button>
               </div>
 
-              {/* Progress Bar */}
-              <div className="space-y-1 bg-white/70 p-2 rounded-lg border border-orange-100">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-semibold text-slate-600">Daily Target Progress</span>
-                  <span className="font-black text-orange-900">{goalPercent}%</span>
-                </div>
-                <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      isGoalReached ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-500 to-orange-500'
-                    }`}
-                    style={{ width: `${goalPercent}%` }}
-                  />
-                </div>
+              {/* Compact Progress Bar */}
+              <div className="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    isGoalReached ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-500 to-orange-500'
+                  }`}
+                  style={{ width: `${goalPercent}%` }}
+                />
               </div>
 
               {/* Quick Goal Adjuster Stepper & Presets */}
-              <div className="flex items-center justify-between pt-0.5 text-xs">
-                <span className="text-[11px] font-bold text-slate-600">Adjust Target:</span>
-                <div className="flex items-center gap-1.5">
+              <div className="flex items-center justify-between text-xs pt-0.5">
+                <span className="text-[10px] font-bold text-slate-600">Target:</span>
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => handleAdjustGoal(dailyGoal - 5)}
                     className="p-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer"
                     title="Decrease by 5"
                   >
-                    <Minus className="w-3 h-3" />
+                    <Minus className="w-2.5 h-2.5" />
                   </button>
-                  <span className="font-black text-slate-900 px-2 min-w-7 text-center">
+                  <span className="font-black text-slate-900 px-1.5 text-[11px] min-w-6 text-center">
                     {dailyGoal}
                   </span>
                   <button
@@ -261,10 +260,10 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
                     className="p-1 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer"
                     title="Increase by 5"
                   >
-                    <Plus className="w-3 h-3" />
+                    <Plus className="w-2.5 h-2.5" />
                   </button>
 
-                  <div className="flex items-center gap-1 ml-1.5 border-l border-slate-200 pl-1.5">
+                  <div className="flex items-center gap-1 ml-1 border-l border-slate-200 pl-1.5">
                     {[10, 15, 20, 25].map((preset) => (
                       <button
                         key={preset}
@@ -284,55 +283,50 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
               </div>
             </div>
 
-            {/* FEATURE 2: Domain Confidence Radar (Interactive Card) */}
-            <div className="p-3 rounded-xl bg-gradient-to-br from-blue-50/90 via-sky-50/60 to-white border border-blue-200/80 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-[#0078D4] to-blue-700 text-white shadow-2xs">
-                    <TrendingUp className="w-4 h-4" />
+            {/* FEATURE 2: Domain Confidence Radar (Compact Interactive Card) */}
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-50/90 via-sky-50/60 to-white border border-blue-200/80 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#0078D4] to-blue-700 text-white shadow-2xs shrink-0">
+                    <TrendingUp className="w-3.5 h-3.5" />
                   </div>
-                  <div>
-                    <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                      <span>Domain Confidence Radar</span>
-                      <span className="text-[9px] bg-blue-100 text-[#0078D4] px-1.5 py-0.5 rounded font-black">
-                        Poly-Mesh
-                      </span>
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-black text-slate-900 truncate">
+                      Domain Confidence Radar
                     </h4>
-                    <p className="text-[11px] text-slate-500">
-                      Multi-axial readiness tracking against 70% passing threshold
+                    <p className="text-[10px] text-slate-500 truncate">
+                      Multi-axial readiness vs 70% exam mark
                     </p>
                   </div>
                 </div>
 
-                <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-[#0078D4] border border-blue-200">
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-[#0078D4] border border-blue-200 shrink-0">
                   {overallAccuracy}% Avg
                 </span>
               </div>
 
-              {/* Action Buttons for Radar */}
-              <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
                   onClick={handleOpenRadarModal}
-                  className="py-1.5 px-2.5 rounded-lg bg-[#0078D4] hover:bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                  className="py-1.5 px-2 rounded-lg bg-[#0078D4] hover:bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center gap-1 shadow-2xs transition-colors cursor-pointer"
                 >
                   <TrendingUp className="w-3 h-3" />
-                  <span>Inspect Radar Chart</span>
+                  <span>Open Radar</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleGoToAnalyticsRadar}
-                  className="py-1.5 px-2.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="py-1.5 px-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
                 >
                   <ExternalLink className="w-3 h-3 text-[#0078D4]" />
-                  <span>Go to Analytics</span>
+                  <span>Analytics</span>
                 </button>
               </div>
             </div>
 
-            {/* Other Study Hub Tools */}
-            <div className="space-y-1 pt-1 border-t border-slate-100">
-              {/* ITEM: Weak Areas Review Drill */}
+            {/* Compact 2-Column Grid for Study Hub Quick Tools */}
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-1.5 pt-1 border-t border-slate-100">
               {onOpenWeakAreasReview && (
                 <button
                   type="button"
@@ -340,28 +334,22 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
                     onOpenWeakAreasReview();
                     setIsOpen(false);
                   }}
-                  className="w-full text-left p-2 rounded-xl hover:bg-rose-50/70 border border-transparent hover:border-rose-200/80 transition-all flex items-start gap-2.5 group/item cursor-pointer"
+                  className="text-left p-2 rounded-xl hover:bg-rose-50/70 border border-slate-100 hover:border-rose-200/80 transition-all flex items-center gap-2 group/item cursor-pointer"
                 >
-                  <div className="p-1.5 rounded-lg bg-rose-600 text-white shadow-2xs shrink-0 mt-0.5">
+                  <div className="p-1.5 rounded-lg bg-rose-600 text-white shadow-2xs shrink-0">
                     <AlertTriangle className="w-3.5 h-3.5" />
                   </div>
-                  <div className="grow">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-slate-900 group-hover/item:text-rose-900">
-                        Weak Areas Review
-                      </h4>
-                      <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-rose-100 text-rose-800">
-                        5–10 Scenarios
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500">
-                      Drill practice scenarios focused only on your lowest scoring modules
+                  <div className="min-w-0">
+                    <h4 className="text-[11px] font-bold text-slate-900 truncate">
+                      Weak Areas Drill
+                    </h4>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      5–10 low-score Qs
                     </p>
                   </div>
                 </button>
               )}
 
-              {/* ITEM: Virtual Study Room */}
               {onOpenStudyRoom && (
                 <button
                   type="button"
@@ -369,163 +357,127 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
                     onOpenStudyRoom();
                     setIsOpen(false);
                   }}
-                  className="w-full text-left p-2 rounded-xl hover:bg-sky-50/70 border border-transparent hover:border-sky-200/80 transition-all flex items-start gap-2.5 group/item cursor-pointer"
+                  className="text-left p-2 rounded-xl hover:bg-sky-50/70 border border-slate-100 hover:border-sky-200/80 transition-all flex items-center gap-2 group/item cursor-pointer"
                 >
-                  <div className="p-1.5 rounded-lg bg-[#0078D4] text-white shadow-2xs shrink-0 mt-0.5">
+                  <div className="p-1.5 rounded-lg bg-[#0078D4] text-white shadow-2xs shrink-0">
                     <Users className="w-3.5 h-3.5" />
                   </div>
-                  <div className="grow">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-slate-900 group-hover/item:text-blue-900">
-                        Virtual Study Room
-                      </h4>
-                      <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-sky-100 text-sky-800">
-                        Live Circle
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500">
-                      Discuss questions and mnemonics with simulated peer learners
+                  <div className="min-w-0">
+                    <h4 className="text-[11px] font-bold text-slate-900 truncate">
+                      Virtual Study Room
+                    </h4>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      Live peer circle
                     </p>
                   </div>
                 </button>
               )}
 
-              {/* ITEM: Adaptive Quiz Mode */}
               <button
                 type="button"
                 onClick={() => {
                   setActiveTab('adaptive');
                   setIsOpen(false);
                 }}
-                className="w-full text-left p-2 rounded-xl hover:bg-blue-50/70 border border-transparent hover:border-blue-200/80 transition-all flex items-start gap-2.5 group/item cursor-pointer"
+                className="text-left p-2 rounded-xl hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200/80 transition-all flex items-center gap-2 group/item cursor-pointer"
               >
-                <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-700 to-indigo-700 text-white shadow-2xs shrink-0 mt-0.5">
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-700 to-indigo-700 text-white shadow-2xs shrink-0">
                   <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
                 </div>
-                <div className="grow">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-900 group-hover/item:text-blue-900">
-                      Adaptive Quiz Mode
-                    </h4>
-                    <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800">
-                      Dynamic
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500">
-                    Prioritizes questions from your weakest domains automatically
+                <div className="min-w-0">
+                  <h4 className="text-[11px] font-bold text-slate-900 truncate">
+                    Adaptive Quiz
+                  </h4>
+                  <p className="text-[10px] text-slate-500 truncate">
+                    Dynamic domain drill
                   </p>
                 </div>
               </button>
 
-              {/* ITEM: Review History */}
               <button
                 type="button"
                 onClick={() => {
                   setActiveTab('history');
                   setIsOpen(false);
                 }}
-                className="w-full text-left p-2 rounded-xl hover:bg-slate-100 border border-transparent hover:border-slate-300 transition-all flex items-start gap-2.5 group/item cursor-pointer"
+                className="text-left p-2 rounded-xl hover:bg-slate-100 border border-slate-100 hover:border-slate-300 transition-all flex items-center gap-2 group/item cursor-pointer"
               >
-                <div className="p-1.5 rounded-lg bg-slate-800 text-white shadow-2xs shrink-0 mt-0.5">
+                <div className="p-1.5 rounded-lg bg-slate-800 text-white shadow-2xs shrink-0">
                   <History className="w-3.5 h-3.5 text-sky-300" />
                 </div>
-                <div className="grow">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-900">
-                      Review Past Sessions
-                    </h4>
-                    <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-slate-200 text-slate-800">
-                      Trajectory
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500">
-                    Track scores and missed scenario questions
+                <div className="min-w-0">
+                  <h4 className="text-[11px] font-bold text-slate-900 truncate">
+                    Past Sessions
+                  </h4>
+                  <p className="text-[10px] text-slate-500 truncate">
+                    Review history
                   </p>
                 </div>
               </button>
 
-              {/* ITEM: Milestone Badges */}
               <button
                 type="button"
                 onClick={() => {
-                  setActiveTab('analytics');
+                  setActiveTab('profile');
                   setIsOpen(false);
                 }}
-                className="w-full text-left p-2 rounded-xl hover:bg-amber-50/70 border border-transparent hover:border-amber-200/80 transition-all flex items-start gap-2.5 group/item cursor-pointer"
+                className="text-left p-2 rounded-xl hover:bg-amber-50/70 border border-slate-100 hover:border-amber-200/80 transition-all flex items-center gap-2 group/item cursor-pointer"
               >
-                <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-2xs shrink-0 mt-0.5">
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-2xs shrink-0">
                   <Award className="w-3.5 h-3.5" />
                 </div>
-                <div className="grow">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-900 group-hover/item:text-amber-900">
-                      Milestone Badges
-                    </h4>
-                    <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-100 text-amber-900">
-                      {unlockedBadgesCount}/{BADGE_DEFINITIONS.length}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500">
-                    Review earned achievements and streaks
+                <div className="min-w-0">
+                  <h4 className="text-[11px] font-bold text-slate-900 truncate">
+                    Badges ({unlockedBadgesCount}/{BADGE_DEFINITIONS.length})
+                  </h4>
+                  <p className="text-[10px] text-slate-500 truncate">
+                    Milestones &amp; profile
                   </p>
                 </div>
               </button>
 
-              {/* ITEM: Export Progress Report */}
               <button
                 type="button"
                 onClick={() => {
                   onOpenExport();
                   setIsOpen(false);
                 }}
-                className="w-full text-left p-2 rounded-xl hover:bg-sky-50/70 border border-transparent hover:border-sky-200/80 transition-all flex items-start gap-2.5 group/item cursor-pointer"
+                className="text-left p-2 rounded-xl hover:bg-sky-50/70 border border-slate-100 hover:border-sky-200/80 transition-all flex items-center gap-2 group/item cursor-pointer"
               >
-                <div className="p-1.5 rounded-lg bg-sky-500 text-white shadow-2xs shrink-0 mt-0.5">
+                <div className="p-1.5 rounded-lg bg-sky-500 text-white shadow-2xs shrink-0">
                   <Download className="w-3.5 h-3.5" />
                 </div>
-                <div className="grow">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-900 group-hover/item:text-sky-900">
-                      Export Progress Report
-                    </h4>
-                    <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-sky-100 text-sky-800">
-                      PDF / JSON
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500">
-                    Download readiness transcript
+                <div className="min-w-0">
+                  <h4 className="text-[11px] font-bold text-slate-900 truncate">
+                    Export Report
+                  </h4>
+                  <p className="text-[10px] text-slate-500 truncate">
+                    PDF / JSON transcript
                   </p>
                 </div>
               </button>
 
-              {/* ITEM: Slide Menu Toggle */}
               <button
                 type="button"
                 onClick={() => {
                   onToggleSlideMenu();
                   setIsOpen(false);
                 }}
-                className="w-full text-left p-2 rounded-xl hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200/80 transition-all flex items-start gap-2.5 group/item cursor-pointer"
+                className="text-left p-2 rounded-xl hover:bg-indigo-50/70 border border-slate-100 hover:border-indigo-200/80 transition-all flex items-center gap-2 group/item cursor-pointer"
               >
-                <div className="p-1.5 rounded-lg bg-indigo-600 text-white shadow-2xs shrink-0 mt-0.5">
+                <div className="p-1.5 rounded-lg bg-indigo-600 text-white shadow-2xs shrink-0">
                   <Layers className="w-3.5 h-3.5" />
                 </div>
-                <div className="grow">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-900 group-hover/item:text-indigo-900">
-                      Slide Menu Features
-                    </h4>
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800">
-                      {isMenuHidden ? 'Hidden' : 'Pinned'}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500">
-                    {isMenuHidden ? 'Click to pin menu visible' : 'Click to hide menu for clean canvas'}
+                <div className="min-w-0">
+                  <h4 className="text-[11px] font-bold text-slate-900 truncate">
+                    Sidebar ({isMenuHidden ? 'Hidden' : 'Pinned'})
+                  </h4>
+                  <p className="text-[10px] text-slate-500 truncate">
+                    {isMenuHidden ? 'Show side navigator' : 'Hide side navigator'}
                   </p>
                 </div>
               </button>
 
-              {/* ITEM: Reset Module Confidence */}
               {onOpenResetModal && (
                 <button
                   type="button"
@@ -533,22 +485,17 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
                     onOpenResetModal();
                     setIsOpen(false);
                   }}
-                  className="w-full text-left p-2 rounded-xl hover:bg-rose-50/70 border border-transparent hover:border-rose-200/80 transition-all flex items-start gap-2.5 group/item cursor-pointer"
+                  className="text-left p-2 rounded-xl hover:bg-rose-50/70 border border-slate-100 hover:border-rose-200/80 transition-all flex items-center gap-2 group/item cursor-pointer"
                 >
-                  <div className="p-1.5 rounded-lg bg-rose-600 text-white shadow-2xs shrink-0 mt-0.5">
+                  <div className="p-1.5 rounded-lg bg-rose-600 text-white shadow-2xs shrink-0">
                     <RotateCcw className="w-3.5 h-3.5" />
                   </div>
-                  <div className="grow">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-slate-900 group-hover/item:text-rose-900">
-                        Reset Module Confidence
-                      </h4>
-                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800">
-                        Scoped
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500">
-                      Clear individual module attempt history
+                  <div className="min-w-0">
+                    <h4 className="text-[11px] font-bold text-slate-900 truncate">
+                      Reset Confidence
+                    </h4>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      Clear module history
                     </p>
                   </div>
                 </button>
