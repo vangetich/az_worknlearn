@@ -424,7 +424,16 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
     return list;
   }, [stats.moduleMastery, sessionAttempts]);
 
-  // Identify the 3 lowest-scoring modules (prioritizing modules within selectedPathId if a path is focused, or modules with session mistakes / lowest accuracy)
+  // Skipped questions queued for Weak Areas review
+  const skippedQuestionsList = useMemo(() => {
+    const skippedSet = new Set(stats.skippedQuestionIds || []);
+    return allQuestions.filter((q) =>
+      skippedSet.has(q.id) &&
+      (selectedPathId === 'all' || q.learningPathId === selectedPathId)
+    );
+  }, [allQuestions, stats.skippedQuestionIds, selectedPathId]);
+
+  // Identify the 3 lowest-scoring modules (prioritizing modules within selectedPathId if a path is focused, or modules with skipped questions / session mistakes / lowest accuracy)
   const weakestModules = useMemo(() => {
     const scoped =
       selectedPathId !== 'all'
@@ -432,8 +441,18 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
         : allModulePerformance;
 
     const candidates = scoped.length > 0 ? [...scoped] : [...allModulePerformance];
+    const skippedCountByModule: Record<number, number> = {};
+    skippedQuestionsList.forEach((q) => {
+      skippedCountByModule[q.moduleId] = (skippedCountByModule[q.moduleId] || 0) + 1;
+    });
 
     candidates.sort((a, b) => {
+      // 0. Prioritize modules with skipped questions marked for review
+      const aSkipped = skippedCountByModule[a.moduleId] || 0;
+      const bSkipped = skippedCountByModule[b.moduleId] || 0;
+      if (aSkipped !== bSkipped) {
+        return bSkipped - aSkipped;
+      }
       // 1. Prioritize modules where the user missed questions in this quiz session
       if (a.sessionWrong !== b.sessionWrong) {
         return b.sessionWrong - a.sessionWrong;
@@ -452,9 +471,9 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
     });
 
     return candidates.slice(0, 3);
-  }, [allModulePerformance, selectedPathId]);
+  }, [allModulePerformance, selectedPathId, skippedQuestionsList]);
 
-  // 3. Generate a new set of practice questions specifically focused on those weak modules
+  // 3. Generate a new set of practice questions specifically focused on those weak modules and any skipped questions
   const generateWeakAreaQuestions = useCallback(async () => {
     setIsGenerating(true);
     setActiveReviewIndex(0);
@@ -514,7 +533,7 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
             }
           );
 
-          // Combine AI-generated questions with 1 targeted scenario per weak module from the remediation deck for a comprehensive 6-question review set
+          // Combine AI-generated questions with 1 targeted scenario per weak module from the remediation deck for a comprehensive review set
           const supplemental: Question[] = targetWeak.map((wm, idx) => {
             const templates =
               MODULE_REMEDIATION_TEMPLATES[wm.moduleId] || MODULE_REMEDIATION_TEMPLATES[1];
@@ -537,7 +556,12 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
             };
           });
 
-          setGeneratedQuestions([...normalizedAiQuestions, ...supplemental].slice(0, 6));
+          setGeneratedQuestions(
+            [...skippedQuestionsList, ...normalizedAiQuestions, ...supplemental].slice(
+              0,
+              Math.max(6, skippedQuestionsList.length + 3)
+            )
+          );
           setIsGenerating(false);
           return;
         }
@@ -546,8 +570,9 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
       // Fallback to deterministic synthesis below if offline or API key not set
     }
 
-    // Deterministic Synthesis: Build a fresh 6-question Weak-Area Review Set focused strictly on the 3 lowest-scoring modules
-    const synthesized: Question[] = [];
+    // Deterministic Synthesis: Prepend any skipped questions, then build a Weak-Area Review Set focused on the 3 lowest-scoring modules
+    const synthesized: Question[] = [...skippedQuestionsList];
+    const existingIds = new Set(synthesized.map((q) => q.id));
 
     targetWeak.forEach((wm, idx) => {
       const templates =
@@ -572,19 +597,22 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
       });
 
       // Also pull 1 unseen or previously missed question from this weak module in the bank
-      const matchingBank = allQuestions.filter((q) => q.moduleId === wm.moduleId);
+      const matchingBank = allQuestions.filter(
+        (q) => q.moduleId === wm.moduleId && !existingIds.has(q.id)
+      );
       if (matchingBank.length > 0) {
         const picked = matchingBank[idx % matchingBank.length];
         synthesized.push({
           ...picked,
-          id: `weak-bank-${picked.id}-${Date.now()}-${idx}`,
         });
       }
     });
 
-    setGeneratedQuestions(synthesized.slice(0, 6));
+    setGeneratedQuestions(
+      synthesized.slice(0, Math.max(6, skippedQuestionsList.length + 3))
+    );
     setIsGenerating(false);
-  }, [weakestModules, selectedPathId, allQuestions]);
+  }, [weakestModules, selectedPathId, allQuestions, skippedQuestionsList]);
 
   // Automatically generate the focused weak-area review set on mount
   useEffect(() => {
@@ -850,6 +878,35 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
 
           {/* Section B: Lowest-Scoring Weak Modules Identified for Targeted Review */}
           <div className="space-y-4">
+            {skippedQuestionsList.length > 0 && (
+              <div className="p-4 rounded-xl bg-amber-50/90 border border-amber-300 flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-amber-950">
+                    <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-950 text-[10px] font-black uppercase tracking-wider">
+                      Skipped Queue
+                    </span>
+                    <span>
+                      {skippedQuestionsList.length} Skipped Question{skippedQuestionsList.length === 1 ? '' : 's'} Marked for Weak Areas Review
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-800">
+                    Questions you skipped without penalty are automatically queued first in your Weak-Area Review set below.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveReviewIndex(0);
+                    setViewMode('review-quiz');
+                  }}
+                  className="px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                >
+                  <span>Review Skipped Now</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
               <div>
                 <h3 className="text-base sm:text-lg font-extrabold text-slate-900 flex items-center gap-2">
@@ -857,7 +914,7 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
                   <span>Identified Lowest-Scoring Modules (Priority Weak Areas)</span>
                 </h3>
                 <p className="text-xs text-slate-500">
-                  These 3 modules have the lowest scores or highest recent misses and are targeted in your separate review question set
+                  These 3 modules have the lowest scores, skipped questions, or highest recent misses and are targeted in your separate review question set
                 </p>
               </div>
 
@@ -1101,11 +1158,16 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
                   })}
                 </div>
 
-                <div className="text-xs text-slate-600 font-medium">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 font-medium">
+                  {(stats.skippedQuestionIds || []).includes(currentReviewQ.id) && (
+                    <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 font-black">
+                      Skipped for Review
+                    </span>
+                  )}
                   <span>
                     Path {currentReviewQ.learningPathId}: {currentReviewQ.learningPathTitle}
                   </span>
-                  <span className="mx-1.5">·</span>
+                  <span className="mx-1">·</span>
                   <strong className="text-rose-700">
                     Weak Area Target: Module {currentReviewQ.moduleId} ({currentReviewQ.moduleTitle})
                   </strong>

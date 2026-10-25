@@ -1,0 +1,190 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Learner account profile and role in the AZ-900 Smart Quiz Builder.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Unique learner email address.",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Learner full name.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "description": "User role tier.",
+          "enum": ["student", "bootcamp_admin", "enterprise_user"]
+        },
+        "isPremium": {
+          "type": "boolean",
+          "description": "Whether the learner has unlocked premium modules via M-Pesa or Stripe."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["uid", "email", "fullName", "role", "isPremium", "createdAt", "updatedAt"]
+    },
+    "UserProgress": {
+      "title": "UserProgress",
+      "description": "Per-module mastery score and status for a specific learner.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "moduleId": {
+          "type": "integer",
+          "description": "Curriculum module number (1 to 12)."
+        },
+        "score": {
+          "type": "integer",
+          "description": "Percentage mastery score (0 to 100)."
+        },
+        "status": {
+          "type": "string",
+          "description": "Mastery status for the module.",
+          "enum": ["not_started", "in_progress", "mastered"]
+        },
+        "lastAttempted": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last question attempt."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Record creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Record update timestamp."
+        }
+      },
+      "required": ["userId", "moduleId", "score", "status", "lastAttempted", "createdAt", "updatedAt"]
+    },
+    "QuizSessionRecord": {
+      "title": "QuizSessionRecord",
+      "description": "Completed quiz session telemetry record.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "questionsAnswered": {
+          "type": "integer",
+          "description": "Total questions answered in session."
+        },
+        "correctCount": {
+          "type": "integer",
+          "description": "Total questions answered correctly."
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when session completed."
+        }
+      },
+      "required": ["userId", "questionsAnswered", "correctCount", "completedAt"]
+    },
+    "PaymentTransaction": {
+      "title": "PaymentTransaction",
+      "description": "M-Pesa STK Push or Stripe payment transaction record.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "gateway": {
+          "type": "string",
+          "description": "Payment gateway identifier.",
+          "enum": ["mpesa", "stripe"]
+        },
+        "amount": {
+          "type": "integer",
+          "description": "Transaction amount."
+        },
+        "currency": {
+          "type": "string",
+          "description": "ISO currency code (KES or USD).",
+          "enum": ["KES", "USD"]
+        },
+        "checkoutRequestId": {
+          "type": "string",
+          "description": "M-Pesa CheckoutRequestID or Stripe session ID.",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "status": {
+          "type": "string",
+          "description": "Payment settlement status.",
+          "enum": ["pending", "completed", "failed"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["userId", "gateway", "amount", "currency", "checkoutRequestId", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Learner account profiles keyed by Firebase Auth UID."
+    },
+    "/user_progress/{progressId}": {
+      "schema": { "$ref": "#/entities/UserProgress" },
+      "description": "Per-module progress records for learners."
+    },
+    "/quiz_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/QuizSessionRecord" },
+      "description": "Completed quiz session telemetry logs."
+    },
+    "/payment_transactions/{txId}": {
+      "schema": { "$ref": "#/entities/PaymentTransaction" },
+      "description": "M-Pesa Daraja STK Push and Stripe payment transactions."
+    }
+  }
+}

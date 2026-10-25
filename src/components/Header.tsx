@@ -18,6 +18,10 @@ import {
   SlidersHorizontal,
   AlertTriangle,
   ArrowRight,
+  Database,
+  RefreshCw,
+  WifiOff,
+  LogOut,
 } from 'lucide-react';
 import {
   MaasaiMedallion,
@@ -33,6 +37,7 @@ import { DailyGoalAlertsModal } from './DailyGoalAlertsModal';
 import { ThemeToggle } from './ThemeToggle';
 import { GlobalSearchBar } from './GlobalSearchBar';
 import { FocusSessionWidget } from './FocusSessionWidget';
+import { SupabaseRealtimeStatus } from '../hooks/usePostgresDatabase';
 
 export type AppTab =
   | 'quiz'
@@ -67,6 +72,11 @@ interface HeaderProps {
   onRetryIncorrectPath?: (pathId: 1 | 2 | 3) => void;
   retryIncorrectPathId?: 1 | 2 | 3 | null;
   onOpenUserGuide?: () => void;
+  realtimeStatus?: SupabaseRealtimeStatus;
+  lastSyncedAt?: number | null;
+  onOpenCloudBackend?: () => void;
+  userEmail?: string | null;
+  onLogout?: () => void;
 }
 
 const PATH_COMPACT_INTEL: Record<
@@ -112,6 +122,11 @@ export const Header: React.FC<HeaderProps> = ({
   onRetryIncorrectPath,
   retryIncorrectPathId = null,
   onOpenUserGuide,
+  realtimeStatus = 'connected',
+  lastSyncedAt = null,
+  onOpenCloudBackend,
+  userEmail = null,
+  onLogout,
 }) => {
   const [showGoalAlertsModal, setShowGoalAlertsModal] = useState<boolean>(false);
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = useState<boolean>(false);
@@ -344,6 +359,48 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Controls on Mobile & Tablet */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Subtle Supabase Real-Time Connection Status Indicator Icon (Mobile/Tablet) */}
+            <button
+              type="button"
+              onClick={onOpenCloudBackend}
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-xl text-[11px] font-bold transition-all shadow-2xs cursor-pointer border ${
+                realtimeStatus === 'connected'
+                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200/90'
+                  : realtimeStatus === 'syncing'
+                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200/90'
+                  : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200/90'
+              }`}
+              title={
+                realtimeStatus === 'connected'
+                  ? `Supabase / Postgres Connected${
+                      lastSyncedAt
+                        ? ` • Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
+                        : ''
+                    } (Click to inspect Cloud DB)`
+                  : realtimeStatus === 'syncing'
+                  ? 'Syncing progress to Supabase / Postgres backend...'
+                  : 'Supabase / Postgres Offline — Progress queued locally'
+              }
+              aria-label={`Supabase real-time sync status: ${realtimeStatus}`}
+            >
+              {realtimeStatus === 'connected' && (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  <Database className="w-3.5 h-3.5 text-emerald-600" />
+                </>
+              )}
+              {realtimeStatus === 'syncing' && (
+                <RefreshCw className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+              )}
+              {realtimeStatus === 'offline' && (
+                <WifiOff className="w-3.5 h-3.5 text-rose-600" />
+              )}
+              <span className="hidden sm:inline capitalize">{realtimeStatus}</span>
+            </button>
+
             <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
             <button
               type="button"
@@ -442,6 +499,54 @@ export const Header: React.FC<HeaderProps> = ({
                 onSelectModule={onSelectModule}
               />
             )}
+
+            {/* Subtle Supabase Real-Time Connection Status Indicator Icon (Desktop) */}
+            <button
+              type="button"
+              onClick={onOpenCloudBackend}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer border shrink-0 ${
+                realtimeStatus === 'connected'
+                  ? 'bg-emerald-50/90 hover:bg-emerald-100 text-emerald-800 border-emerald-200/90'
+                  : realtimeStatus === 'syncing'
+                  ? 'bg-amber-50/90 hover:bg-amber-100 text-amber-800 border-amber-200/90'
+                  : 'bg-rose-50/90 hover:bg-rose-100 text-rose-800 border-rose-200/90'
+              }`}
+              title={
+                realtimeStatus === 'connected'
+                  ? `Supabase / Postgres Real-Time Status: Connected${
+                      lastSyncedAt
+                        ? ` • Last synced at ${new Date(lastSyncedAt).toLocaleTimeString()}`
+                        : ''
+                    } (Click to open Postgres Backend Console)`
+                  : realtimeStatus === 'syncing'
+                  ? 'Supabase / Postgres Real-Time Status: Syncing progress to relational backend...'
+                  : 'Supabase / Postgres Real-Time Status: Offline (Progress buffered locally)'
+              }
+              aria-label={`Supabase real-time sync status: ${realtimeStatus}`}
+            >
+              {realtimeStatus === 'connected' && (
+                <>
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="hidden xl:inline">PG Connected</span>
+                </>
+              )}
+              {realtimeStatus === 'syncing' && (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 text-amber-600 animate-spin shrink-0" />
+                  <span className="hidden xl:inline">PG Syncing</span>
+                </>
+              )}
+              {realtimeStatus === 'offline' && (
+                <>
+                  <WifiOff className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                  <span className="hidden xl:inline">PG Offline</span>
+                </>
+              )}
+            </button>
 
             {onSelectPath && (
               <div className="flex items-center p-0.5 bg-slate-100 rounded-xl border border-slate-200/80 text-xs font-bold shrink-0">
@@ -588,6 +693,18 @@ export const Header: React.FC<HeaderProps> = ({
 
             <ThemeToggle />
             <PWAInstallButton />
+
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
+                title={userEmail ? `Signed in as ${userEmail} • Click to Sign Out` : 'Sign Out'}
+                aria-label="Sign out of session"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            )}
 
             <button
               type="button"

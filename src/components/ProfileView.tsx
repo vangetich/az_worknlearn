@@ -37,6 +37,10 @@ import { DailyLearningGoal } from './DailyLearningGoal';
 import { LearningPathProgressMap } from './LearningPathProgressMap';
 import { triggerAchievementOverlay } from './AchievementOverlay';
 import { AppTab } from './Header';
+import { StreakActivityGraph } from './StreakActivityGraph';
+import { DailyStudyReminder } from './DailyStudyReminder';
+import { getUnresolvedMistakesMap } from '../utils/storage';
+import { BUILTIN_QUESTIONS } from '../data/questionBank';
 
 export interface ProfileViewProps {
   stats: UserStats;
@@ -56,7 +60,7 @@ export interface ProfileViewProps {
   onOpenUserGuide?: () => void;
 }
 
-type ProfileExplorerTab = 'paths' | 'modules' | 'services' | 'actions';
+type ProfileExplorerTab = 'paths' | 'modules' | 'services' | 'gaps' | 'actions';
 
 interface ExplorerServiceItem {
   term: string;
@@ -91,6 +95,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [isEditingName, setIsEditingName] = useState<boolean>(false);
   const [tempName, setTempName] = useState<string>(candidateName);
 
+  // Top-level ProfileView Tab ('overview' | 'gaps')
+  const [profileMainTab, setProfileMainTab] = useState<'overview' | 'gaps'>('overview');
+  const [expandedGapModuleId, setExpandedGapModuleId] = useState<number | null>(null);
+
   // Compact Azure Cloud Explorer Menus Window state in Profile tab
   const [isExplorerExpanded, setIsExplorerExpanded] = useState<boolean>(true);
   const [explorerTab, setExplorerTab] = useState<ProfileExplorerTab>('paths');
@@ -98,6 +106,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [serviceSearch, setServiceSearch] = useState<string>('');
   const [selectedServiceCategory, setSelectedServiceCategory] = useState<string>('All');
   const [activeServiceDetail, setActiveServiceDetail] = useState<ExplorerServiceItem | null>(null);
+  const [gapsFilter, setGapsFilter] = useState<'all' | 'unresolved'>('all');
 
   // Badges section state
   const [selectedCategory, setSelectedCategory] = useState<BadgeCategory>('all');
@@ -248,6 +257,146 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     return Math.round((m.correct / m.total) * 100);
   };
 
+  // Knowledge Gaps Table Data: rank Azure service modules by highest unresolved mistakes
+  const moduleKnowledgeGaps = useMemo(() => {
+    const unresolvedMap = getUnresolvedMistakesMap(stats);
+    const questionToModule = new Map<string, number>();
+
+    BUILTIN_QUESTIONS.forEach((q) => {
+      questionToModule.set(q.id, q.moduleId);
+    });
+
+    if (stats.mistakesHistory) {
+      stats.mistakesHistory.forEach((entry) => {
+        if (entry.questionId && entry.moduleId) {
+          questionToModule.set(entry.questionId, entry.moduleId);
+        }
+      });
+    }
+
+    if (stats.attempts) {
+      Object.entries(stats.attempts).forEach(([qId, list]) => {
+        if (list && list.length > 0 && list[0].moduleId) {
+          questionToModule.set(qId, list[0].moduleId);
+        }
+      });
+    }
+
+    // Group unresolved mistakes by moduleId
+    const unresolvedByModule: Record<
+      number,
+      Array<{ questionId: string; lastWrongAnswer: string; timestamp: number; trapType?: string }>
+    > = {};
+
+    unresolvedMap.forEach((val, qId) => {
+      let modId = questionToModule.get(qId);
+      if (!modId) {
+        const match = qId.match(/mod(\d+)/i);
+        if (match) modId = parseInt(match[1], 10);
+      }
+      if (modId) {
+        if (!unresolvedByModule[modId]) unresolvedByModule[modId] = [];
+        unresolvedByModule[modId].push({ questionId: qId, ...val });
+      }
+    });
+
+    return allModules
+      .map((mod) => {
+        const unresolvedList = unresolvedByModule[mod.id] || [];
+        const unresolvedCount = unresolvedList.length;
+        const mStats = stats.moduleMastery?.[mod.id];
+        const totalAttempts = mStats?.total || 0;
+        const correctAttempts = mStats?.correct || 0;
+        const wrongAttempts = Math.max(0, totalAttempts - correctAttempts);
+        const masteryPct =
+          totalAttempts > 0 ? Math.round((correctAttempts / totalAttempts) * 100) : null;
+
+        const trapCounts: Record<string, number> = {};
+        unresolvedList.forEach((u) => {
+          const t = u.trapType || 'Conceptual Confusion';
+          trapCounts[t] = (trapCounts[t] || 0) + 1;
+        });
+
+        const sortedTraps = Object.entries(trapCounts).sort((a, b) => b[1] - a[1]);
+        const primaryTrap =
+          sortedTraps.length > 0
+            ? sortedTraps[0][0]
+            : wrongAttempts > 0
+            ? 'Service Scope Distractor'
+            : 'No Active Traps';
+
+        const keyServices = (MODULE_FREQUENTLY_MISSED_TERMS[mod.id] || []).map((t) => t.term);
+        const lastMistakeTimestamp =
+          unresolvedList.length > 0
+            ? Math.max(...unresolvedList.map((u) => u.timestamp))
+            : null;
+
+        const severity: 'critical' | 'warning' | 'healthy' =
+          unresolvedCount >= 2 || (masteryPct !== null && masteryPct < 60)
+            ? 'critical'
+            : unresolvedCount === 1 || (masteryPct !== null && masteryPct < 75)
+            ? 'warning'
+            : 'healthy';
+
+        const unresolvedDetails = unresolvedList.map((u) => {
+          const qObj = BUILTIN_QUESTIONS.find((q) => q.id === u.questionId);
+          return {
+            questionId: u.questionId,
+            questionText: qObj?.question || `Scenario Question (${u.questionId})`,
+            lastWrongAnswer: u.lastWrongAnswer,
+            correctAnswer: qObj?.correctAnswer || '—',
+            trapType: u.trapType || 'Conceptual Confusion',
+            timestamp: u.timestamp,
+          };
+        });
+
+        return {
+          moduleId: mod.id,
+          moduleTitle: mod.title,
+          pathId: mod.pathId,
+          unresolvedCount,
+          unresolvedDetails,
+          wrongAttempts,
+          totalAttempts,
+          masteryPct,
+          primaryTrap,
+          keyServices,
+          lastMistakeTimestamp,
+          severity,
+        };
+      })
+      .sort((a, b) => {
+        if (b.unresolvedCount !== a.unresolvedCount) {
+          return b.unresolvedCount - a.unresolvedCount;
+        }
+        if (b.wrongAttempts !== a.wrongAttempts) {
+          return b.wrongAttempts - a.wrongAttempts;
+        }
+        const aPct = a.masteryPct ?? 101;
+        const bPct = b.masteryPct ?? 101;
+        if (aPct !== bPct) {
+          return aPct - bPct;
+        }
+        return a.moduleId - b.moduleId;
+      });
+  }, [stats, allModules]);
+
+  const totalUnresolvedAcrossModules = useMemo(
+    () => moduleKnowledgeGaps.reduce((sum, item) => sum + item.unresolvedCount, 0),
+    [moduleKnowledgeGaps]
+  );
+
+  const visibleKnowledgeGaps = useMemo(() => {
+    const pathFiltered =
+      selectedPathFilter === 'all'
+        ? moduleKnowledgeGaps
+        : moduleKnowledgeGaps.filter((g) => g.pathId === selectedPathFilter);
+    if (gapsFilter === 'unresolved') {
+      return pathFiltered.filter((g) => g.unresolvedCount > 0 || g.wrongAttempts > 0);
+    }
+    return pathFiltered;
+  }, [moduleKnowledgeGaps, selectedPathFilter, gapsFilter]);
+
   const tierColors: Record<
     BadgeTier,
     { bg: string; text: string; border: string; ring: string }
@@ -280,6 +429,489 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   return (
     <div className="space-y-4 sm:space-y-5 max-w-6xl mx-auto">
+      {/* =====================================================================
+          TOP-LEVEL PROFILE VIEW NAVIGATION TABS ('Overview' vs 'Knowledge Gaps')
+         ===================================================================== */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-2 sm:p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+        <div
+          className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80"
+          role="tablist"
+          aria-label="Profile View Sections"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={profileMainTab === 'overview'}
+            onClick={() => setProfileMainTab('overview')}
+            className={`px-3.5 py-2 rounded-lg text-xs sm:text-sm font-extrabold flex items-center gap-2 transition-all cursor-pointer ${
+              profileMainTab === 'overview'
+                ? 'bg-[#0078D4] text-white shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+            }`}
+          >
+            <Compass className="w-4 h-4 shrink-0" />
+            <span>Profile &amp; Progress</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={profileMainTab === 'gaps'}
+            onClick={() => setProfileMainTab('gaps')}
+            className={`px-3.5 py-2 rounded-lg text-xs sm:text-sm font-extrabold flex items-center gap-2 transition-all cursor-pointer ${
+              profileMainTab === 'gaps'
+                ? 'bg-rose-600 text-white shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+            }`}
+          >
+            <AlertTriangle
+              className={`w-4 h-4 shrink-0 ${
+                profileMainTab === 'gaps' ? 'text-amber-200' : 'text-rose-600'
+              }`}
+            />
+            <span>Knowledge Gaps</span>
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-black font-mono ${
+                profileMainTab === 'gaps'
+                  ? 'bg-white text-rose-700'
+                  : totalUnresolvedAcrossModules > 0
+                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                  : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {Math.max(totalUnresolvedAcrossModules, unresolvedMistakesCount)}
+            </span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-slate-500 px-2">
+          <span className="hidden sm:inline font-medium">
+            {totalUnresolvedAcrossModules > 0
+              ? `Highest unresolved mistakes in Module ${moduleKnowledgeGaps[0]?.moduleId}: ${moduleKnowledgeGaps[0]?.moduleTitle}`
+              : 'All 12 Azure service modules monitored for unresolved mistakes'}
+          </span>
+          {profileMainTab === 'overview' && (
+            <button
+              type="button"
+              onClick={() => setProfileMainTab('gaps')}
+              className="text-rose-600 hover:text-rose-700 font-extrabold inline-flex items-center gap-1 cursor-pointer"
+            >
+              <span>Inspect Knowledge Gaps Table</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* =====================================================================
+          DEDICATED TOP-LEVEL 'KNOWLEDGE GAPS' TAB VIEW
+         ===================================================================== */}
+      {profileMainTab === 'gaps' && (
+        <section
+          aria-label="Knowledge Gaps Diagnostic Table"
+          className="bg-white rounded-2xl border border-rose-200 card-elevation overflow-hidden shadow-xs"
+        >
+          <KitengeRibbon height={4} />
+
+          {/* Header Banner */}
+          <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 text-white flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-600/30 border border-rose-400/40 text-amber-300 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-rose-500/30 text-rose-200 border border-rose-400/30">
+                    Diagnostic Analysis
+                  </span>
+                  <h2 className="font-black text-base sm:text-lg text-white">
+                    Azure Service Modules — Knowledge Gaps Table
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Identifies the specific Azure service modules where you have the highest number of unresolved mistakes, ranked by remediation priority.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {onOpenPersonalizedReview && totalUnresolvedAcrossModules > 0 && (
+                <button
+                  type="button"
+                  onClick={onOpenPersonalizedReview}
+                  className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Resolve All {totalUnresolvedAcrossModules} Mistakes</span>
+                </button>
+              )}
+              {onOpenWeakAreasReview && (
+                <button
+                  type="button"
+                  onClick={onOpenWeakAreasReview}
+                  className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Launch Weak Areas Drill</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-6 space-y-4">
+            {/* 3 Diagnostic KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700 block">
+                    Total Unresolved Mistakes
+                  </span>
+                  <span className="text-xl font-black text-slate-900 font-mono">
+                    {totalUnresolvedAcrossModules}
+                  </span>
+                  <span className="text-[11px] text-slate-600 block">
+                    Across {moduleKnowledgeGaps.filter((m) => m.unresolvedCount > 0).length} of 12 Azure modules
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center font-black shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 flex items-center justify-between">
+                <div className="min-w-0 pr-2">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 block">
+                    Highest Priority Module
+                  </span>
+                  <span className="text-sm font-black text-slate-900 truncate block">
+                    M{moduleKnowledgeGaps[0]?.moduleId}: {moduleKnowledgeGaps[0]?.moduleTitle}
+                  </span>
+                  <span className="text-[11px] text-amber-900 font-semibold block">
+                    {moduleKnowledgeGaps[0]?.unresolvedCount || 0} unresolved •{' '}
+                    {moduleKnowledgeGaps[0]?.masteryPct !== null
+                      ? `${moduleKnowledgeGaps[0]?.masteryPct}% mastery`
+                      : 'No attempts yet'}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shrink-0">
+                  <Layers className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-sky-50/70 border border-sky-200 flex items-center justify-between">
+                <div className="min-w-0 pr-2">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#0078D4] block">
+                    Primary Exam Trap Pattern
+                  </span>
+                  <span className="text-sm font-black text-slate-900 truncate block">
+                    {moduleKnowledgeGaps[0]?.primaryTrap || 'No Active Traps'}
+                  </span>
+                  <span className="text-[11px] text-slate-600 block">
+                    Click any service chip below to drill
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-[#0078D4] text-white flex items-center justify-center font-black shrink-0">
+                  <Cloud className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Controls */}
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-extrabold text-slate-700 px-1">Learning Path:</span>
+                {(['all', 1, 2, 3] as const).map((pid) => (
+                  <button
+                    key={String(pid)}
+                    type="button"
+                    onClick={() => setSelectedPathFilter(pid)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      selectedPathFilter === pid
+                        ? 'bg-[#0078D4] text-white'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {pid === 'all' ? 'All Paths' : `Path ${pid}`}
+                  </button>
+                ))}
+              </div>
+
+              <div className="inline-flex rounded-lg bg-white p-0.5 border border-slate-200 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setGapsFilter('all')}
+                  className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+                    gapsFilter === 'all'
+                      ? 'bg-slate-900 text-white'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  All 12 Modules Ranked
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGapsFilter('unresolved')}
+                  className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+                    gapsFilter === 'unresolved'
+                      ? 'bg-rose-600 text-white'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Modules With Mistakes Only
+                </button>
+              </div>
+            </div>
+
+            {/* Knowledge Gaps Table */}
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-900 text-white text-[11px] font-extrabold uppercase tracking-wider">
+                    <th className="py-3 px-3.5">Rank &amp; Status</th>
+                    <th className="py-3 px-3.5">Azure Service Module</th>
+                    <th className="py-3 px-3.5">Key Azure Services</th>
+                    <th className="py-3 px-3.5 text-center">Unresolved Mistakes</th>
+                    <th className="py-3 px-3.5">Dominant Exam Trap</th>
+                    <th className="py-3 px-3.5 text-center">Accuracy</th>
+                    <th className="py-3 px-3.5 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 text-xs">
+                  {visibleKnowledgeGaps.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-10 px-4 text-center text-slate-500">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                          <span className="font-extrabold text-sm text-slate-800">
+                            No unresolved mistakes in this view!
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            Switch to &ldquo;All 12 Modules Ranked&rdquo; to view all Azure service modules.
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    visibleKnowledgeGaps.map((row, idx) => {
+                      const isCritical = row.severity === 'critical';
+                      const isWarning = row.severity === 'warning';
+                      const isExpanded = expandedGapModuleId === row.moduleId;
+
+                      return (
+                        <React.Fragment key={row.moduleId}>
+                          <tr
+                            className={`transition-colors ${
+                              row.unresolvedCount > 0
+                                ? 'bg-rose-50/40 hover:bg-rose-50/80'
+                                : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <td className="py-3 px-3.5 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`w-6 h-6 rounded-lg font-mono text-xs font-black flex items-center justify-center ${
+                                    isCritical
+                                      ? 'bg-rose-600 text-white'
+                                      : isWarning
+                                      ? 'bg-amber-500 text-slate-950'
+                                      : 'bg-slate-100 text-slate-600'
+                                  }`}
+                                >
+                                  #{idx + 1}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                    isCritical
+                                      ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                      : isWarning
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  }`}
+                                >
+                                  {isCritical ? 'High Gap' : isWarning ? 'Needs Review' : 'Clear'}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3.5">
+                              <div className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                                <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 font-mono text-[10px] text-[#0078D4]">
+                                  Module {row.moduleId}
+                                </span>
+                                <span>{row.moduleTitle}</span>
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                                Learning Path {row.pathId} • {row.totalAttempts} total attempts ({row.wrongAttempts} missed)
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3.5">
+                              <div className="flex flex-wrap gap-1 max-w-xs">
+                                {row.keyServices.slice(0, 3).map((srv) => (
+                                  <button
+                                    key={srv}
+                                    type="button"
+                                    onClick={() => {
+                                      if (onSearchService) onSearchService(srv);
+                                      onNavigateToPractice();
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-sky-50 hover:bg-[#0078D4] text-sky-900 hover:text-white border border-sky-200 text-[10px] font-semibold transition-colors cursor-pointer truncate max-w-[140px]"
+                                    title={`Drill Azure service: ${srv}`}
+                                  >
+                                    {srv}
+                                  </button>
+                                ))}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                              {row.unresolvedCount > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedGapModuleId(isExpanded ? null : row.moduleId)
+                                  }
+                                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-mono text-xs font-black shadow-2xs cursor-pointer"
+                                  title="Click to inspect unresolved questions in this module"
+                                >
+                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-200" />
+                                  <span>{row.unresolvedCount} Unresolved</span>
+                                </button>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[11px] font-bold">
+                                  <Check className="w-3 h-3" />
+                                  <span>0 Unresolved</span>
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3.5 whitespace-nowrap">
+                              <span
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-bold border ${
+                                  row.unresolvedCount > 0
+                                    ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                                }`}
+                              >
+                                {row.primaryTrap}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                              {row.masteryPct !== null ? (
+                                <div className="inline-flex flex-col items-center gap-1 w-24">
+                                  <span
+                                    className={`font-mono text-xs font-black ${
+                                      row.masteryPct >= 75
+                                        ? 'text-emerald-700'
+                                        : row.masteryPct >= 50
+                                        ? 'text-amber-700'
+                                        : 'text-rose-700'
+                                    }`}
+                                  >
+                                    {row.masteryPct}%
+                                  </span>
+                                  <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${
+                                        row.masteryPct >= 75
+                                          ? 'bg-emerald-500'
+                                          : row.masteryPct >= 50
+                                          ? 'bg-amber-500'
+                                          : 'bg-rose-500'
+                                      }`}
+                                      style={{ width: `${row.masteryPct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] font-semibold text-slate-400">
+                                  Not Practiced
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3.5 text-right whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5">
+                                {row.unresolvedCount > 0 && onOpenPersonalizedReview && (
+                                  <button
+                                    type="button"
+                                    onClick={onOpenPersonalizedReview}
+                                    className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold inline-flex items-center gap-1 cursor-pointer shadow-2xs"
+                                  >
+                                    <RotateCcw className="w-3 h-3" />
+                                    <span>Fix ({row.unresolvedCount})</span>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (onSelectModule) {
+                                      onSelectModule(row.moduleId, row.pathId);
+                                    }
+                                    onNavigateToPractice();
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <span>Drill Module</span>
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Expandable Unresolved Questions Breakdown */}
+                          {isExpanded && row.unresolvedDetails.length > 0 && (
+                            <tr className="bg-rose-50/70">
+                              <td colSpan={7} className="p-3.5 border-t border-rose-200">
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between text-xs font-extrabold text-rose-950">
+                                    <span>
+                                      Unresolved Questions in Module {row.moduleId} ({row.moduleTitle}):
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedGapModuleId(null)}
+                                      className="text-rose-700 hover:text-rose-900 text-[11px] font-bold cursor-pointer"
+                                    >
+                                      Hide Details
+                                    </button>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    {row.unresolvedDetails.map((detail) => (
+                                      <div
+                                        key={detail.questionId}
+                                        className="p-2.5 rounded-xl bg-white border border-rose-200 flex flex-col justify-between gap-1.5"
+                                      >
+                                        <p className="text-xs font-bold text-slate-900 leading-snug">
+                                          {detail.questionText}
+                                        </p>
+                                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                                          <span className="text-rose-700 font-mono font-bold">
+                                            Your Last Answer: {detail.lastWrongAnswer} (Correct: {detail.correctAnswer})
+                                          </span>
+                                          <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-semibold">
+                                            {detail.trapType}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* =====================================================================
           AZURE CLOUD EXPLORER MENUS WINDOW (PROFILE TAB)
           Functionally compact & CSS-responsive across Mobile, Tablet & Laptop
@@ -430,6 +1062,29 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <button
                 type="button"
                 role="tab"
+                aria-selected={explorerTab === 'gaps'}
+                onClick={() => {
+                  setExplorerTab('gaps');
+                  if (!isExplorerExpanded) setIsExplorerExpanded(true);
+                }}
+                className={`px-2 sm:px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  explorerTab === 'gaps' && isExplorerExpanded
+                    ? 'bg-rose-600 text-white shadow-2xs font-extrabold'
+                    : 'text-sky-100/80 hover:text-white'
+                }`}
+              >
+                <AlertTriangle className="w-3 h-3 shrink-0 text-amber-300" />
+                <span>Knowledge Gaps</span>
+                {(totalUnresolvedAcrossModules > 0 || unresolvedMistakesCount > 0) && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-950 text-[9px] font-black flex items-center justify-center">
+                    {Math.max(totalUnresolvedAcrossModules, unresolvedMistakesCount)}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                role="tab"
                 aria-selected={explorerTab === 'actions'}
                 onClick={() => {
                   setExplorerTab('actions');
@@ -443,11 +1098,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               >
                 <LayoutGrid className="w-3 h-3 shrink-0" />
                 <span>Modes</span>
-                {unresolvedMistakesCount > 0 && (
-                  <span className="w-4 h-4 rounded-full bg-amber-400 text-slate-950 text-[9px] font-black flex items-center justify-center">
-                    {unresolvedMistakesCount}
-                  </span>
-                )}
               </button>
             </div>
 
@@ -1020,7 +1670,277 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             )}
 
             {/* ===============================================================
-                EXPLORER TAB 4: COMPACT STUDIO MODES & ACTIONS LAUNCHER
+                EXPLORER TAB 4: KNOWLEDGE GAPS DIAGNOSTIC TABLE
+               =============================================================== */}
+            {explorerTab === 'gaps' && (
+              <div className="space-y-3">
+                {/* Top Summary & Filter Strip */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-rose-50/70 border border-rose-200/80 rounded-xl p-3">
+                  <div className="flex items-start sm:items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-rose-600 text-white shrink-0 shadow-2xs">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">
+                          Azure Service Module Knowledge Gaps
+                        </h4>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">
+                          {totalUnresolvedAcrossModules} Unresolved Mistake{totalUnresolvedAcrossModules === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600">
+                        Modules ranked by highest number of unresolved mistakes and lowest accuracy to prioritize your study remediation.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                    <div className="inline-flex rounded-lg bg-white p-0.5 border border-slate-200 text-[11px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setGapsFilter('all')}
+                        className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+                          gapsFilter === 'all'
+                            ? 'bg-slate-900 text-white'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        All Modules ({allModules.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGapsFilter('unresolved')}
+                        className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+                          gapsFilter === 'unresolved'
+                            ? 'bg-rose-600 text-white'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        With Mistakes Only
+                      </button>
+                    </div>
+
+                    {onOpenPersonalizedReview && totalUnresolvedAcrossModules > 0 && (
+                      <button
+                        type="button"
+                        onClick={onOpenPersonalizedReview}
+                        className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-extrabold inline-flex items-center gap-1 shadow-2xs cursor-pointer"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Review All Mistakes</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Knowledge Gaps Structured Table */}
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-900 text-white text-[10px] font-extrabold uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Priority</th>
+                        <th className="py-2.5 px-3">Azure Service Module</th>
+                        <th className="py-2.5 px-3">Affected Azure Services</th>
+                        <th className="py-2.5 px-3 text-center">Unresolved Mistakes</th>
+                        <th className="py-2.5 px-3">Primary Exam Trap</th>
+                        <th className="py-2.5 px-3 text-center">Module Mastery</th>
+                        <th className="py-2.5 px-3 text-right">Remediation</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs">
+                      {visibleKnowledgeGaps.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 px-4 text-center text-slate-500">
+                            <div className="flex flex-col items-center justify-center gap-1.5">
+                              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                              <span className="font-bold text-slate-800">
+                                Zero unresolved mistakes found for this filter!
+                              </span>
+                              <span className="text-[11px] text-slate-500">
+                                Switch to &ldquo;All Modules&rdquo; to inspect full curriculum mastery or launch a practice session.
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        visibleKnowledgeGaps.map((row, idx) => {
+                          const isCritical = row.severity === 'critical';
+                          const isWarning = row.severity === 'warning';
+
+                          return (
+                            <tr
+                              key={row.moduleId}
+                              className={`transition-colors ${
+                                row.unresolvedCount > 0
+                                  ? 'bg-rose-50/35 hover:bg-rose-50/70'
+                                  : 'hover:bg-slate-50'
+                              }`}
+                            >
+                              {/* Priority Rank */}
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className={`w-5 h-5 rounded-md font-mono text-[10px] font-black flex items-center justify-center ${
+                                      isCritical
+                                        ? 'bg-rose-600 text-white'
+                                        : isWarning
+                                        ? 'bg-amber-500 text-slate-950'
+                                        : 'bg-slate-100 text-slate-600'
+                                    }`}
+                                  >
+                                    #{idx + 1}
+                                  </span>
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
+                                      isCritical
+                                        ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                        : isWarning
+                                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    }`}
+                                  >
+                                    {isCritical ? 'High Gap' : isWarning ? 'Needs Review' : 'Solid'}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* Azure Service Module */}
+                              <td className="py-2.5 px-3">
+                                <div className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.2 rounded bg-slate-100 border border-slate-200 font-mono text-[10px] text-[#0078D4]">
+                                    M{row.moduleId}
+                                  </span>
+                                  <span>{row.moduleTitle}</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                                  Learning Path {row.pathId} • {row.totalAttempts} attempt{row.totalAttempts === 1 ? '' : 's'} ({row.wrongAttempts} missed)
+                                </div>
+                              </td>
+
+                              {/* Affected Azure Services */}
+                              <td className="py-2.5 px-3">
+                                <div className="flex flex-wrap gap-1 max-w-xs">
+                                  {row.keyServices.slice(0, 3).map((srv) => (
+                                    <button
+                                      key={srv}
+                                      type="button"
+                                      onClick={() => {
+                                        if (onSearchService) onSearchService(srv);
+                                        onNavigateToPractice();
+                                      }}
+                                      className="px-1.5 py-0.5 rounded bg-sky-50 hover:bg-[#0078D4] text-sky-900 hover:text-white border border-sky-200 text-[10px] font-semibold transition-colors cursor-pointer truncate max-w-[135px]"
+                                      title={`Drill service: ${srv}`}
+                                    >
+                                      {srv}
+                                    </button>
+                                  ))}
+                                </div>
+                              </td>
+
+                              {/* Unresolved Mistakes Count */}
+                              <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                {row.unresolvedCount > 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-600 text-white font-mono text-xs font-black shadow-2xs">
+                                    <AlertTriangle className="w-3 h-3 text-amber-200" />
+                                    {row.unresolvedCount} Unresolved
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[10px] font-bold">
+                                    <Check className="w-3 h-3" />0 Unresolved
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Primary Exam Trap */}
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <span
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                                    row.unresolvedCount > 0
+                                      ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                      : 'bg-slate-50 text-slate-600 border-slate-200'
+                                  }`}
+                                >
+                                  {row.primaryTrap}
+                                </span>
+                              </td>
+
+                              {/* Module Mastery % */}
+                              <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                {row.masteryPct !== null ? (
+                                  <div className="inline-flex flex-col items-center gap-1 w-20">
+                                    <span
+                                      className={`font-mono text-xs font-black ${
+                                        row.masteryPct >= 75
+                                          ? 'text-emerald-700'
+                                          : row.masteryPct >= 50
+                                          ? 'text-amber-700'
+                                          : 'text-rose-700'
+                                      }`}
+                                    >
+                                      {row.masteryPct}%
+                                    </span>
+                                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full ${
+                                          row.masteryPct >= 75
+                                            ? 'bg-emerald-500'
+                                            : row.masteryPct >= 50
+                                            ? 'bg-amber-500'
+                                            : 'bg-rose-500'
+                                        }`}
+                                        style={{ width: `${row.masteryPct}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] font-semibold text-slate-400">
+                                    Untested
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Action Button */}
+                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                <div className="inline-flex items-center gap-1.5">
+                                  {row.unresolvedCount > 0 && onOpenPersonalizedReview && (
+                                    <button
+                                      type="button"
+                                      onClick={onOpenPersonalizedReview}
+                                      className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-extrabold inline-flex items-center gap-1 cursor-pointer shadow-2xs"
+                                      title="Resolve mistakes in Personalized Review"
+                                    >
+                                      <RotateCcw className="w-3 h-3" />
+                                      <span>Fix ({row.unresolvedCount})</span>
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (onSelectModule) {
+                                        onSelectModule(row.moduleId, row.pathId);
+                                      }
+                                      onNavigateToPractice();
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <span>Drill M{row.moduleId}</span>
+                                    <ChevronRight className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ===============================================================
+                EXPLORER TAB 5: COMPACT STUDIO MODES & ACTIONS LAUNCHER
                =============================================================== */}
             {explorerTab === 'actions' && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
@@ -1221,6 +2141,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         questionCountByModule={questionCountByModule}
         defaultExpanded={false}
       />
+
+      {/* Daily Study Reminder System (Browser Notification API) */}
+      <DailyStudyReminder
+        stats={stats}
+        onStartScenarioQuestion={onNavigateToPractice}
+      />
+
+      {/* 30-Day Streak Activity & Study Consistency Graph (Recharts) */}
+      <StreakActivityGraph stats={stats} />
 
       {/* 30-Day Daily Accuracy Percentage Line Chart (Recharts) */}
       <DailyAccuracyTrajectoryChart stats={stats} />

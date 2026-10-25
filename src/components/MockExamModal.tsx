@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Clock,
   Flag,
@@ -41,7 +41,13 @@ export const MockExamModal: React.FC<MockExamProps> = ({
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [flagged, setFlagged] = useState<Record<string, boolean>>({});
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+  const [autoSubmittedByTimer, setAutoSubmittedByTimer] = useState<boolean>(false);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'missed' | 'flagged'>('all');
+
+  const answersRef = useRef<Record<string, string>>(answers);
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
 
   // Proportionally sampled questions across all 3 official learning paths
   const examQuestions = useMemo(() => {
@@ -77,14 +83,52 @@ export const MockExamModal: React.FC<MockExamProps> = ({
     }
   }, [examMode, hasStarted]);
 
-  // Countdown timer
+  const handleSubmitAndFinalize = useCallback(
+    (triggeredByTimer = false) => {
+      if (isSubmitted) return;
+      setIsSubmitted(true);
+      if (triggeredByTimer) {
+        setAutoSubmittedByTimer(true);
+      }
+
+      const latestAnswers = answersRef.current;
+      let correctCount = 0;
+      examQuestions.forEach((q) => {
+        if (latestAnswers[q.id] === q.correctAnswer) {
+          correctCount += 1;
+        }
+      });
+
+      const scaledScore = Math.round((correctCount / examQuestions.length) * 1000);
+      if (scaledScore >= 700) {
+        try {
+          confetti({
+            particleCount: 120,
+            spread: 80,
+            origin: { y: 0.6 },
+          });
+        } catch (e) {
+          // Safe fallback
+        }
+      }
+      onFinish(correctCount, examQuestions.length);
+    },
+    [isSubmitted, examQuestions, onFinish]
+  );
+
+  const submitRef = useRef(handleSubmitAndFinalize);
+  useEffect(() => {
+    submitRef.current = handleSubmitAndFinalize;
+  }, [handleSubmitAndFinalize]);
+
+  // Countdown timer tick — immediately triggers 'Submit & Finalize' when reaching zero
   useEffect(() => {
     if (!hasStarted || isSubmitted) return;
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          handleSubmitExam();
+          submitRef.current(true);
           return 0;
         }
         return prev - 1;
@@ -105,35 +149,12 @@ export const MockExamModal: React.FC<MockExamProps> = ({
     setFlagged((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleSubmitExam = () => {
-    setIsSubmitted(true);
-    let correctCount = 0;
-    examQuestions.forEach((q) => {
-      if (answers[q.id] === q.correctAnswer) {
-        correctCount += 1;
-      }
-    });
-
-    const scaledScore = Math.round((correctCount / examQuestions.length) * 1000);
-    if (scaledScore >= 700) {
-      try {
-        confetti({
-          particleCount: 120,
-          spread: 80,
-          origin: { y: 0.6 },
-        });
-      } catch (e) {
-        // Safe fallback
-      }
-    }
-    onFinish(correctCount, examQuestions.length);
-  };
-
   const handleRestart = () => {
     setAnswers({});
     setFlagged({});
     setCurrentIndex(0);
     setIsSubmitted(false);
+    setAutoSubmittedByTimer(false);
     setTimeLeft(examMode === 'mini' ? 20 * 60 : 45 * 60);
     setHasStarted(false);
   };
@@ -141,6 +162,9 @@ export const MockExamModal: React.FC<MockExamProps> = ({
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const timeFormatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  const timeRemainingPct = Math.max(0, Math.min(100, Math.round((timeLeft / initialDuration) * 100)));
+  const isCriticalTime = timeLeft <= 180; // <= 3 minutes
+  const isWarningTime = timeLeft > 180 && timeLeft <= 300; // 3-5 minutes
 
   // Results calculation
   const totalCorrect = examQuestions.filter((q) => answers[q.id] === q.correctAnswer).length;
@@ -194,18 +218,40 @@ export const MockExamModal: React.FC<MockExamProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-4">
-            {hasStarted && !isSubmitted && (
+          <div className="flex items-center gap-2 sm:gap-3">
+            {!isSubmitted && (
               <div
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border font-mono font-bold text-sm ${
-                  timeLeft < 180
-                    ? 'bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse'
+                role="timer"
+                aria-live="polite"
+                aria-label={`Remaining Exam Time: ${timeFormatted}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border font-mono font-extrabold text-sm shadow-2xs transition-colors ${
+                  hasStarted && isCriticalTime
+                    ? 'bg-rose-500/25 border-rose-400 text-rose-200 animate-pulse'
+                    : hasStarted && isWarningTime
+                    ? 'bg-amber-500/25 border-amber-400 text-amber-200'
                     : 'bg-slate-800 border-slate-700 text-amber-300'
                 }`}
+                title="Remaining Exam Time (Automatically triggers Submit & Finalize at 00:00)"
               >
-                <Clock className="w-4 h-4" />
-                <span>{timeFormatted}</span>
+                <Clock className="w-4 h-4 shrink-0" />
+                <div className="flex flex-col leading-none">
+                  <span className="text-[9px] uppercase tracking-wider font-sans text-slate-300 font-bold">
+                    {hasStarted ? 'Time Remaining' : 'Exam Timer'}
+                  </span>
+                  <span>{timeFormatted}</span>
+                </div>
               </div>
+            )}
+
+            {hasStarted && !isSubmitted && (
+              <button
+                type="button"
+                onClick={() => handleSubmitAndFinalize(false)}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs shadow-2xs transition-colors cursor-pointer"
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+                <span>Submit &amp; Finalize</span>
+              </button>
             )}
 
             <button
@@ -217,6 +263,45 @@ export const MockExamModal: React.FC<MockExamProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Active Exam Countdown Progress Strip */}
+        {hasStarted && !isSubmitted && (
+          <div className="bg-slate-950 px-6 py-2.5 border-b border-slate-800 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between text-xs font-bold flex-wrap gap-2">
+              <span
+                className={`flex items-center gap-1.5 ${
+                  isCriticalTime
+                    ? 'text-rose-400'
+                    : isWarningTime
+                    ? 'text-amber-300'
+                    : 'text-sky-300'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>
+                  {isCriticalTime
+                    ? `Final Countdown: ${minutes}m ${seconds}s remaining — Auto-triggers Submit & Finalize at 00:00`
+                    : `Remaining Time: ${minutes}m ${seconds.toString().padStart(2, '0')}s (${timeRemainingPct}% remaining) • Auto-submits at 00:00`}
+                </span>
+              </span>
+              <span className="text-slate-400 font-mono text-[11px]">
+                {Object.keys(answers).length}/{examQuestions.length} Answered
+              </span>
+            </div>
+            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-500 rounded-full ${
+                  isCriticalTime
+                    ? 'bg-rose-500'
+                    : isWarningTime
+                    ? 'bg-amber-400'
+                    : 'bg-[#0078D4]'
+                }`}
+                style={{ width: `${timeRemainingPct}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* VIEW 1: PRE-EXAM BRIEFING & MODE SELECTION */}
         {!hasStarted && !isSubmitted ? (
@@ -438,6 +523,20 @@ export const MockExamModal: React.FC<MockExamProps> = ({
         {/* VIEW 3: EXAM SCORE AND FEEDBACK REPORT */}
         {isSubmitted && (
           <div className="p-6 sm:p-8 overflow-y-auto flex-1 space-y-6">
+            {autoSubmittedByTimer && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 flex items-center justify-between gap-3 text-xs font-bold shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    Time Expired (00:00): Your exam session was automatically submitted &amp; finalized with all recorded responses.
+                  </span>
+                </div>
+                <span className="px-2 py-0.5 rounded bg-amber-200/80 text-amber-950 text-[10px] font-black uppercase shrink-0">
+                  Auto-Finalized
+                </span>
+              </div>
+            )}
+
             <div
               className={`p-6 rounded-2xl border text-center ${
                 isPassed
@@ -613,10 +712,11 @@ export const MockExamModal: React.FC<MockExamProps> = ({
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={handleSubmitExam}
-                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold shadow-xs cursor-pointer"
+                  onClick={() => handleSubmitAndFinalize(false)}
+                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold shadow-xs cursor-pointer inline-flex items-center gap-1.5"
                 >
-                  Submit Exam Now
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Submit &amp; Finalize</span>
                 </button>
 
                 <button

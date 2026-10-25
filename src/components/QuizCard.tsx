@@ -37,16 +37,19 @@ import {
   ChevronDown,
   SlidersHorizontal,
   Layers,
+  SkipForward,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
 import { KeyConceptSidePanel, extractScenarioTerminology } from './KeyConceptSidePanel';
 import { ScenarioTextWithTooltips } from './ScenarioTextWithTooltips';
 import { QuickNotesDrawer } from './QuickNotesDrawer';
-import { getQuestionNote, saveQuestionNote } from '../utils/storage';
+import { getQuestionNote, saveQuestionNote, markQuestionSkipped } from '../utils/storage';
 import { ShareQuestionModal } from './ShareQuestionModal';
 import { QuickStudyOverlay } from './QuickStudyOverlay';
 import { DeepWorkTimerWidget } from './DeepWorkTimerWidget';
+import { SessionCountdownTimer } from './SessionCountdownTimer';
+import { QuizTtsBar } from './QuizTtsBar';
 
 interface QuizCardProps {
   question: Question;
@@ -102,6 +105,7 @@ interface QuizCardProps {
   externalStudyZoneOpenTrigger?: number;
   onRateConfidence?: (questionId: string, confidence: number) => void;
   onOpenUserGuide?: () => void;
+  onSkipQuestion?: (questionId: string) => void;
 }
 
 const EXAM_SIMULATION_DURATION_SECONDS = 45 * 60; // 45:00 standard AZ-900 exam duration
@@ -331,9 +335,11 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   externalStudyZoneOpenTrigger = 0,
   onRateConfidence,
   onOpenUserGuide,
+  onSkipQuestion,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
+  const [skipFeedbackToast, setSkipFeedbackToast] = useState<string | null>(null);
   const [userConfidence, setUserConfidence] = useState<number | null>(() => stats?.confidenceScores?.[question.id] || null);
   const [confidenceToast, setConfidenceToast] = useState<string | null>(null);
   const [showKnowledgeCheck, setShowKnowledgeCheck] = useState<boolean>(false);
@@ -1120,6 +1126,51 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const isExamMode = quizCardMode === 'exam';
   const showImmediateFeedback = isAnswered && (!isExamMode || examFeedbackRevealed);
   const isSelectedCorrect = selectedOption === question.correctAnswer;
+  const isQuestionSkipped = Boolean(stats?.skippedQuestionIds?.includes(question.id));
+
+  // Color-coded Difficulty Badge Configuration (Fundamental, Intermediate, Advanced)
+  const difficultyBadgeConfig =
+    question.difficulty === 'Fundamental'
+      ? {
+          label: 'Fundamental',
+          pillClass:
+            'bg-emerald-100 text-emerald-900 border-emerald-400 hover:bg-emerald-200/80 ring-1 ring-emerald-500/20',
+          dotClass: 'bg-emerald-600',
+          subLabel: 'Foundational Concept',
+        }
+      : question.difficulty === 'Intermediate'
+      ? {
+          label: 'Intermediate',
+          pillClass:
+            'bg-amber-100 text-amber-950 border-amber-400 hover:bg-amber-200/80 ring-1 ring-amber-500/25',
+          dotClass: 'bg-amber-600',
+          subLabel: 'Scenario Application',
+        }
+      : {
+          label: 'Advanced',
+          pillClass:
+            'bg-rose-100 text-rose-900 border-rose-400 hover:bg-rose-200/80 ring-1 ring-rose-500/25',
+          dotClass: 'bg-rose-600',
+          subLabel: 'Complex Architecture',
+        };
+
+  // Skip handler: moves to next question without penalty or completion, marking for Weak Areas review
+  const handleSkipQuestion = () => {
+    if (hasSubmitted) {
+      onNext();
+      return;
+    }
+    if (onSkipQuestion) {
+      onSkipQuestion(question.id);
+    } else if (stats) {
+      markQuestionSkipped(stats, question.id);
+    }
+    setSkipFeedbackToast(
+      `Skipped Question ${questionIndex + 1} without penalty — queued in Weak Areas for later review`
+    );
+    setTimeout(() => setSkipFeedbackToast(null), 2600);
+    onNext();
+  };
 
   // Path styling tags
   const pathColor =
@@ -1242,26 +1293,21 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             {question.moduleTitle}
           </span>
 
-          {/* Compact Difficulty & Adaptive Status Pill */}
+          {/* Clear Color-Coded Difficulty Badge & Adaptive Status Pill */}
           <button
             type="button"
             onClick={handleCycleDifficultyBadgeFilter}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
-              question.difficulty === 'Fundamental'
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                : question.difficulty === 'Intermediate'
-                ? 'bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100'
-                : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
-            }`}
-            title={`Question Difficulty: ${question.difficulty} • Adaptive Tier: ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-2xs ${difficultyBadgeConfig.pillClass}`}
+            title={`Question Difficulty: ${difficultyBadgeConfig.label} (${difficultyBadgeConfig.subLabel}) • Adaptive Tier: ${
               activeLockedDifficulty
                 ? `Locked (${activeLockedDifficulty})`
                 : dynamicDifficulty || 'Intermediate'
             }. Click to cycle difficulty filter or open Study Zone menu for granular controls.`}
           >
-            <span>{question.difficulty}</span>
+            <span className={`w-2 h-2 rounded-full shrink-0 ${difficultyBadgeConfig.dotClass}`} />
+            <span>{difficultyBadgeConfig.label}</span>
             <span className="opacity-40">•</span>
-            <span className="text-[10px] font-extrabold text-slate-600">
+            <span className="text-[10px] font-extrabold opacity-85">
               {activeLockedDifficulty
                 ? `🔒 ${activeLockedDifficulty.slice(0, 4)}`
                 : `Adaptive: ${
@@ -1278,6 +1324,16 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               </span>
             )}
           </button>
+
+          {isQuestionSkipped && !hasSubmitted && (
+            <span
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-orange-100 text-orange-900 border border-orange-300"
+              title="Previously skipped without penalty — marked for review in Weak Areas"
+            >
+              <SkipForward className="w-3 h-3 text-orange-600" />
+              <span>Skipped • In Weak Areas</span>
+            </span>
+          )}
 
           {question.isAiGenerated && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-300">
@@ -2164,6 +2220,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
       </div>
 
+      {/* Persistent Optional Session Countdown Timer with Gentle Milestone Alert */}
+      <SessionCountdownTimer
+        sessionAnsweredCount={sessionAnsweredCount}
+        isAudioMuted={isAudioMuted}
+        onFinishSession={onFinishSession}
+      />
+
       {/* Live Color-Coded Question Pace Bar (Green -> Amber -> Red Exam Readiness Indicator) */}
       <div className="px-6 py-2 bg-slate-50/90 border-b border-slate-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
         <div className="flex items-center gap-2">
@@ -2219,6 +2282,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         <div className={`grid gap-6 ${showKnowledgeCheck ? 'grid-cols-1 lg:grid-cols-12 items-start' : 'grid-cols-1'}`}>
           {/* Main Question & Answering Column */}
           <div className={`space-y-6 ${showKnowledgeCheck ? 'lg:col-span-8' : 'w-full'}`}>
+            {/* Hands-Free Text-to-Speech (TTS) Audio Reader Toolbar */}
+            <QuizTtsBar
+              question={question}
+              showExplanation={showImmediateFeedback}
+              onSpeakingChange={setIsSpeaking}
+            />
+
             {/* Scenario Narrative Box */}
             <div className="relative bg-slate-50/80 rounded-xl p-5 border-l-4 border-[#0078D4] border-t border-r border-b border-slate-200/60 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -2340,40 +2410,80 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               )}
             </div>
 
-        {/* Actual Exam Question + Hands-Free Voice Option Answering Control */}
+        {/* Skip Notification Banner */}
+        {skipFeedbackToast && (
+          <div className="px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs font-bold flex items-center justify-between gap-2 shadow-2xs animate-in fade-in duration-150">
+            <div className="flex items-center gap-2">
+              <SkipForward className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span>{skipFeedbackToast}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSkipFeedbackToast(null)}
+              className="text-[11px] font-extrabold text-amber-800 hover:underline cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* Actual Exam Question + Prominent Difficulty Badge + Voice Answer & Skip Controls */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-          <div>
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${difficultyBadgeConfig.pillClass}`}
+              >
+                <span className={`w-2 h-2 rounded-full ${difficultyBadgeConfig.dotClass}`} />
+                <span>Difficulty: {difficultyBadgeConfig.label}</span>
+              </span>
+              <span className="text-[11px] font-semibold text-slate-500">
+                {difficultyBadgeConfig.subLabel}
+              </span>
+            </div>
             <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
               {question.question}
             </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Choose the single best answer that meets all architectural criteria (or use Voice Answer and say &ldquo;Option one&rdquo; – &ldquo;Option four&rdquo;):
+            <p className="text-xs text-slate-500">
+              Choose the single best answer that meets all architectural criteria (or click <strong>Skip</strong> to defer for Weak Areas review without penalty):
             </p>
           </div>
 
           {!hasSubmitted && (
-            <button
-              type="button"
-              onClick={handleToggleVoiceAnswer}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold border shrink-0 self-start transition-all cursor-pointer ${
-                isListeningVoiceAnswer
-                  ? 'bg-rose-600 text-white border-rose-700 shadow-xs ring-2 ring-rose-400/40 animate-pulse'
-                  : 'bg-sky-50 hover:bg-sky-100 text-[#0078D4] border-sky-200 shadow-2xs'
-              }`}
-              title='Speak option index (e.g., "Option one", "Option two", "Option three", "Option four") to answer hands-free'
-            >
-              {isListeningVoiceAnswer ? (
-                <>
-                  <MicOff className="w-3.5 h-3.5 text-white" />
-                  <span>Listening (&ldquo;Option 1–4&rdquo;)...</span>
-                </>
-              ) : (
-                <>
-                  <Mic className="w-3.5 h-3.5 text-[#0078D4]" />
-                  <span>Voice Answer</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-2 shrink-0 self-start">
+              <button
+                type="button"
+                onClick={handleSkipQuestion}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs transition-all cursor-pointer"
+                title="Skip this question without penalty or completion and mark it for later review in Weak Areas"
+              >
+                <SkipForward className="w-3.5 h-3.5 text-amber-600" />
+                <span>Skip</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleVoiceAnswer}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                  isListeningVoiceAnswer
+                    ? 'bg-rose-600 text-white border-rose-700 shadow-xs ring-2 ring-rose-400/40 animate-pulse'
+                    : 'bg-sky-50 hover:bg-sky-100 text-[#0078D4] border-sky-200 shadow-2xs'
+                }`}
+                title='Speak option index (e.g., "Option one", "Option two", "Option three", "Option four") to answer hands-free'
+              >
+                {isListeningVoiceAnswer ? (
+                  <>
+                    <MicOff className="w-3.5 h-3.5 text-white" />
+                    <span>Listening (&ldquo;Option 1–4&rdquo;)...</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-3.5 h-3.5 text-[#0078D4]" />
+                    <span>Voice Answer</span>
+                  </>
+                )}
+              </button>
+            </div>
           )}
         </div>
 
@@ -2953,6 +3063,18 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               >
                 <Sparkles className="w-4 h-4 text-amber-200" />
                 <span>Finish Session &amp; Review Weak Areas</span>
+              </button>
+            )}
+
+            {!isAnswered && (
+              <button
+                type="button"
+                onClick={handleSkipQuestion}
+                className="px-4 py-2.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-sm font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                title="Skip question without penalty or completion and mark it for later review in Weak Areas"
+              >
+                <SkipForward className="w-4 h-4 text-amber-600" />
+                <span>Skip</span>
               </button>
             )}
 

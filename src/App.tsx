@@ -26,6 +26,7 @@ import {
   SlidersHorizontal,
   ChevronDown,
   ArrowUpDown,
+  Cloud,
 } from 'lucide-react';
 import { Header, AppTab } from './components/Header';
 import { QuizCard } from './components/QuizCard';
@@ -59,6 +60,17 @@ import { AzureCloudExplorer } from './components/AzureCloudExplorer';
 import { LearningPathProgressMap } from './components/LearningPathProgressMap';
 import { WeeklyExamReadiness } from './components/WeeklyExamReadiness';
 import { UserGuideModal } from './components/UserGuideModal';
+import { BackendCloudModal } from './components/BackendCloudModal';
+import { ApiDocumentationModal } from './components/ApiDocumentationModal';
+import { ProtectedRoute, AuthenticatedSupabaseUser } from './components/ProtectedRoute';
+import { usePostgresDatabase } from './hooks/usePostgresDatabase';
+import { authService } from './services/authService';
+import {
+  getStoredReminderSettings,
+  saveReminderSettings,
+  getTodaySolvedQuestionsCount,
+  triggerBrowserStudyNotification,
+} from './components/DailyStudyReminder';
 import {
   AfricanWatermarkPattern,
   KitengeRibbon,
@@ -79,6 +91,7 @@ import {
   getUnresolvedMissedQuestionsCount,
   getUnresolvedMistakesMap,
   saveQuestionConfidence,
+  markQuestionSkipped,
 } from './utils/storage';
 import { fireModuleCompletionConfetti } from './utils/confetti';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -109,6 +122,16 @@ export default function App() {
   // User performance stats
   const [stats, setStats] = useState<UserStats>(getInitialStats);
 
+  // Postgres & Supabase Database Utility Hook for curriculum modules & progress writes
+  const {
+    writeModuleProgress,
+    submitQuestionAnswer,
+    realtimeStatus,
+    lastSyncedAt,
+  } = usePostgresDatabase();
+  const [authenticatedUser, setAuthenticatedUser] =
+    useState<AuthenticatedSupabaseUser | null>(null);
+
   // Filter selections for Practice Mode
   const [selectedPathId, setSelectedPathId] = useState<number | 'all'>('all');
   const [selectedModuleId, setSelectedModuleId] = useState<number | 'all'>('all');
@@ -126,6 +149,8 @@ export default function App() {
   const [retryIncorrectSnapshotIds, setRetryIncorrectSnapshotIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [pendingJumpQuestionId, setPendingJumpQuestionId] = useState<string | null>(null);
+  const [showBackendCloudModal, setShowBackendCloudModal] = useState<boolean>(false);
+  const [showApiDocumentationModal, setShowApiDocumentationModal] = useState<boolean>(false);
   const initialDeepLinkHandledRef = React.useRef<boolean>(false);
 
   // Tick down temporary 5-minute 'Retry Queue' filter every second and auto-expire after 5 minutes
@@ -275,8 +300,15 @@ export default function App() {
   // Scoped reset module modal state
   const [showResetModuleModal, setShowResetModuleModal] = useState<boolean>(false);
 
-  // Virtual Study Room state
-  const [showStudyRoom, setShowStudyRoom] = useState<boolean>(false);
+  // Virtual Study Room state (auto-opens if ?hub=CODE is present in URL)
+  const [showStudyRoom, setShowStudyRoom] = useState<boolean>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return Boolean(params.get('hub'));
+    } catch {
+      return false;
+    }
+  });
 
   // Weak Areas Review modal state
   const [showWeakAreasReview, setShowWeakAreasReview] = useState<boolean>(false);
@@ -393,6 +425,11 @@ export default function App() {
   const handleResetModuleConfidence = (moduleId: number) => {
     const updated = resetModuleConfidence(stats, moduleId);
     setStats(updated);
+  };
+
+  // Mark Question Skipped for Weak Areas Review without penalty or completion
+  const handleSkipQuestion = (questionId: string) => {
+    setStats((prev) => markQuestionSkipped(prev, questionId));
   };
 
   // Previously missed question IDs grouped by Learning Path (1, 2, 3)
@@ -651,6 +688,44 @@ export default function App() {
     }
   }, [questions]);
 
+  // Global Daily Study Reminder scheduler (fires browser Notification at user-defined time if not yet fired today)
+  useEffect(() => {
+    const checkGlobalReminder = async () => {
+      const settings = getStoredReminderSettings();
+      if (!settings.enabled) return;
+
+      const now = new Date();
+      const todayKey = now.toISOString().split('T')[0];
+      const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(
+        now.getMinutes()
+      ).padStart(2, '0')}`;
+
+      if (currentHHMM === settings.reminderTime && settings.lastNotifiedDate !== todayKey) {
+        saveReminderSettings({
+          ...settings,
+          lastNotifiedDate: todayKey,
+        });
+
+        const solvedToday = getTodaySolvedQuestionsCount(stats);
+        const title =
+          solvedToday === 0
+            ? `🔥 Keep Your ${stats.streakDays || 1}-Day AZ-900 Streak Alive!`
+            : `⚡ Daily AZ-900 Study Check-In (${settings.reminderTime})`;
+        const body =
+          solvedToday === 0
+            ? 'Complete at least 1 scenario-based question today to maintain your study streak!'
+            : `Awesome job completing ${solvedToday} question(s) today! Ready for 1 bonus scenario?`;
+
+        await triggerBrowserStudyNotification(title, body, () => {
+          setActiveTab('quiz');
+        });
+      }
+    };
+
+    const timer = setInterval(checkGlobalReminder, 20000);
+    return () => clearInterval(timer);
+  }, [stats]);
+
   // Count questions per module
   const questionCountByModule = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -682,6 +757,28 @@ export default function App() {
     const updatedStats = saveUserAttempt(stats, attempt);
     setStats(updatedStats);
     setSessionAttempts((prev) => [...prev, attempt]);
+
+    // Write user progress update & evaluate answer via the Postgres / Supabase database utility hook
+    if (['A', 'B', 'C', 'D'].includes(selectedAnswer)) {
+      submitQuestionAnswer(
+        questionId,
+        selectedAnswer as 'A' | 'B' | 'C' | 'D',
+        false
+      ).catch(() => {});
+    }
+
+    const modStat = updatedStats.moduleMastery[targetQ.moduleId];
+    if (modStat && modStat.total > 0) {
+      const modScore = Math.round((modStat.correct / modStat.total) * 100);
+      const modStatus = modScore >= 80 ? 'mastered' : 'in_progress';
+      writeModuleProgress({
+        moduleId: targetQ.moduleId,
+        score: modScore,
+        status: modStatus,
+        attemptsCount: modStat.total,
+        correctCount: modStat.correct,
+      }).catch(() => {});
+    }
 
     // Update rolling window of recent answers in current session (last 5 answers)
     const nextRollingWindow = [...sessionRollingOutcomes, isCorrect].slice(-ROLLING_WINDOW_SIZE);
@@ -820,66 +917,74 @@ export default function App() {
   const currentQ = filteredQuestions[currentQuestionIndex];
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-[#1E293B] relative flex flex-col font-sans">
-      {/* Subtle African Kitenge Watermark Background */}
-      <AfricanWatermarkPattern opacity={0.04} />
+    <ProtectedRoute onUserChange={setAuthenticatedUser}>
+      <div className="min-h-screen bg-[#F8F9FA] text-[#1E293B] relative flex flex-col font-sans">
+        {/* Subtle African Kitenge Watermark Background */}
+        <AfricanWatermarkPattern opacity={0.04} />
 
-      {/* Offline Status Toast Indicator */}
-      <OfflineIndicator />
+        {/* Offline Status Toast Indicator */}
+        <OfflineIndicator />
 
-      {/* Primary Header with African Motif Ribbon & Azure Curriculum Branding (Hidden in Focus Mode) */}
-      {!isFocusMode && (
-        <Header
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          selectedPathId={selectedPathId}
-          onSelectPath={(p) => {
-            setRetryIncorrectPathId(null);
-            setRetryIncorrectSnapshotIds([]);
-            setSelectedPathId(p);
-          }}
-          stats={stats}
-          onOpenExport={() => setShowExportModal(true)}
-          onUpdateStats={setStats}
-          fireStreakTrigger={fireStreakTrigger}
-          onOpenReviewSession={() => setShowReviewSession(true)}
-          questions={questions}
-          searchQuery={searchQuery}
-          onSearchQueryChange={(query) => {
-            setSearchQuery(query);
-            setCurrentQuestionIndex(0);
-            if (query.trim() && activeTab !== 'quiz') {
+        {/* Primary Header with African Motif Ribbon & Azure Curriculum Branding (Hidden in Focus Mode) */}
+        {!isFocusMode && (
+          <Header
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            selectedPathId={selectedPathId}
+            onSelectPath={(p) => {
+              setRetryIncorrectPathId(null);
+              setRetryIncorrectSnapshotIds([]);
+              setSelectedPathId(p);
+            }}
+            stats={stats}
+            onOpenExport={() => setShowExportModal(true)}
+            onUpdateStats={setStats}
+            fireStreakTrigger={fireStreakTrigger}
+            onOpenReviewSession={() => setShowReviewSession(true)}
+            questions={questions}
+            searchQuery={searchQuery}
+            onSearchQueryChange={(query) => {
+              setSearchQuery(query);
+              setCurrentQuestionIndex(0);
+              if (query.trim() && activeTab !== 'quiz') {
+                setActiveTab('quiz');
+              }
+            }}
+            onSelectQuestion={(targetQ) => {
+              setSearchQuery('');
+              setRetryIncorrectPathId(null);
+              setRetryIncorrectSnapshotIds([]);
+              setSelectedPathId('all');
+              setSelectedModuleId('all');
+              setOnlyBookmarks(false);
+              setOnlyAiGenerated(false);
               setActiveTab('quiz');
-            }
-          }}
-          onSelectQuestion={(targetQ) => {
-            setSearchQuery('');
-            setRetryIncorrectPathId(null);
-            setRetryIncorrectSnapshotIds([]);
-            setSelectedPathId('all');
-            setSelectedModuleId('all');
-            setOnlyBookmarks(false);
-            setOnlyAiGenerated(false);
-            setActiveTab('quiz');
-            setPendingJumpQuestionId(targetQ.id);
-          }}
-          onSelectModule={(modId, pathId) => {
-            setSearchQuery('');
-            setRetryIncorrectPathId(null);
-            setRetryIncorrectSnapshotIds([]);
-            setSelectedPathId(pathId);
-            setSelectedModuleId(modId);
-            setOnlyBookmarks(false);
-            setOnlyAiGenerated(false);
-            setCurrentQuestionIndex(0);
-            setActiveTab('quiz');
-          }}
-          onRetryIncorrectPath={handleToggleRetryIncorrectInPath}
-          retryIncorrectPathId={retryIncorrectPathId}
-          onOpenStudyBreak={() => setShowStudyBreak(true)}
-          onOpenUserGuide={() => setShowUserGuideModal(true)}
-        />
-      )}
+              setPendingJumpQuestionId(targetQ.id);
+            }}
+            onSelectModule={(modId, pathId) => {
+              setSearchQuery('');
+              setRetryIncorrectPathId(null);
+              setRetryIncorrectSnapshotIds([]);
+              setSelectedPathId(pathId);
+              setSelectedModuleId(modId);
+              setOnlyBookmarks(false);
+              setOnlyAiGenerated(false);
+              setCurrentQuestionIndex(0);
+              setActiveTab('quiz');
+            }}
+            onRetryIncorrectPath={handleToggleRetryIncorrectInPath}
+            retryIncorrectPathId={retryIncorrectPathId}
+            onOpenStudyBreak={() => setShowStudyBreak(true)}
+            onOpenUserGuide={() => setShowUserGuideModal(true)}
+            realtimeStatus={realtimeStatus}
+            lastSyncedAt={lastSyncedAt}
+            onOpenCloudBackend={() => setShowBackendCloudModal(true)}
+            userEmail={authenticatedUser?.email || null}
+            onLogout={() => {
+              authService.logout();
+            }}
+          />
+        )}
 
       {/* Floating Focus Mode Banner (Minimized UI for Test-Like Concentration) */}
       {isFocusMode && (
@@ -957,6 +1062,25 @@ export default function App() {
                     onOpenStudyRoom={() => setShowStudyRoom(true)}
                     onOpenUserGuide={() => setShowUserGuideModal(true)}
                   />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowBackendCloudModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer"
+                    title="Open Cloud Account, Protected Curriculum API & M-Pesa / Stripe Unlocks"
+                  >
+                    <Cloud className="w-3.5 h-3.5" />
+                    <span>Cloud Sync & M-Pesa Unlocks</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowApiDocumentationModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-slate-900 hover:bg-slate-800 text-sky-200 border border-slate-700 shadow-xs transition-all cursor-pointer"
+                    title="Open Backend REST API Documentation, /api/quiz/submit Payloads & Response Schemas"
+                  >
+                    <span>API Docs</span>
+                  </button>
                 </div>
 
                 {/* Compact Responsive Heading */}
@@ -1555,12 +1679,13 @@ export default function App() {
                     onAnswer={handleAnswerQuestion}
                     onNext={() =>
                       setCurrentQuestionIndex((prev) =>
-                        Math.min(filteredQuestions.length - 1, prev + 1)
+                        prev + 1 < filteredQuestions.length ? prev + 1 : 0
                       )
                     }
                     onPrev={() =>
                       setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))
                     }
+                    onSkipQuestion={handleSkipQuestion}
                     onBookmark={handleToggleBookmark}
                     isBookmarked={stats.bookmarks.includes(currentQ.id)}
                     onAskTutorAboutQuestion={handleAskTutorAboutQuestion}
@@ -1955,12 +2080,13 @@ export default function App() {
         />
       )}
 
-      {/* Virtual Study Room Side Chat Panel */}
+      {/* Virtual Study Room Side Chat & Live Collaboration Hub */}
       <VirtualStudyRoom
         currentQuestion={currentQ}
         activeModuleTitle={currentQ?.moduleTitle}
         isOpen={showStudyRoom}
         onClose={() => setShowStudyRoom(false)}
+        onSelectSharedQuestion={(qId) => setPendingJumpQuestionId(qId)}
       />
 
       {/* Weak Areas Review Mode Modal */}
@@ -1986,6 +2112,18 @@ export default function App() {
       <AchievementOverlay
         stats={stats}
         onViewBadges={() => setActiveTab('profile')}
+      />
+
+      <BackendCloudModal
+        isOpen={showBackendCloudModal}
+        onClose={() => setShowBackendCloudModal(false)}
+        stats={stats}
+        onOpenApiDocs={() => setShowApiDocumentationModal(true)}
+      />
+
+      <ApiDocumentationModal
+        isOpen={showApiDocumentationModal}
+        onClose={() => setShowApiDocumentationModal(false)}
       />
 
       {/* Footer with Randomly Placed Light-Azure Animated African Motifs & Heritage Accent (Hidden in Focus Mode) */}
@@ -2045,6 +2183,7 @@ export default function App() {
           </div>
         </footer>
       )}
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }

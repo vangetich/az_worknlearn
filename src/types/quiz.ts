@@ -86,6 +86,8 @@ export interface UserStats {
   reviewedMistakeTimestamps?: Record<string, number>; // questionId -> timestamp when reviewed successfully
   confidenceScores?: Record<string, number>; // questionId -> 1..5 user self-rated confidence
   moduleConfidenceScores?: Record<number, number>; // moduleId -> 1..5 user self-rated confidence
+  skippedQuestionIds?: string[]; // Question IDs skipped without penalty and marked for Weak Areas review
+  skippedQuestionTimestamps?: Record<string, number>; // questionId -> timestamp when skipped
 }
 
 export interface CheatSheetItem {

@@ -1,0 +1,227 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Reusable Hardened Global Helpers
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'vangetich@gmail.com'
+      );
+    }
+
+    // =========================================================================
+    // Validation Blueprints
+    // =========================================================================
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'fullName', 'role', 'isPremium', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'fullName', 'role', 'isPremium', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120 &&
+        data.role is string && data.role.size() <= 32 && (data.role == 'student' || data.role == 'bootcamp_admin' || data.role == 'enterprise_user') &&
+        data.isPremium is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserProgress(data) {
+      return data.keys().hasAll(['userId', 'moduleId', 'score', 'status', 'lastAttempted', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'moduleId', 'score', 'status', 'lastAttempted', 'createdAt', 'updatedAt']) &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.moduleId is int && data.moduleId >= 1 && data.moduleId <= 12 &&
+        data.score is int && data.score >= 0 && data.score <= 100 &&
+        data.status is string && data.status.size() <= 24 && (data.status == 'not_started' || data.status == 'in_progress' || data.status == 'mastered') &&
+        data.lastAttempted is timestamp &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidQuizSession(data) {
+      return data.keys().hasAll(['userId', 'questionsAnswered', 'correctCount', 'completedAt']) &&
+        data.keys().hasOnly(['userId', 'questionsAnswered', 'correctCount', 'completedAt']) &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.questionsAnswered is int && data.questionsAnswered >= 1 && data.questionsAnswered <= 200 &&
+        data.correctCount is int && data.correctCount >= 0 && data.correctCount <= data.questionsAnswered &&
+        data.completedAt is timestamp;
+    }
+
+    function isValidPaymentTransaction(data) {
+      return data.keys().hasAll(['userId', 'gateway', 'amount', 'currency', 'checkoutRequestId', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'gateway', 'amount', 'currency', 'checkoutRequestId', 'status', 'createdAt', 'updatedAt']) &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.gateway is string && data.gateway.size() <= 16 && (data.gateway == 'mpesa' || data.gateway == 'stripe') &&
+        data.amount is int && data.amount >= 1 && data.amount <= 1000000 &&
+        data.currency is string && data.currency.size() == 3 && (data.currency == 'KES' || data.currency == 'USD') &&
+        data.checkoutRequestId is string && data.checkoutRequestId.size() >= 3 && data.checkoutRequestId.size() <= 128 &&
+        data.status is string && data.status.size() <= 16 && (data.status == 'pending' || data.status == 'completed' || data.status == 'failed') &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // =========================================================================
+    // Collection Rules
+    // =========================================================================
+
+    // Admins Registry (Read-only for verified users checking their own admin doc)
+    match /admins/{adminId} {
+      allow get: if isVerifiedUser() && isValidId(adminId) && isOwner(adminId);
+      allow list, create, update, delete: if false;
+    }
+
+    // 1. Users Collection (PII Isolated to Owner or Admin)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (existing().uid == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (
+          (incoming().role == 'student' && incoming().isPremium == false) ||
+          isAdmin()
+        );
+
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          // Action 1: Owner updates display name only (cannot escalate role or isPremium)
+          (
+            isOwner(userId) &&
+            incoming().role == existing().role &&
+            incoming().isPremium == existing().isPremium &&
+            incoming().email == existing().email &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'updatedAt'])
+          ) ||
+          // Action 2: Admin can update role or premium status
+          isAdmin()
+        );
+
+      allow delete: if isVerifiedUser() && isValidId(userId) && isAdmin();
+    }
+
+    // 2. User Progress Collection
+    match /user_progress/{progressId} {
+      allow get: if isSignedIn() && isValidId(progressId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(progressId) &&
+        isValidUserProgress(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        incoming().lastAttempted == request.time &&
+        exists(/databases/$(database)/documents/users/$(incoming().userId));
+
+      allow update: if isVerifiedUser() &&
+        isValidId(progressId) &&
+        isValidUserProgress(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().moduleId == existing().moduleId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().lastAttempted == request.time &&
+        (
+          (
+            existing().userId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['score', 'status', 'lastAttempted', 'updatedAt'])
+          ) ||
+          isAdmin()
+        );
+
+      allow delete: if isVerifiedUser() && isValidId(progressId) && isAdmin();
+    }
+
+    // 3. Quiz Sessions Collection (Append-Only Telemetry Log)
+    match /quiz_sessions/{sessionId} {
+      allow get: if isSignedIn() && isValidId(sessionId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(sessionId) &&
+        isValidQuizSession(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().completedAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(incoming().userId));
+
+      allow update, delete: if false;
+    }
+
+    // 4. Payment Transactions Collection (Terminal State Locked)
+    match /payment_transactions/{txId} {
+      allow get: if isSignedIn() && isValidId(txId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(txId) &&
+        isValidPaymentTransaction(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'pending' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(incoming().userId));
+
+      allow update: if isVerifiedUser() &&
+        isValidId(txId) &&
+        isValidPaymentTransaction(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().gateway == existing().gateway &&
+        incoming().amount == existing().amount &&
+        incoming().currency == existing().currency &&
+        incoming().checkoutRequestId == existing().checkoutRequestId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          // Terminal state lock: only pending transactions can transition, or admin override
+          (
+            existing().status == 'pending' &&
+            isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          ) ||
+          isAdmin()
+        );
+
+      allow delete: if false;
+    }
+  }
+}

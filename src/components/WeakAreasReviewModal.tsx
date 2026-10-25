@@ -32,8 +32,18 @@ export const WeakAreasReviewModal: React.FC<WeakAreasReviewModalProps> = ({
   onClose,
   onAnswerQuestion,
 }) => {
-  // 1. Identify lowest scoring modules
+  // 1. Identify skipped questions and lowest scoring modules
+  const skippedIdsSet = useMemo(
+    () => new Set(stats.skippedQuestionIds || []),
+    [stats.skippedQuestionIds]
+  );
+
   const targetQuestions = useMemo(() => {
+    // Always prioritize questions explicitly skipped by the user for Weak Areas review
+    const skippedQuestions = allQuestions.filter((q) =>
+      (stats.skippedQuestionIds || []).includes(q.id)
+    );
+
     // Module stats map
     const moduleScores: { moduleId: number; accuracy: number; total: number; mistakes: number }[] = [];
 
@@ -41,25 +51,26 @@ export const WeakAreasReviewModal: React.FC<WeakAreasReviewModalProps> = ({
     for (let mId = 1; mId <= 12; mId++) {
       const mm = stats.moduleMastery[mId];
       const mistakesCount = (stats.mistakesHistory || []).filter((m) => m.moduleId === mId).length;
+      const skippedInMod = skippedQuestions.filter((q) => q.moduleId === mId).length;
       if (mm && mm.total > 0) {
         moduleScores.push({
           moduleId: mId,
           accuracy: Math.round((mm.correct / mm.total) * 100),
           total: mm.total,
-          mistakes: mistakesCount,
+          mistakes: mistakesCount + skippedInMod,
         });
       } else {
-        // Untested module or module with mistakes
+        // Untested module or module with mistakes/skips
         moduleScores.push({
           moduleId: mId,
           accuracy: 0,
           total: 0,
-          mistakes: mistakesCount,
+          mistakes: mistakesCount + skippedInMod,
         });
       }
     }
 
-    // Sort by lowest accuracy first, then highest mistakes
+    // Sort by lowest accuracy first, then highest mistakes/skips
     moduleScores.sort((a, b) => {
       if (a.accuracy !== b.accuracy) return a.accuracy - b.accuracy;
       return b.mistakes - a.mistakes;
@@ -68,13 +79,17 @@ export const WeakAreasReviewModal: React.FC<WeakAreasReviewModalProps> = ({
     // Pick top 3 weakest module IDs
     const weakModuleIds = moduleScores.slice(0, 3).map((m) => m.moduleId);
 
-    // Pull 5 to 10 questions from these weak modules
-    const matching = allQuestions.filter((q) => weakModuleIds.includes(q.moduleId));
+    // Pull remaining questions from these weak modules (excluding already-queued skipped questions)
+    const skippedIdLookup = new Set(skippedQuestions.map((q) => q.id));
+    const matching = allQuestions.filter(
+      (q) => weakModuleIds.includes(q.moduleId) && !skippedIdLookup.has(q.id)
+    );
 
-    // Shuffle and pick between 5 and 10 questions
+    // Shuffle and combine with skipped questions at the front
     const shuffled = [...matching].sort(() => 0.5 - Math.random());
-    const count = Math.min(Math.max(5, Math.min(10, shuffled.length)), 10);
-    return shuffled.slice(0, count);
+    const combined = [...skippedQuestions, ...shuffled];
+    const count = Math.min(Math.max(5, Math.min(10, combined.length)), Math.max(10, skippedQuestions.length));
+    return combined.slice(0, count);
   }, [stats, allQuestions]);
 
   const [currentIndex, setCurrentIndex] = useState<number>(0);
@@ -140,9 +155,14 @@ export const WeakAreasReviewModal: React.FC<WeakAreasReviewModalProps> = ({
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800">
                   Targeted Scenarios
                 </span>
+                {skippedIdsSet.size > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                    {skippedIdsSet.size} Skipped Queued
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500">
-                5–10 practice questions dynamically focused on your lowest-scoring modules
+                Practice questions dynamically focused on your skipped questions & lowest-scoring modules
               </p>
             </div>
           </div>
@@ -162,17 +182,22 @@ export const WeakAreasReviewModal: React.FC<WeakAreasReviewModalProps> = ({
             <>
               {/* Question Progress & Module Tag */}
               <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-slate-100 text-slate-700">
                     Question {currentIndex + 1} of {targetQuestions.length}
                   </span>
                   <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
                     Module {currentQ.moduleId}: {currentQ.moduleTitle}
                   </span>
+                  {skippedIdsSet.has(currentQ.id) && (
+                    <span className="px-2 py-0.5 rounded-md text-xs font-black bg-amber-100 text-amber-900 border border-amber-300">
+                      Skipped for Review
+                    </span>
+                  )}
                 </div>
 
                 <span className="text-xs font-semibold text-slate-500">
-                  Path {currentQ.learningPathId}
+                  Path {currentQ.learningPathId} · {currentQ.difficulty}
                 </span>
               </div>
 

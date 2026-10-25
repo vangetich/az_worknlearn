@@ -22,6 +22,8 @@ export function getInitialStats(): UserStats {
     reviewedMistakeTimestamps: {},
     confidenceScores: {},
     moduleConfidenceScores: {},
+    skippedQuestionIds: [],
+    skippedQuestionTimestamps: {},
   };
 
   try {
@@ -114,6 +116,13 @@ export function saveUserAttempt(
     reviewedMistakeTimestamps[attempt.questionId] = attempt.timestamp;
   }
 
+  // Remove from skippedQuestionIds once user actually completes an attempt on this question
+  const skippedQuestionIds = (stats.skippedQuestionIds || []).filter(
+    (id) => id !== attempt.questionId
+  );
+  const skippedQuestionTimestamps = { ...(stats.skippedQuestionTimestamps || {}) };
+  delete skippedQuestionTimestamps[attempt.questionId];
+
   const updated: UserStats = {
     ...stats,
     totalAnswered,
@@ -124,6 +133,8 @@ export function saveUserAttempt(
     mistakesHistory,
     reviewedMistakeIds,
     reviewedMistakeTimestamps,
+    skippedQuestionIds,
+    skippedQuestionTimestamps,
   };
 
   try {
@@ -133,6 +144,35 @@ export function saveUserAttempt(
     }
   } catch (e) {
     console.error('Failed to save to localStorage', e);
+  }
+
+  return updated;
+}
+
+export function markQuestionSkipped(
+  stats: UserStats,
+  questionId: string
+): UserStats {
+  const now = Date.now();
+  const existingSkipped = stats.skippedQuestionIds || [];
+  const skippedQuestionIds = existingSkipped.includes(questionId)
+    ? existingSkipped
+    : [questionId, ...existingSkipped];
+  const skippedQuestionTimestamps = {
+    ...(stats.skippedQuestionTimestamps || {}),
+    [questionId]: now,
+  };
+
+  const updated: UserStats = {
+    ...stats,
+    skippedQuestionIds,
+    skippedQuestionTimestamps,
+  };
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to save skipped question status', e);
   }
 
   return updated;
