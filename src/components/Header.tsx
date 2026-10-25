@@ -32,6 +32,7 @@ import { PWAInstallButton } from './PWAInstallButton';
 import { DailyGoalAlertsModal } from './DailyGoalAlertsModal';
 import { ThemeToggle } from './ThemeToggle';
 import { GlobalSearchBar } from './GlobalSearchBar';
+import { FocusSessionWidget } from './FocusSessionWidget';
 
 export type AppTab =
   | 'quiz'
@@ -57,6 +58,7 @@ interface HeaderProps {
   onUpdateStats?: (newStats: UserStats) => void;
   fireStreakTrigger?: number;
   onOpenReviewSession?: () => void;
+  onOpenStudyBreak?: () => void;
   questions?: Question[];
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
@@ -64,6 +66,7 @@ interface HeaderProps {
   onSelectModule?: (moduleId: number, pathId: number) => void;
   onRetryIncorrectPath?: (pathId: 1 | 2 | 3) => void;
   retryIncorrectPathId?: 1 | 2 | 3 | null;
+  onOpenUserGuide?: () => void;
 }
 
 const PATH_COMPACT_INTEL: Record<
@@ -100,6 +103,7 @@ export const Header: React.FC<HeaderProps> = ({
   onUpdateStats,
   fireStreakTrigger = 0,
   onOpenReviewSession,
+  onOpenStudyBreak,
   questions = [],
   searchQuery = '',
   onSearchQueryChange,
@@ -107,6 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectModule,
   onRetryIncorrectPath,
   retryIncorrectPathId = null,
+  onOpenUserGuide,
 }) => {
   const [showGoalAlertsModal, setShowGoalAlertsModal] = useState<boolean>(false);
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = useState<boolean>(false);
@@ -339,6 +344,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Controls on Mobile & Tablet */}
           <div className="flex items-center gap-1.5 shrink-0">
+            <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
             <button
               type="button"
               onClick={toggleMenuBar}
@@ -539,6 +545,8 @@ export const Header: React.FC<HeaderProps> = ({
               fireStreakTrigger={fireStreakTrigger}
             />
 
+            <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
+
             <button
               type="button"
               onClick={() => setShowGoalAlertsModal(true)}
@@ -563,6 +571,18 @@ export const Header: React.FC<HeaderProps> = ({
                     {missedCount}
                   </span>
                 )}
+              </button>
+            )}
+
+            {onOpenUserGuide && (
+              <button
+                type="button"
+                onClick={onOpenUserGuide}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-[#0078D4] border border-sky-200/80 text-xs font-bold transition-all shadow-2xs cursor-pointer group shrink-0"
+                title="AZ-900 Studio User Guide & FAQ: Comprehensive features breakdown and printable PDF"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-[#0078D4] group-hover:scale-110 transition-transform" />
+                <span className="hidden xl:inline">Guide &amp; PDF</span>
               </button>
             )}
 
@@ -709,6 +729,19 @@ export const Header: React.FC<HeaderProps> = ({
                     >
                       <RotateCcw className="w-3 h-3 text-rose-600" />
                       <span>Review ({missedCount})</span>
+                    </button>
+                  )}
+                  {onOpenUserGuide && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenUserGuide();
+                        setIsMobileDetailsOpen(false);
+                      }}
+                      className="px-2 py-0.5 rounded-md bg-sky-50 hover:bg-sky-100 text-[#0078D4] border border-sky-200 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <BookOpen className="w-3 h-3 text-[#0078D4]" />
+                      <span>Guide &amp; PDF</span>
                     </button>
                   )}
                 </div>

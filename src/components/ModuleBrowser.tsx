@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { UserStats } from '../types/quiz';
+import { fireModuleCompletionConfetti } from '../utils/confetti';
 
 const ALL_CURRICULUM_MODULES = LEARNING_PATHS.flatMap((p) => p.modules);
 
@@ -260,14 +261,17 @@ export const ModuleBrowser: React.FC<ModuleBrowserProps> = ({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (!isModCompleted) {
+                                  fireModuleCompletionConfetti(mod.title);
+                                }
                                 onToggleModuleComplete(mod.id);
                               }}
-                              className={`w-3.5 h-3.5 rounded flex items-center justify-center border shrink-0 transition-colors cursor-pointer ${
+                              className={`w-3.5 h-3.5 rounded flex items-center justify-center border shrink-0 transition-all cursor-pointer ${
                                 isModCompleted
-                                  ? 'bg-emerald-600 border-emerald-600 text-white'
+                                  ? 'bg-emerald-600 border-emerald-600 text-white scale-110 shadow-xs'
                                   : isModSelected
-                                  ? 'border-white/80 bg-transparent'
-                                  : 'border-slate-300 bg-white hover:border-[#0078D4]'
+                                  ? 'border-white/80 bg-transparent hover:scale-105'
+                                  : 'border-slate-300 bg-white hover:border-[#0078D4] hover:scale-105'
                               }`}
                               aria-label={
                                 isModCompleted

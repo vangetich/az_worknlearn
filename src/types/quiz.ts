@@ -60,6 +60,7 @@ export interface QuestionAttempt {
   isCorrect: boolean;
   timestamp: number;
   trapType?: string;
+  confidence?: number; // 1 (Guessing) to 5 (Mastered)
 }
 
 export interface UserStats {
@@ -83,6 +84,8 @@ export interface UserStats {
   completedModules?: number[]; // Module IDs (1..12) marked complete by user
   reviewedMistakeIds?: string[]; // Question IDs reviewed successfully and removed from future review sessions
   reviewedMistakeTimestamps?: Record<string, number>; // questionId -> timestamp when reviewed successfully
+  confidenceScores?: Record<string, number>; // questionId -> 1..5 user self-rated confidence
+  moduleConfidenceScores?: Record<number, number>; // moduleId -> 1..5 user self-rated confidence
 }
 
 export interface CheatSheetItem {

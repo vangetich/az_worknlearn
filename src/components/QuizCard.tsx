@@ -100,6 +100,8 @@ interface QuizCardProps {
   showWorkspacePanels?: boolean;
   onToggleWorkspacePanels?: () => void;
   externalStudyZoneOpenTrigger?: number;
+  onRateConfidence?: (questionId: string, confidence: number) => void;
+  onOpenUserGuide?: () => void;
 }
 
 const EXAM_SIMULATION_DURATION_SECONDS = 45 * 60; // 45:00 standard AZ-900 exam duration
@@ -327,9 +329,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   showWorkspacePanels = false,
   onToggleWorkspacePanels,
   externalStudyZoneOpenTrigger = 0,
+  onRateConfidence,
+  onOpenUserGuide,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
+  const [userConfidence, setUserConfidence] = useState<number | null>(() => stats?.confidenceScores?.[question.id] || null);
+  const [confidenceToast, setConfidenceToast] = useState<string | null>(null);
   const [showKnowledgeCheck, setShowKnowledgeCheck] = useState<boolean>(false);
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
   const [showQuickNotes, setShowQuickNotes] = useState<boolean>(false);
@@ -730,6 +736,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   React.useEffect(() => {
     setSelectedOption(null);
     setHasSubmitted(false);
+    setUserConfidence(stats?.confidenceScores?.[question.id] || null);
+    setConfidenceToast(null);
     setExamFeedbackRevealed(false);
     setElapsedSeconds(0);
     setShowKnowledgeCheck(false);
@@ -761,7 +769,26 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
-  }, [question.id]);
+  }, [question.id, stats?.confidenceScores]);
+
+  const handleRateConfidence = (level: number) => {
+    setUserConfidence(level);
+    const label =
+      level === 1
+        ? 'Guessing (1/5)'
+        : level === 2
+        ? 'Low Confidence (2/5)'
+        : level === 3
+        ? 'Moderate Confidence (3/5)'
+        : level === 4
+        ? 'High Confidence (4/5)'
+        : 'Mastered (5/5)';
+    setConfidenceToast(`Recorded: ${label}`);
+    setTimeout(() => setConfidenceToast(null), 3000);
+    if (onRateConfidence) {
+      onRateConfidence(question.id, level);
+    }
+  };
 
   const handleInlineNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextVal = e.target.value;
@@ -1352,16 +1379,16 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               />
             </button>
 
-            {/* Centered Modal Popup in the Middle of the Page (Not Sideways) */}
+            {/* Centered Modal Popup in the Middle of the Page (Not Sideways, Comfortably Lower Down) */}
             {showStudyZoneMenu && (
               <div
-                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150"
+                className="fixed inset-0 z-50 flex items-start justify-center pt-20 sm:pt-24 pb-10 px-4 overflow-y-auto bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150"
                 onClick={() => setShowStudyZoneMenu(false)}
               >
                 <div
                   ref={studyZoneMenuRef}
                   onClick={(e) => e.stopPropagation()}
-                  className="w-full max-w-xl max-h-[86vh] overflow-y-auto rounded-2xl bg-white border border-slate-200 shadow-2xl text-left animate-in zoom-in-95 duration-150"
+                  className="w-full max-w-xl my-auto sm:my-0 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl bg-white border border-slate-200 shadow-2xl text-left animate-in slide-in-from-top-4 zoom-in-95 duration-200"
                 >
                   {/* Modal Header */}
                   <div className="sticky top-0 z-10 bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white px-5 py-4 flex items-center justify-between gap-3 border-b border-slate-800">
@@ -1864,6 +1891,35 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
                       {openStudyZoneSections.tools && (
                         <div className="p-3.5 pt-2 border-t border-slate-200/80 space-y-3 bg-slate-50/70">
+                          {/* Candidate Guide & PDF Manual Highlight Card */}
+                          {onOpenUserGuide && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onOpenUserGuide();
+                                setShowStudyZoneMenu(false);
+                              }}
+                              className="w-full p-2.5 rounded-xl border border-sky-300 bg-gradient-to-r from-sky-50 via-white to-blue-50 hover:from-sky-100 hover:to-blue-100 text-slate-900 text-xs font-extrabold flex items-center justify-between transition-all cursor-pointer shadow-2xs group"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <span className="p-2 rounded-lg bg-blue-100 text-[#0078D4] group-hover:scale-105 transition-transform">
+                                  <BookOpen className="w-4 h-4" />
+                                </span>
+                                <div className="text-left">
+                                  <span className="block font-black text-slate-900 text-xs">
+                                    📘 Candidate Guide, Special Features &amp; FAQ
+                                  </span>
+                                  <span className="block text-[10px] text-slate-500 font-normal">
+                                    How to use the studio, aims of features, 4-week study plan &amp; downloadable PDF
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-rose-600 hover:bg-rose-500 text-white shadow-2xs shrink-0 flex items-center gap-1">
+                                <span>PDF / Print</span>
+                              </span>
+                            </button>
+                          )}
+
                           {/* Primary Practice Tools Grid */}
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {onOpenMockExam && (
@@ -2783,6 +2839,58 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   </p>
                 </div>
               </div>
+            </div>
+
+            {/* User Confidence Scoring Prompt (1-5 Scale) */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900 via-[#0B2545] to-[#134074] text-white border border-slate-800 shadow-md animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950">
+                      Confidence Check
+                    </span>
+                    <h5 className="text-xs font-bold text-sky-100">
+                      Rate your confidence for this question:
+                    </h5>
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    Helps isolate lucky guesses from solid comprehension across Azure topics.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { level: 1, label: 'Guessing', color: 'bg-rose-500/20 text-rose-300 hover:bg-rose-500 hover:text-white border-rose-500/40' },
+                    { level: 2, label: 'Low', color: 'bg-orange-500/20 text-orange-300 hover:bg-orange-500 hover:text-white border-orange-500/40' },
+                    { level: 3, label: 'Moderate', color: 'bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-white border-amber-500/40' },
+                    { level: 4, label: 'High', color: 'bg-sky-500/20 text-sky-300 hover:bg-sky-500 hover:text-white border-sky-500/40' },
+                    { level: 5, label: 'Mastered', color: 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500 hover:text-white border-emerald-500/40' },
+                  ].map((item) => {
+                    const isSelected = userConfidence === item.level;
+                    return (
+                      <button
+                        key={item.level}
+                        type="button"
+                        onClick={() => handleRateConfidence(item.level)}
+                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm scale-105 ring-2 ring-amber-300/50'
+                            : item.color
+                        }`}
+                        title={`Rate confidence: ${item.level} (${item.label})`}
+                      >
+                        <span>{item.level}</span>
+                        <span className="hidden sm:inline text-[10px]">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {confidenceToast && (
+                <div className="mt-2 text-center text-[11px] font-bold text-amber-300 animate-pulse">
+                  ✓ {confidenceToast}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -58,6 +58,7 @@ import { PostSessionWeakAreaReview } from './components/PostSessionWeakAreaRevie
 import { AzureCloudExplorer } from './components/AzureCloudExplorer';
 import { LearningPathProgressMap } from './components/LearningPathProgressMap';
 import { WeeklyExamReadiness } from './components/WeeklyExamReadiness';
+import { UserGuideModal } from './components/UserGuideModal';
 import {
   AfricanWatermarkPattern,
   KitengeRibbon,
@@ -77,7 +78,9 @@ import {
   markQuestionReviewedSuccessfully,
   getUnresolvedMissedQuestionsCount,
   getUnresolvedMistakesMap,
+  saveQuestionConfidence,
 } from './utils/storage';
+import { fireModuleCompletionConfetti } from './utils/confetti';
 import { ThemeToggle } from './components/ThemeToggle';
 import { getStoredTheme, applyTheme } from './utils/theme';
 
@@ -240,6 +243,7 @@ export default function App() {
   const [showMicroDrill, setShowMicroDrill] = useState<number | false>(false);
   const [microDrillTargetModuleId, setMicroDrillTargetModuleId] = useState<number>(5);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [showUserGuideModal, setShowUserGuideModal] = useState<boolean>(false);
 
   // Focus Mode state (minimizes UI by hiding nav bar and footer)
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
@@ -738,7 +742,17 @@ export default function App() {
 
   // Module completion toggle (Curriculum Progress Tracker)
   const handleToggleModuleComplete = (moduleId: number) => {
+    const isCurrentlyComplete = stats.completedModules?.includes(moduleId);
+    if (!isCurrentlyComplete) {
+      fireModuleCompletionConfetti(`Module ${moduleId}`);
+    }
     const updated = toggleModuleCompletion(stats, moduleId);
+    setStats(updated);
+  };
+
+  // User confidence scoring rating handler (1-5 scale)
+  const handleRateConfidence = (questionId: string, confidence: number) => {
+    const updated = saveQuestionConfidence(stats, questionId, confidence);
     setStats(updated);
   };
 
@@ -862,6 +876,8 @@ export default function App() {
           }}
           onRetryIncorrectPath={handleToggleRetryIncorrectInPath}
           retryIncorrectPathId={retryIncorrectPathId}
+          onOpenStudyBreak={() => setShowStudyBreak(true)}
+          onOpenUserGuide={() => setShowUserGuideModal(true)}
         />
       )}
 
@@ -939,6 +955,7 @@ export default function App() {
                     }}
                     onOpenWeakAreasReview={() => setShowWeakAreasReview(true)}
                     onOpenStudyRoom={() => setShowStudyRoom(true)}
+                    onOpenUserGuide={() => setShowUserGuideModal(true)}
                   />
                 </div>
 
@@ -1592,6 +1609,8 @@ export default function App() {
                     showWorkspacePanels={showWorkspacePanels}
                     onToggleWorkspacePanels={() => setShowWorkspacePanels((prev) => !prev)}
                     externalStudyZoneOpenTrigger={externalStudyZoneOpenTrigger}
+                    onRateConfidence={handleRateConfidence}
+                    onOpenUserGuide={() => setShowUserGuideModal(true)}
                   />
                 ) : (
                   <div className="bg-white rounded-xl border border-slate-200 card-elevation p-12 text-center space-y-4">
@@ -1839,6 +1858,7 @@ export default function App() {
             setActiveTab={setActiveTab}
             unresolvedMistakesCount={unresolvedMistakesCount}
             questionCountByModule={questionCountByModule}
+            onOpenUserGuide={() => setShowUserGuideModal(true)}
           />
         )}
       </main>
@@ -1907,6 +1927,22 @@ export default function App() {
         <ExportProgressModal
           stats={stats}
           onClose={() => setShowExportModal(false)}
+          onOpenUserGuide={() => setShowUserGuideModal(true)}
+        />
+      )}
+
+      {/* Comprehensive Candidate User Guide & Printable/Downloadable PDF Manual */}
+      {showUserGuideModal && (
+        <UserGuideModal
+          onClose={() => setShowUserGuideModal(false)}
+          onOpenMockExam={() => {
+            setShowUserGuideModal(false);
+            setShowMockExam(true);
+          }}
+          onOpenAdaptive={() => {
+            setShowUserGuideModal(false);
+            setActiveTab('adaptive');
+          }}
         />
       )}
 

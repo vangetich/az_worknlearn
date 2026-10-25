@@ -20,6 +20,8 @@ export function getInitialStats(): UserStats {
     completedModules: [],
     reviewedMistakeIds: [],
     reviewedMistakeTimestamps: {},
+    confidenceScores: {},
+    moduleConfidenceScores: {},
   };
 
   try {
@@ -546,5 +548,48 @@ export function getAllQuestionNotes(): Record<string, string> {
     return {};
   }
 }
+
+export function saveQuestionConfidence(
+  stats: UserStats,
+  questionId: string,
+  confidence: number
+): UserStats {
+  const confidenceScores = {
+    ...(stats.confidenceScores || {}),
+    [questionId]: confidence,
+  };
+  const updated: UserStats = {
+    ...stats,
+    confidenceScores,
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to save confidence score', e);
+  }
+  return updated;
+}
+
+export function saveModuleConfidence(
+  stats: UserStats,
+  moduleId: number,
+  confidence: number
+): UserStats {
+  const moduleConfidenceScores = {
+    ...(stats.moduleConfidenceScores || {}),
+    [moduleId]: confidence,
+  };
+  const updated: UserStats = {
+    ...stats,
+    moduleConfidenceScores,
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to save module confidence score', e);
+  }
+  return updated;
+}
+
 
 

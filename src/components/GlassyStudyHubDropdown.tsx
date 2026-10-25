@@ -22,6 +22,7 @@ import {
   ExternalLink,
   Users,
   AlertTriangle,
+  BookOpen,
 } from 'lucide-react';
 import { UserStats } from '../types/quiz';
 import { BADGE_DEFINITIONS } from './BadgeSystem';
@@ -42,6 +43,7 @@ interface GlassyStudyHubDropdownProps {
   onDrillDomain?: (moduleIds: number[]) => void;
   onOpenWeakAreasReview?: () => void;
   onOpenStudyRoom?: () => void;
+  onOpenUserGuide?: () => void;
 }
 
 export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
@@ -56,6 +58,7 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
   onDrillDomain,
   onOpenWeakAreasReview,
   onOpenStudyRoom,
+  onOpenUserGuide,
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [showRadarModal, setShowRadarModal] = useState<boolean>(false);
@@ -456,6 +459,29 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
                   </p>
                 </div>
               </button>
+
+              {onOpenUserGuide && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenUserGuide();
+                    setIsOpen(false);
+                  }}
+                  className="text-left p-2 rounded-xl hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200/80 transition-all flex items-center gap-2 group/item cursor-pointer"
+                >
+                  <div className="p-1.5 rounded-lg bg-[#0078D4] text-white shadow-2xs shrink-0">
+                    <BookOpen className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-[11px] font-bold text-slate-900 truncate">
+                      Candidate Guide
+                    </h4>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      PDF manual &amp; FAQ
+                    </p>
+                  </div>
+                </button>
+              )}
 
               <button
                 type="button"

@@ -46,7 +46,7 @@ interface DomainConfidenceProps {
   onResetModuleConfidence?: (moduleId: number) => void;
 }
 
-type RadarWindowTab = 'radar' | 'modules' | 'actions';
+type RadarWindowTab = 'radar' | 'modules' | 'confidence' | 'actions';
 type AnalyticsSectionFilter = 'all' | 'charts' | 'gaps' | 'toolkit';
 
 export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
@@ -173,6 +173,83 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
     return LEARNING_PATHS.filter((p) => p.id === selectedPathFilter);
   }, [selectedPathFilter]);
 
+  // Aggregate user confidence scoring across paths and modules (1-5 scale)
+  const confidenceSummary = useMemo(() => {
+    const questionScores = stats.confidenceScores || {};
+    const moduleScores = stats.moduleConfidenceScores || {};
+
+    const pathData: Record<1 | 2 | 3, { total: number; count: number; lowCount: number }> = {
+      1: { total: 0, count: 0, lowCount: 0 },
+      2: { total: 0, count: 0, lowCount: 0 },
+      3: { total: 0, count: 0, lowCount: 0 },
+    };
+
+    const moduleData: Record<number, { total: number; count: number; manualRating?: number }> = {};
+    LEARNING_PATHS.forEach((p) => {
+      p.modules.forEach((m) => {
+        moduleData[m.id] = { total: 0, count: 0, manualRating: moduleScores[m.id] };
+      });
+    });
+
+    let overallSum = 0;
+    let overallRatingsCount = 0;
+
+    Object.entries(questionScores).forEach(([qId, score]) => {
+      const atts = stats.attempts?.[qId] || [];
+      const mId = atts[0]?.moduleId;
+      const pId = atts[0]?.pathId;
+
+      if (pId && (pId === 1 || pId === 2 || pId === 3)) {
+        pathData[pId].total += score;
+        pathData[pId].count += 1;
+        if (score <= 2) pathData[pId].lowCount += 1;
+      }
+      if (mId && moduleData[mId]) {
+        moduleData[mId].total += score;
+        moduleData[mId].count += 1;
+      }
+
+      overallSum += score;
+      overallRatingsCount += 1;
+    });
+
+    // Merge manual module ratings
+    Object.entries(moduleScores).forEach(([mIdStr, score]) => {
+      const mId = parseInt(mIdStr, 10);
+      const foundPath = LEARNING_PATHS.find((p) => p.modules.some((m) => m.id === mId));
+      if (foundPath && (foundPath.id === 1 || foundPath.id === 2 || foundPath.id === 3)) {
+        if (moduleData[mId] && moduleData[mId].count === 0) {
+          pathData[foundPath.id].total += score;
+          pathData[foundPath.id].count += 1;
+          if (score <= 2) pathData[foundPath.id].lowCount += 1;
+          overallSum += score;
+          overallRatingsCount += 1;
+        }
+      }
+    });
+
+    // Detect high risk areas (low confidence <= 2 or mistakes with low confidence)
+    const highRiskModuleIds: number[] = [];
+    LEARNING_PATHS.forEach((p) => {
+      p.modules.forEach((m) => {
+        const md = moduleData[m.id];
+        const manual = md?.manualRating;
+        const avg = md && md.count > 0 ? md.total / md.count : manual || 0;
+        if ((avg > 0 && avg <= 2.5) || manual === 1 || manual === 2) {
+          highRiskModuleIds.push(m.id);
+        }
+      });
+    });
+
+    return {
+      pathData,
+      moduleData,
+      overallAvg: overallRatingsCount > 0 ? (overallSum / overallRatingsCount).toFixed(1) : null,
+      totalRatings: overallRatingsCount,
+      highRiskModuleIds,
+    };
+  }, [stats.confidenceScores, stats.moduleConfidenceScores, stats.attempts]);
+
   return (
     <div className="space-y-4 sm:space-y-5">
       {/* =====================================================================
@@ -254,6 +331,27 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
                 <span>Domains</span>
                 <span className="hidden xs:inline text-[9px] px-1 rounded bg-white/15">
                   12
+                </span>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeWindowTab === 'confidence'}
+                onClick={() => {
+                  setActiveWindowTab('confidence');
+                  if (!isWindowExpanded) setIsWindowExpanded(true);
+                }}
+                className={`px-2 sm:px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  activeWindowTab === 'confidence' && isWindowExpanded
+                    ? 'bg-[#0078D4] text-white shadow-2xs font-extrabold'
+                    : 'text-sky-100/80 hover:text-white'
+                }`}
+              >
+                <Award className="w-3 h-3 shrink-0 text-amber-300" />
+                <span>Confidence</span>
+                <span className="hidden xs:inline text-[9px] px-1 rounded bg-amber-400 text-slate-950 font-black">
+                  1-5
                 </span>
               </button>
 
@@ -733,6 +831,204 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* ===============================================================
+                WINDOW TAB: USER CONFIDENCE SCORING SUMMARY (1-5 SCALE)
+               =============================================================== */}
+            {activeWindowTab === 'confidence' && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {/* Header & Overall Summary */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-gradient-to-r from-slate-900 via-[#0B2545] to-[#134074] text-white">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950">
+                        Self-Efficacy Engine
+                      </span>
+                      <h4 className="text-xs sm:text-sm font-black text-white">
+                        User Confidence Scoring Summary (1–5 Scale)
+                      </h4>
+                    </div>
+                    <p className="text-[11px] text-slate-300">
+                      Evaluates subjective confidence against objective accuracy across all 3 AZ-900 Learning Paths
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-center">
+                      <span className="text-[9px] font-bold uppercase text-sky-200 block">Overall Confidence</span>
+                      <span className="font-mono text-base font-black text-amber-300">
+                        {confidenceSummary.overallAvg ? `${confidenceSummary.overallAvg} / 5.0` : 'Not Yet Rated'}
+                      </span>
+                    </div>
+                    <div className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-center">
+                      <span className="text-[9px] font-bold uppercase text-sky-200 block">Rated Questions</span>
+                      <span className="font-mono text-base font-black text-white">
+                        {confidenceSummary.totalRatings}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3 Learning Paths Confidence Comparison */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {LEARNING_PATHS.map((path) => {
+                    const pData = confidenceSummary.pathData[path.id];
+                    const avg = pData.count > 0 ? (pData.total / pData.count).toFixed(1) : null;
+                    const numAvg = avg ? parseFloat(avg) : 0;
+                    const statusConfig =
+                      avg === null
+                        ? { label: 'Unrated', color: 'bg-slate-100 text-slate-600 border-slate-200' }
+                        : numAvg >= 4.0
+                        ? { label: 'High Confidence', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' }
+                        : numAvg >= 3.0
+                        ? { label: 'Moderate', color: 'bg-amber-100 text-amber-900 border-amber-300' }
+                        : { label: 'Needs Practice', color: 'bg-rose-100 text-rose-900 border-rose-300' };
+
+                    return (
+                      <div
+                        key={path.id}
+                        className="p-3.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5 flex flex-col justify-between"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span
+                              className="px-2 py-0.5 rounded text-[10px] font-black uppercase"
+                              style={{ backgroundColor: `${path.accentColor}18`, color: path.accentColor }}
+                            >
+                              Path {path.id} ({path.examWeight})
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${statusConfig.color}`}>
+                              {statusConfig.label}
+                            </span>
+                          </div>
+                          <h5 className="font-extrabold text-xs text-slate-900 line-clamp-1">
+                            {path.title}
+                          </h5>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-600">Avg Confidence:</span>
+                          <span className="font-mono text-sm font-black text-slate-900">
+                            {avg ? `${avg} / 5.0` : '—'}
+                          </span>
+                        </div>
+
+                        {pData.lowCount > 0 && (
+                          <div className="text-[10px] text-rose-700 font-bold flex items-center gap-1 bg-rose-50 px-2 py-1 rounded">
+                            <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                            <span>{pData.lowCount} questions flagged low confidence (≤2)</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* High-Risk Areas & Practice Recommendations */}
+                {confidenceSummary.highRiskModuleIds.length > 0 && (
+                  <div className="p-3.5 rounded-xl bg-rose-50/90 border border-rose-200 text-xs text-rose-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-rose-600 text-white shrink-0">
+                        <AlertTriangle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-black text-rose-900 uppercase tracking-wide">
+                          High-Risk Modules Identified (Low Confidence Score)
+                        </div>
+                        <p className="text-[11px] text-rose-800 mt-0.5">
+                          Target these modules where self-confidence is lowest to eliminate exam surprise:
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {confidenceSummary.highRiskModuleIds.map((mId) => (
+                        <button
+                          key={mId}
+                          type="button"
+                          onClick={() => onSelectModule(mId)}
+                          className="px-2.5 py-1 rounded-lg bg-white hover:bg-rose-100 text-rose-900 border border-rose-300 font-extrabold text-[11px] shadow-2xs transition-colors cursor-pointer"
+                        >
+                          Practice Module {mId} →
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Module-by-Module Confidence Breakdown Table (12 Modules) */}
+                <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-2xs">
+                  <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-800">
+                      Module-by-Module Confidence &amp; Accuracy Matrix
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      All 12 AZ-900 Modules
+                    </span>
+                  </div>
+
+                  <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+                    {LEARNING_PATHS.flatMap((p) => p.modules).map((m) => {
+                      const mData = confidenceSummary.moduleData[m.id];
+                      const avg = mData && mData.count > 0 ? (mData.total / mData.count).toFixed(1) : mData?.manualRating?.toFixed(1) || null;
+                      const numAvg = avg ? parseFloat(avg) : 0;
+                      const modStat = filteredMetrics.moduleMastery[m.id] || { correct: 0, total: 0 };
+                      const acc = modStat.total > 0 ? Math.round((modStat.correct / modStat.total) * 100) : null;
+
+                      return (
+                        <div
+                          key={m.id}
+                          className="px-3.5 py-2 flex items-center justify-between gap-3 hover:bg-slate-50/80 text-xs transition-colors"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-700 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                              M{m.id}
+                            </span>
+                            <span className="font-bold text-slate-900 truncate">
+                              {m.title}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="text-right">
+                              <span className="text-[10px] text-slate-400 uppercase block">Confidence</span>
+                              <span
+                                className={`font-mono font-black text-xs ${
+                                  avg === null
+                                    ? 'text-slate-400'
+                                    : numAvg >= 4.0
+                                    ? 'text-emerald-700'
+                                    : numAvg >= 3.0
+                                    ? 'text-amber-600'
+                                    : 'text-rose-600'
+                                }`}
+                              >
+                                {avg ? `${avg} / 5` : '—'}
+                              </span>
+                            </div>
+
+                            <div className="text-right hidden sm:block">
+                              <span className="text-[10px] text-slate-400 uppercase block">Accuracy</span>
+                              <span className="font-mono font-bold text-xs text-slate-700">
+                                {acc !== null ? `${acc}%` : 'New'}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => onSelectModule(m.id)}
+                              className="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-[#0078D4] hover:text-white text-[#0078D4] border border-sky-200 text-[11px] font-bold transition-all cursor-pointer"
+                            >
+                              Practice
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}

@@ -24,6 +24,8 @@ import {
   LayoutGrid,
   X,
   Filter,
+  FileText,
+  Printer,
 } from 'lucide-react';
 import { UserStats } from '../types/quiz';
 import { BADGE_DEFINITIONS, BadgeTier, BadgeCategory } from './BadgeSystem';
@@ -51,6 +53,7 @@ export interface ProfileViewProps {
   setActiveTab?: (tab: AppTab) => void;
   unresolvedMistakesCount?: number;
   questionCountByModule?: Record<number, number>;
+  onOpenUserGuide?: () => void;
 }
 
 type ProfileExplorerTab = 'paths' | 'modules' | 'services' | 'actions';
@@ -80,6 +83,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   setActiveTab,
   unresolvedMistakesCount = 0,
   questionCountByModule = {},
+  onOpenUserGuide,
 }) => {
   const [candidateName, setCandidateName] = useState<string>(() => {
     return localStorage.getItem('az900_candidate_name') || 'Azure Cloud Explorer';
@@ -1171,6 +1175,26 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     </div>
                   </div>
                 </button>
+
+                {onOpenUserGuide && (
+                  <button
+                    type="button"
+                    onClick={onOpenUserGuide}
+                    className="p-2.5 rounded-xl bg-gradient-to-r from-sky-50 via-white to-blue-50 hover:from-sky-100 hover:to-blue-100 border border-sky-300 text-slate-900 text-left flex items-center gap-2.5 transition-all cursor-pointer shadow-2xs group"
+                  >
+                    <div className="p-2 rounded-lg bg-rose-600 text-white shrink-0 group-hover:scale-105 transition-transform">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-extrabold text-xs truncate flex items-center gap-1">
+                        <span>Candidate Guide (PDF)</span>
+                      </div>
+                      <div className="text-[10px] text-sky-700 truncate">
+                        Manual, aims &amp; FAQ
+                      </div>
+                    </div>
+                  </button>
+                )}
               </div>
             )}
           </div>

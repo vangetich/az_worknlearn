@@ -9,20 +9,24 @@ import {
   Share2,
   Award,
   Sparkles,
+  BookOpen,
 } from 'lucide-react';
 import { UserStats } from '../types/quiz';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { calculateDomainConfidence } from '../utils/storage';
 import { MaasaiMedallion, KitengeRibbon } from './MotifDecorations';
+import { generateDomainConfidencePdf, generateUserManualPdf } from '../utils/pdfGenerator';
 
 interface ExportProgressModalProps {
   stats: UserStats;
   onClose: () => void;
+  onOpenUserGuide?: () => void;
 }
 
 export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
   stats,
   onClose,
+  onOpenUserGuide,
 }) => {
   const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
 
@@ -95,7 +99,38 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
     setTimeout(() => setCopiedNotification(null), 3000);
   };
 
-  // 2. Export / Print as PDF
+  // 2. Direct Client-Side PDF Generation via jsPDF (Domain Confidence Report & Learning Path Progress Map)
+  const handleDownloadClientPdf = () => {
+    try {
+      generateDomainConfidencePdf(stats);
+      setCopiedNotification(
+        'Domain Confidence Report & Learning Path Progress Map saved as PDF!'
+      );
+      setTimeout(() => setCopiedNotification(null), 3500);
+    } catch (e) {
+      console.error(e);
+      setCopiedNotification('Failed to generate client PDF. Opening print dialog...');
+      handlePrintPDF();
+    }
+  };
+
+  // 3. Direct Client-Side Studio User Manual PDF Generation via jsPDF
+  const handleDownloadManualPdf = () => {
+    try {
+      generateUserManualPdf();
+      setCopiedNotification('Azure Fundamentals Practice Studio User Manual saved as PDF!');
+      setTimeout(() => setCopiedNotification(null), 3500);
+    } catch (e) {
+      console.error(e);
+      setCopiedNotification('Failed to generate PDF manual. Opening candidate guide...');
+      if (onOpenUserGuide) {
+        onClose();
+        onOpenUserGuide();
+      }
+    }
+  };
+
+  // 4. Export / Print as PDF (Printable HTML view)
   const handlePrintPDF = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -269,50 +304,129 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
           </div>
 
           {/* Export Options Grid */}
-          <div className="space-y-3">
-            {/* Option 1: PDF Export */}
+          <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+            {/* Primary Option: Client-Side Vector PDF via jsPDF */}
             <div
-              onClick={handlePrintPDF}
-              className="p-4 rounded-xl border border-slate-200 hover:border-[#0078D4] hover:bg-blue-50/20 cursor-pointer transition-all flex items-center justify-between group"
+              onClick={handleDownloadClientPdf}
+              className="p-3.5 rounded-xl border-2 border-[#0078D4] bg-blue-50/40 hover:bg-blue-50 hover:shadow-md cursor-pointer transition-all flex items-center justify-between group relative overflow-hidden"
             >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-xl pointer-events-none" />
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-105 transition-transform">
+                <div className="w-10 h-10 rounded-xl bg-[#0078D4] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm group-hover:scale-105 transition-transform">
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-slate-900 group-hover:text-[#0078D4] transition-colors">
-                    Download / Print Summary PDF
-                  </h4>
-                  <p className="text-xs text-slate-500">
-                    High-fidelity printable readiness report with 12-module breakdown table
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-[#0078D4] transition-colors">
+                      Domain Confidence &amp; Progress Map (.PDF)
+                    </h4>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-blue-600 text-white">
+                      jsPDF
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">
+                      Recommended
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Vector PDF with scaled scores, P1-P3 domain ratings, and 12-module visual progress bars
                   </p>
                 </div>
               </div>
 
-              <Printer className="w-4 h-4 text-slate-400 group-hover:text-[#0078D4] transition-colors" />
+              <div className="p-2 rounded-lg bg-blue-100/60 text-[#0078D4] group-hover:bg-[#0078D4] group-hover:text-white transition-all shrink-0 ml-2">
+                <Download className="w-4 h-4" />
+              </div>
             </div>
 
-            {/* Option 2: JSON Export */}
+            {/* Option 2: Studio User Manual & FAQ (.PDF) */}
+            <div
+              onClick={handleDownloadManualPdf}
+              className="p-3.5 rounded-xl border border-rose-200 bg-rose-50/30 hover:border-rose-400 hover:bg-rose-50/60 cursor-pointer transition-all flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-amber-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-rose-700 transition-colors">
+                      Studio User Manual &amp; FAQ (.PDF)
+                    </h4>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-rose-600 text-white">
+                      5 Pages
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Complete candidate guide, Adaptive Engine breakdown, and 13 categorized FAQs
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-2 rounded-lg bg-rose-100 text-rose-700 group-hover:bg-rose-600 group-hover:text-white transition-all shrink-0 ml-2">
+                <Download className="w-4 h-4" />
+              </div>
+            </div>
+
+            {/* Option 3: Browser Print Dialog */}
+            <div
+              onClick={handlePrintPDF}
+              className="p-3.5 rounded-xl border border-slate-200 hover:border-slate-400 hover:bg-slate-50 cursor-pointer transition-all flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-105 transition-transform">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900 group-hover:text-slate-800 transition-colors">
+                    Browser Print / Save Page
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Printable HTML snapshot view with standard system printer dialog
+                  </p>
+                </div>
+              </div>
+
+              <Printer className="w-4 h-4 text-slate-400 group-hover:text-slate-700 transition-colors shrink-0 ml-2" />
+            </div>
+
+            {/* Option 4: Raw JSON Export */}
             <div
               onClick={handleExportJSON}
-              className="p-4 rounded-xl border border-slate-200 hover:border-[#0078D4] hover:bg-blue-50/20 cursor-pointer transition-all flex items-center justify-between group"
+              className="p-3.5 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/30 cursor-pointer transition-all flex items-center justify-between group"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-105 transition-transform">
                   <FileCode className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-slate-900 group-hover:text-[#0078D4] transition-colors">
+                  <h4 className="font-bold text-sm text-slate-900 group-hover:text-emerald-700 transition-colors">
                     Download Raw Data (.JSON)
                   </h4>
-                  <p className="text-xs text-slate-500">
-                    Machine-readable backup of complete attempts, timestamps, and confidence scores
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Raw JSON progress backup of attempts, bookmarks, and timestamps
                   </p>
                 </div>
               </div>
 
-              <Download className="w-4 h-4 text-slate-400 group-hover:text-[#0078D4] transition-colors" />
+              <Download className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 transition-colors shrink-0 ml-2" />
             </div>
+
+            {/* Interactive User Guide Modal Link */}
+            {onOpenUserGuide && (
+              <div
+                onClick={() => {
+                  onClose();
+                  onOpenUserGuide();
+                }}
+                className="p-3 rounded-xl border border-sky-200 bg-sky-50/50 hover:bg-sky-100/70 cursor-pointer transition-all flex items-center justify-between text-xs font-semibold text-sky-900"
+              >
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-sky-600 shrink-0" />
+                  <span>Looking for instant answers? Open Interactive FAQ &amp; Guide</span>
+                </div>
+                <span className="text-[#0078D4] hover:underline">Read Now &rarr;</span>
+              </div>
+            )}
           </div>
 
           {/* Alert Notification */}
