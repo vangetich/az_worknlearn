@@ -88,6 +88,17 @@ export interface UserStats {
   moduleConfidenceScores?: Record<number, number>; // moduleId -> 1..5 user self-rated confidence
   skippedQuestionIds?: string[]; // Question IDs skipped without penalty and marked for Weak Areas review
   skippedQuestionTimestamps?: Record<string, number>; // questionId -> timestamp when skipped
+  harambeeChallengeBadges?: Record<
+    number,
+    {
+      bestScore: number;
+      total: number;
+      accuracy: number;
+      badgeEarned: boolean;
+      completedAt: number;
+      attemptsCount: number;
+    }
+  >; // moduleId -> 5-question Harambee Weakness Drill tracking & badge status
 }
 
 export interface CheatSheetItem {

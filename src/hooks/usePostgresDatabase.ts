@@ -14,7 +14,12 @@ import {
   WriteProgressParams,
 } from '../lib/supabase';
 import { authService } from '../services/authService';
-import { auth, syncModuleProgressToFirestore } from '../lib/firebase';
+import { postgresBackendService } from '../services/postgresBackendService';
+import {
+  auth,
+  syncModuleProgressToFirestore,
+  subscribeToCrossDeviceProgress,
+} from '../lib/firebase';
 
 export interface PostgresProgressSummary {
   overall_mastery_score: number;
@@ -110,11 +115,26 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
 
       if (progressRes.ok) {
         const progData = await progressRes.json();
-        setUserProgress(progData.user_progress || []);
+        const incomingProgress: PostgresUserProgressRow[] = progData.user_progress || [];
+        setUserProgress(incomingProgress);
         setProgressSummary(progData.summary || null);
         setPaymentTransactions(progData.payment_transactions || []);
         if (progData.user) {
           setBackendUser(progData.user);
+        }
+        if (typeof window !== 'undefined' && incomingProgress.length > 0) {
+          window.dispatchEvent(
+            new CustomEvent('az900-cross-device-sync', {
+              detail: {
+                source: 'postgres',
+                records: incomingProgress.map((r) => ({
+                  moduleId: Number(r.module_id),
+                  score: Number(r.score) || 0,
+                  status: r.status,
+                })),
+              },
+            })
+          );
         }
       }
       setLastSyncedAt(Date.now());
@@ -246,6 +266,7 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
           }
         }
 
+        const startMs = Date.now();
         const headers = await authService.getAuthHeaders(activeUserId);
         const res = await fetch('/api/quiz/submit', {
           method: 'POST',
@@ -257,6 +278,9 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
             record_session: recordSession,
           }),
         });
+
+        const elapsedMs = Math.max(1, Date.now() - startMs);
+        postgresBackendService.recordEndpointSample('/api/quiz/submit', elapsedMs, res.status);
 
         const data = await res.json();
         if (!res.ok) {
@@ -289,7 +313,8 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
     fetchCurriculumModules();
   }, [fetchCurriculumModules]);
 
-  // Listen for browser online/offline events, auth changes, and Supabase real-time channel status
+  // Listen for browser online/offline events, window focus (device switch), auth changes,
+  // Firestore cross-device onSnapshot, and Supabase real-time channel status
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
@@ -303,10 +328,49 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
       setBackendUser(authService.getStoredBackendUser());
       fetchCurriculumModules();
     };
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchCurriculumModules();
+      }
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     window.addEventListener('az900-auth-session-change', handleAuthChange);
+    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
+    // Periodic 45-second background reconciliation for simultaneous mobile + laptop study
+    const reconcileInterval = setInterval(() => {
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'visible' &&
+        (typeof navigator === 'undefined' || navigator.onLine)
+      ) {
+        fetchCurriculumModules();
+      }
+    }, 45000);
+
+    // Real-time Firestore cross-device listener when Firebase Auth user is active
+    let unsubFirestoreProgress: (() => void) | null = null;
+    if (auth.currentUser?.uid) {
+      unsubFirestoreProgress = subscribeToCrossDeviceProgress(
+        auth.currentUser.uid,
+        (records) => {
+          setLastSyncedAt(Date.now());
+          if (typeof window !== 'undefined' && records.length > 0) {
+            window.dispatchEvent(
+              new CustomEvent('az900-cross-device-sync', {
+                detail: {
+                  source: 'firestore',
+                  records,
+                },
+              })
+            );
+          }
+        }
+      );
+    }
 
     let channel: ReturnType<typeof supabase.channel> | null = null;
     if (isSupabaseDirectConfigured) {
@@ -329,9 +393,15 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
     }
 
     return () => {
+      clearInterval(reconcileInterval);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('az900-auth-session-change', handleAuthChange);
+      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      if (unsubFirestoreProgress) {
+        unsubFirestoreProgress();
+      }
       if (channel) {
         supabase.removeChannel(channel);
       }

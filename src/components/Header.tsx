@@ -51,7 +51,8 @@ export type AppTab =
   | 'analytics'
   | 'leaderboard'
   | 'wisdom'
-  | 'profile';
+  | 'profile'
+  | 'glossary';
 
 interface HeaderProps {
   activeTab: AppTab;
@@ -449,6 +450,20 @@ export const Header: React.FC<HeaderProps> = ({
                 }`}
               />
             </button>
+
+            {/* Mobile & Tablet Visible Larger Sign Out Button with Interactive Hover Features */}
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-50 via-red-50 to-rose-100 hover:from-rose-600 hover:via-red-600 hover:to-rose-700 text-rose-700 hover:text-white border border-rose-300 hover:border-rose-600 text-xs font-black transition-all duration-200 shadow-2xs hover:shadow-md hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+                title={userEmail ? `Signed in as ${userEmail} • Click to open 17s Secure Exit & WhatsApp Study Report` : 'Sign Out & Save Progress'}
+                aria-label="Sign out of study session"
+              >
+                <LogOut className="w-3.5 h-3.5 transition-transform duration-200 group-hover:-translate-x-0.5 group-hover:scale-110" />
+                <span className="font-extrabold tracking-tight">Sign Out</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -698,11 +713,12 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onLogout}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
-                title={userEmail ? `Signed in as ${userEmail} • Click to Sign Out` : 'Sign Out'}
-                aria-label="Sign out of session"
+                className="group relative flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-50 via-red-50 to-rose-100 hover:from-rose-600 hover:via-red-600 hover:to-rose-700 text-rose-700 hover:text-white border border-rose-300 hover:border-rose-600 text-xs font-black transition-all duration-200 shadow-2xs hover:shadow-md hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+                title={userEmail ? `Signed in as ${userEmail} • Click to open 17s Secure Exit & WhatsApp Study Report` : 'Sign Out & Save Progress'}
+                aria-label="Sign out of study session"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOut className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5 group-hover:scale-110" />
+                <span className="font-extrabold tracking-wide">Sign Out</span>
               </button>
             )}
 
@@ -866,6 +882,20 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="flex items-center gap-1.5 lg:hidden">
                   <ThemeToggle />
                   <PWAInstallButton />
+                  {onLogout && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMobileDetailsOpen(false);
+                        onLogout();
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-600 text-xs font-bold transition-all shadow-2xs hover:scale-105 cursor-pointer"
+                      title="Save progress and sign out"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1008,6 +1038,19 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {activeTab === 'profile' ? <WarriorSpearBadge size={14} /> : <Award className="w-3.5 h-3.5 text-purple-700 dark:text-amber-300" />}
               <span>Profile</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('glossary')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                activeTab === 'glossary'
+                  ? 'bg-gradient-to-r from-emerald-700 to-[#005A9E] text-white shadow-md ring-1 ring-emerald-300 font-black scale-102'
+                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+              }`}
+              title="Azure Glossary & Dictionary: All AZ-900 terms, interrelated architecture pinpoints, and verified Microsoft Learn references"
+            >
+              {activeTab === 'glossary' ? <WarriorSpearBadge size={14} /> : <BookOpen className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-300" />}
+              <span>Glossary</span>
             </button>
 
             {/* Right Kenyan Moran Warrior Shield Motif */}

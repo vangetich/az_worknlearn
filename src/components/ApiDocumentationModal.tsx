@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   FileCode,
@@ -8,13 +8,21 @@ import {
   Terminal,
   Server,
   ShieldCheck,
-  Smartphone,
-  BookOpen,
-  UserCheck,
   Code2,
   RefreshCw,
+  Activity,
+  AlertTriangle,
+  Gauge,
+  Zap,
 } from 'lucide-react';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { BackendTelemetryLineChart } from './BackendTelemetryLineChart';
+import {
+  postgresBackendService,
+  EndpointTelemetryPoint,
+  EndpointSummaryMetrics,
+  MonitoredEndpointPath,
+} from '../services/postgresBackendService';
 
 interface ApiDocumentationModalProps {
   isOpen: boolean;
@@ -527,6 +535,8 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
   const [isTestingEndpoint, setIsTestingEndpoint] = useState(false);
   const [testQuestionAnswer, setTestQuestionAnswer] = useState<'A' | 'B' | 'C' | 'D'>('B');
 
+  const [isProbingTelemetry, setIsProbingTelemetry] = useState<boolean>(false);
+
   if (!isOpen) return null;
 
   const activeDoc =
@@ -538,12 +548,75 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
     setTimeout(() => setCopiedBlock(null), 2000);
   };
 
+  // Probe live /api/quiz/submit endpoint and record real round-trip latency
+  const handleProbeQuizSubmit = async () => {
+    setIsProbingTelemetry(true);
+    try {
+      const qRes = await fetch('/api/modules/1/questions?protect=true');
+      const qData = await qRes.json();
+      const firstQuestionId = qData?.questions?.[0]?.id || 'q1';
+      await postgresBackendService.submitQuizAnswer({
+        userId: 'usr-default-learner',
+        questionId: firstQuestionId,
+        selectedAnswer: 'B',
+        recordSession: false,
+      });
+    } catch {
+      // telemetry is recorded inside submitQuizAnswer
+    } finally {
+      setIsProbingTelemetry(false);
+    }
+  };
+
+  // Probe live /api/payments/webhook endpoint and record real round-trip latency
+  const handleProbePaymentWebhook = async () => {
+    setIsProbingTelemetry(true);
+    try {
+      await postgresBackendService.triggerPaymentWebhook({
+        Body: {
+          stkCallback: {
+            MerchantRequestID: `m-${Date.now()}`,
+            CheckoutRequestID: `ws_CO_${Date.now()}`,
+            ResultCode: 0,
+            ResultDesc: 'The service request is processed successfully.',
+            CallbackMetadata: {
+              Item: [{ Name: 'MpesaReceiptNumber', Value: 'SJK99201KL' }],
+            },
+          },
+        },
+      });
+    } catch {
+      // telemetry recorded inside triggerPaymentWebhook
+    } finally {
+      setIsProbingTelemetry(false);
+    }
+  };
+
+  // Simulate a 400 validation error on either endpoint to test real-time error rate visualization
+  const handleInjectValidationError = async (endpoint: MonitoredEndpointPath) => {
+    setIsProbingTelemetry(true);
+    const start = Date.now();
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const elapsed = Math.max(2, Date.now() - start);
+      postgresBackendService.recordEndpointSample(endpoint, elapsed, res.status || 400);
+    } catch {
+      postgresBackendService.recordEndpointSample(endpoint, 12, 500);
+    } finally {
+      setIsProbingTelemetry(false);
+    }
+  };
+
   const handleRunLiveEndpointTest = async () => {
     setIsTestingEndpoint(true);
     setLiveTestResponse(null);
+    const startTime = Date.now();
     try {
       if (activeDoc.id === 'quiz-submit') {
-        // First get a valid question ID from module 1 so the live test always hits a real question
         const qRes = await fetch('/api/modules/1/questions?protect=true');
         const qData = await qRes.json();
         const firstQuestionId = qData?.questions?.[0]?.id || 'q1';
@@ -561,21 +634,32 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
             record_session: true,
           }),
         });
+        const elapsed = Math.max(1, Date.now() - startTime);
+        postgresBackendService.recordEndpointSample('/api/quiz/submit', elapsed, res.status);
         const data = await res.json();
-        setLiveTestResponse({ status: res.status, payload: data });
+        setLiveTestResponse({ status: res.status, latencyMs: elapsed, payload: data });
       } else if (activeDoc.method === 'GET') {
         const targetPath = activeDoc.path.replace(':id', '1');
         const res = await fetch(targetPath);
+        const elapsed = Math.max(1, Date.now() - startTime);
         const data = await res.json();
-        setLiveTestResponse({ status: res.status, payload: data });
+        setLiveTestResponse({ status: res.status, latencyMs: elapsed, payload: data });
       } else {
         const res = await fetch(activeDoc.path, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(activeDoc.requestPayload || {}),
         });
+        const elapsed = Math.max(1, Date.now() - startTime);
+        if (activeDoc.path === '/api/payments/webhook') {
+          postgresBackendService.recordEndpointSample(
+            '/api/payments/webhook',
+            elapsed,
+            res.status
+          );
+        }
         const data = await res.json();
-        setLiveTestResponse({ status: res.status, payload: data });
+        setLiveTestResponse({ status: res.status, latencyMs: elapsed, payload: data });
       }
     } catch (err: any) {
       setLiveTestResponse({
@@ -601,14 +685,17 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-extrabold text-base sm:text-lg tracking-tight">
-                  AZ-900 Backend API Documentation &amp; Payload Reference
+                  AZ-900 Backend API Documentation &amp; Real-Time Telemetry Monitor
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-md text-[10px] font-mono font-black uppercase bg-sky-400/20 text-sky-200 border border-sky-400/40">
-                  REST API v1.0 · OpenAPI Spec
+                  REST API v1.0 · Recharts Live APM
                 </span>
               </div>
               <p className="text-xs text-blue-100/80">
-                Complete endpoint reference, request payloads for <code className="font-mono font-bold text-white">POST /api/quiz/submit</code>, and expected JSON response schemas for frontend consumption
+                Real-time latency &amp; error rate monitoring for{' '}
+                <code className="font-mono font-bold text-white">/api/quiz/submit</code> and{' '}
+                <code className="font-mono font-bold text-white">/api/payments/webhook</code> +
+                OpenAPI payload specifications
               </p>
             </div>
           </div>
@@ -623,7 +710,7 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
           </button>
         </div>
 
-        {/* Main Body: Left Sidebar (Endpoint Directory) + Right Panel (Detailed Spec & Live Runner) */}
+        {/* Main Body: Left Sidebar (Endpoint Directory) + Right Panel (Real-Time Monitoring Dashboard + Detailed Spec) */}
         <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
           {/* Left Sidebar: Endpoint Directory */}
           <div className="lg:col-span-4 border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50/80 overflow-y-auto p-4 space-y-4 max-h-60 lg:max-h-none">
@@ -677,8 +764,17 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
             </div>
           </div>
 
-          {/* Right Panel: Selected Endpoint Spec, Request Payloads & Expected Response Formats */}
+          {/* Right Panel: Real-Time Monitoring Dashboard + Selected Endpoint Spec */}
           <div className="lg:col-span-8 overflow-y-auto p-5 sm:p-6 space-y-6 bg-white">
+            {/* =================================================================
+                REAL-TIME MONITORING DASHBOARD (Recharts Telemetry Line Chart)
+               ================================================================= */}
+            <BackendTelemetryLineChart
+              onProbeQuizSubmit={handleProbeQuizSubmit}
+              onProbePaymentWebhook={handleProbePaymentWebhook}
+              onInjectError={handleInjectValidationError}
+            />
+
             {/* Endpoint Header Banner */}
             <div className="p-4 rounded-xl bg-slate-900 text-white space-y-2.5 border border-slate-800">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -924,7 +1020,8 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
                 <div className="rounded-xl bg-slate-950 text-slate-100 p-3.5 font-mono text-xs space-y-2 border border-slate-800">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                     <span className="text-emerald-400 font-bold">
-                      Live Server Response (HTTP {liveTestResponse.status})
+                      Live Server Response (HTTP {liveTestResponse.status}
+                      {liveTestResponse.latencyMs ? ` • ${liveTestResponse.latencyMs}ms` : ''})
                     </span>
                     <span className="text-[10px] text-slate-400">
                       {new Date().toLocaleTimeString()}
@@ -942,3 +1039,4 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
     </div>
   );
 };
+

@@ -656,14 +656,30 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                   <Globe className="w-4 h-4 text-sky-400" />
                   <span>Continue with Google Cloud / Firebase Auth</span>
                 </button>
+
+                {/* Concise KDPA 2019, Simultaneous Cross-Platform & M-Pesa Security Disclaimer */}
+                <div className="pt-2 border-t border-slate-800/80 text-[11px] text-slate-400 leading-relaxed space-y-1">
+                  <p>
+                    <strong className="text-slate-200">Cross-Platform &amp; Long-Hour Security:</strong>{' '}
+                    Stay signed in on your mobile phone and laptop simultaneously with real-time cloud
+                    progress merging and automatic 25-min token renewal.
+                  </p>
+                  <p>
+                    <strong className="text-emerald-400">Kenya Data Protection Act (2019):</strong>{' '}
+                    Your data is used strictly for AZ-900 learning analytics (never sold), with full
+                    JSON/PDF export &amp; reset control. M-Pesa STK Push PINs are entered only on your
+                    phone SIM Toolkit.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="relative z-10 border-t border-slate-800/80 bg-slate-950/70 py-4 px-6 text-center text-xs text-slate-400">
-          Secured by <span className="text-sky-400 font-bold">ProtectedRoute</span> • Supabase
-          PostgreSQL &amp; Express Relational Bridge
+        <div className="relative z-10 border-t border-slate-800/80 bg-slate-950/70 py-3.5 px-6 text-center text-xs text-slate-400">
+          Secured by <span className="text-sky-400 font-bold">ProtectedRoute</span> • Simultaneous
+          Mobile &amp; Laptop Cloud Sync • Compliant with{' '}
+          <span className="text-emerald-400 font-semibold">Kenya Data Protection Act (2019)</span>
         </div>
       </div>
     );

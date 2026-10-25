@@ -10,26 +10,31 @@ import {
   Zap,
   X,
   Lightbulb,
+  ShieldCheck,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Question } from '../types/quiz';
-import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { KitengeRibbon, MaasaiMedallion, KenyanFlagMiniEmblem } from './MotifDecorations';
 
 interface MicroDrillProps {
   questions: Question[];
+  targetModuleId?: number;
   targetModuleName: string;
   onAnswer: (questionId: string, selectedAnswer: string, isCorrect: boolean) => void;
+  onCompleteDrill?: (moduleId: number, score: number, total: number) => void;
   onClose: () => void;
 }
 
 export const MicroDrillModal: React.FC<MicroDrillProps> = ({
   questions,
+  targetModuleId = 11,
   targetModuleName,
   onAnswer,
+  onCompleteDrill,
   onClose,
 }) => {
-  // Take up to 3 questions for a bite-sized micro-drill
-  const drillQuestions = questions.slice(0, 3);
+  // Take up to 5 questions for the Daily Harambee Weakness Drill
+  const drillQuestions = questions.slice(0, 5);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
@@ -39,7 +44,7 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
   const currentQ = drillQuestions[currentIndex];
 
   const handleSelect = (letter: string) => {
-    if (hasSubmitted) return;
+    if (hasSubmitted || !currentQ) return;
     setSelectedAnswer(letter);
     setHasSubmitted(true);
     const isCorrect = letter === currentQ.correctAnswer;
@@ -56,63 +61,92 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
       setHasSubmitted(false);
     } else {
       setIsFinished(true);
+      if (onCompleteDrill) {
+        onCompleteDrill(targetModuleId, score, drillQuestions.length);
+      }
       confetti({
-        particleCount: 60,
-        spread: 60,
+        particleCount: score >= 4 ? 90 : 45,
+        spread: 70,
         origin: { y: 0.6 },
       });
     }
   };
 
+  const handleRetryDrill = () => {
+    setCurrentIndex(0);
+    setSelectedAnswer(null);
+    setHasSubmitted(false);
+    setScore(0);
+    setIsFinished(false);
+  };
+
   const isSelectedCorrect = selectedAnswer === currentQ?.correctAnswer;
+  const accuracyPercent =
+    drillQuestions.length > 0 ? Math.round((score / drillQuestions.length) * 100) : 0;
+  // Accurate completion badge unlocked at >= 80% (4/5 or 5/5)
+  const earnedAccuracyBadge = accuracyPercent >= 80;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-2xl rounded-2xl border border-slate-200 card-elevation overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-        <KitengeRibbon height={4} />
+    <div className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-white w-full max-w-2xl max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] flex flex-col rounded-2xl border border-slate-200 card-elevation overflow-hidden shadow-2xl my-auto animate-in zoom-in-95 duration-200">
+        <div className="shrink-0">
+          <KitengeRibbon height={4} />
+        </div>
 
-        {/* Modal Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 text-white flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white/20 backdrop-blur-xs">
-              <Zap className="w-5 h-5 text-yellow-200" />
+        {/* Modal Header (Fixed / Shrink-0 so it stays visible on all screen sizes) */}
+        <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 text-white flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="p-2 rounded-xl bg-white/20 backdrop-blur-xs shrink-0">
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-200" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base sm:text-lg">
-                  3-Question Rapid Micro-Drill
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-sm sm:text-lg truncate">
+                  5-Question Rapid Weakness Drill
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white">
-                  Quick Burst
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white shrink-0">
+                  Daily Harambee Challenge
                 </span>
               </div>
-              <p className="text-xs text-amber-100">
-                Targeting: {targetModuleName}
+              <p className="text-[11px] sm:text-xs text-amber-100 truncate">
+                Targeting Module {targetModuleId}: {targetModuleName}
               </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+            aria-label="Close drill modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Body */}
+        {/* Scrollable Body that adapts to any viewport height */}
         {!isFinished && currentQ ? (
-          <div className="p-6 space-y-5">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
             {/* Progress indicators */}
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-              <span>Question {currentIndex + 1} of {drillQuestions.length}</span>
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/80">
+              <div className="flex items-center gap-2">
+                <Target className="w-3.5 h-3.5 text-amber-600" />
+                <span>
+                  Question <strong>{currentIndex + 1}</strong> of{' '}
+                  <strong>{drillQuestions.length}</strong>
+                </span>
+                <span className="text-slate-400">•</span>
+                <span className="text-emerald-700 font-bold">
+                  Score: {score}/{currentIndex + (hasSubmitted ? 1 : 0)}
+                </span>
+              </div>
               <div className="flex items-center gap-1.5">
                 {drillQuestions.map((_, i) => (
                   <span
                     key={i}
-                    className={`w-2.5 h-2.5 rounded-full ${
+                    className={`w-2.5 h-2.5 rounded-full transition-all ${
                       i === currentIndex
-                        ? 'bg-amber-500 ring-2 ring-amber-200'
+                        ? 'bg-amber-500 ring-2 ring-amber-200 scale-110'
                         : i < currentIndex
                         ? 'bg-emerald-500'
                         : 'bg-slate-200'
@@ -123,13 +157,13 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
             </div>
 
             {/* Scenario snippet */}
-            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 leading-relaxed">
+            <div className="bg-slate-50 p-3 sm:p-3.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 leading-relaxed">
               <strong className="text-slate-900 block mb-1">Scenario:</strong>
               {currentQ.scenario}
             </div>
 
             {/* Question */}
-            <h4 className="font-bold text-sm sm:text-base text-slate-900">
+            <h4 className="font-bold text-sm sm:text-base text-slate-900 leading-snug">
               {currentQ.question}
             </h4>
 
@@ -139,23 +173,28 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
                 const isSelected = selectedAnswer === opt.letter;
                 const isCorrect = opt.letter === currentQ.correctAnswer;
 
-                let btnStyles = 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50';
+                let btnStyles =
+                  'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 cursor-pointer';
                 if (hasSubmitted) {
                   if (isCorrect) {
-                    btnStyles = 'bg-emerald-50 border-emerald-500 text-emerald-950 ring-1 ring-emerald-500';
+                    btnStyles =
+                      'bg-emerald-50 border-emerald-500 text-emerald-950 ring-1 ring-emerald-500';
                   } else if (isSelected && !isCorrect) {
-                    btnStyles = 'bg-red-50 border-red-400 text-red-950 ring-1 ring-red-400';
+                    btnStyles =
+                      'bg-red-50 border-red-400 text-red-950 ring-1 ring-red-400';
                   } else {
-                    btnStyles = 'bg-slate-50/50 border-slate-200 text-slate-400 opacity-60';
+                    btnStyles =
+                      'bg-slate-50/50 border-slate-200 text-slate-400 opacity-60';
                   }
                 }
 
                 return (
                   <button
                     key={opt.letter}
+                    type="button"
                     onClick={() => handleSelect(opt.letter)}
                     disabled={hasSubmitted}
-                    className={`w-full text-left p-3 rounded-xl border text-xs sm:text-sm font-medium flex items-center gap-3 transition-all ${btnStyles}`}
+                    className={`w-full text-left p-2.5 sm:p-3 rounded-xl border text-xs sm:text-sm font-medium flex items-center gap-3 transition-all ${btnStyles}`}
                   >
                     <span
                       className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-xs shrink-0 border ${
@@ -177,7 +216,7 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
             {/* Instant mini corrective feedback */}
             {hasSubmitted && (
               <div
-                className={`p-3.5 rounded-xl border text-xs space-y-1.5 animate-in fade-in duration-200 ${
+                className={`p-3 sm:p-3.5 rounded-xl border text-xs space-y-1.5 animate-in fade-in duration-200 ${
                   isSelectedCorrect
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
                     : 'bg-amber-50 border-amber-300 text-amber-900'
@@ -185,21 +224,21 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
               >
                 <div className="flex items-center gap-1.5 font-bold">
                   {isSelectedCorrect ? (
-                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                   ) : (
-                    <XCircle className="w-4 h-4 text-amber-600" />
+                    <XCircle className="w-4 h-4 text-amber-600 shrink-0" />
                   )}
                   <span>
                     {isSelectedCorrect
-                      ? 'Correct! Quick mastery point gained.'
+                      ? 'Correct! Weakness domain confidence reinforced.'
                       : `Correct Answer is ${currentQ.correctAnswer}`}
                   </span>
                 </div>
                 <p className="text-slate-700 leading-relaxed font-normal">
                   {currentQ.whyCorrect}
                 </p>
-                <div className="pt-1 text-amber-900 font-semibold flex items-center gap-1">
-                  <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <div className="pt-1 text-amber-900 font-semibold flex items-start gap-1.5">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
                   <span>Exam Tip: {currentQ.examTip}</span>
                 </div>
               </div>
@@ -207,40 +246,116 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
 
             {/* Next or Finish Button */}
             {hasSubmitted && (
-              <div className="flex justify-end pt-2">
+              <div className="flex justify-end pt-1 sticky bottom-0 bg-gradient-to-t from-white via-white to-white/90 py-2">
                 <button
+                  type="button"
                   onClick={handleNext}
-                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
                 >
-                  <span>{currentIndex < drillQuestions.length - 1 ? 'Next Question' : 'Complete Micro-Drill'}</span>
+                  <span>
+                    {currentIndex < drillQuestions.length - 1
+                      ? 'Next Question'
+                      : 'Complete 5-Question Drill'}
+                  </span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             )}
           </div>
         ) : (
-          /* Finished summary */
-          <div className="p-8 text-center space-y-5">
-            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto shadow-xs">
-              <Award className="w-8 h-8" />
+          /* Finished summary & Accuracy Badge Presentation */
+          <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-8 text-center space-y-5">
+            <div className="relative inline-flex items-center justify-center mx-auto">
+              <div
+                className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-md ${
+                  earnedAccuracyBadge
+                    ? 'bg-gradient-to-br from-amber-400 via-orange-500 to-emerald-600 text-white ring-4 ring-amber-200'
+                    : 'bg-amber-50 text-amber-600 border border-amber-200'
+                }`}
+              >
+                {earnedAccuracyBadge ? (
+                  <ShieldCheck className="w-9 h-9" />
+                ) : (
+                  <Award className="w-8 h-8" />
+                )}
+              </div>
+              <div className="absolute -bottom-1 -right-1">
+                <MaasaiMedallion size={22} />
+              </div>
             </div>
 
-            <div>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                Micro-Drill Completed!
+            <div className="space-y-1.5">
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-extrabold border inline-flex items-center gap-1.5 ${
+                  earnedAccuracyBadge
+                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                    : 'bg-amber-100 text-amber-900 border-amber-300'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>
+                  {earnedAccuracyBadge
+                    ? 'Harambee Weakness Conqueror Badge Unlocked!'
+                    : '5-Question Weakness Drill Completed'}
+                </span>
               </span>
-              <h3 className="text-xl font-extrabold text-slate-900 mt-2">
-                You scored {score} of {drillQuestions.length} Correct
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 mt-2">
+                You Scored {score} of {drillQuestions.length} Correct ({accuracyPercent}%)
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 max-w-sm mx-auto mt-1">
-                Bite-sized practice locks in key concepts without study burnout. Keep building your streak!
+              <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto">
+                {earnedAccuracyBadge
+                  ? `Outstanding accuracy on Module ${targetModuleId} (${targetModuleName})! Your weakness tracker and domain confidence have been updated.`
+                  : `You need at least 4 of 5 (80%) correct to unlock the Harambee Weakness Conqueror badge for Module ${targetModuleId}. Retry now to claim your badge!`}
               </p>
             </div>
 
-            <div className="pt-2 flex items-center justify-center gap-3">
+            {/* Badge Card Display */}
+            <div
+              className={`max-w-md mx-auto p-4 rounded-2xl border text-left flex items-center gap-3.5 ${
+                earnedAccuracyBadge
+                  ? 'bg-gradient-to-r from-amber-50 via-emerald-50/70 to-amber-50 border-emerald-300 shadow-sm'
+                  : 'bg-slate-50 border-slate-200 opacity-85'
+              }`}
+            >
+              <div className="shrink-0">
+                <KenyanFlagMiniEmblem size={36} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-black text-slate-900">
+                    Harambee Weakness Conqueror
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                      earnedAccuracyBadge
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {earnedAccuracyBadge ? 'Badge Earned' : 'Locked (<80%)'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  Module {targetModuleId}: {targetModuleName} • 5-Question Rapid Drill Mastery
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+              {!earnedAccuracyBadge && (
+                <button
+                  type="button"
+                  onClick={handleRetryDrill}
+                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs sm:text-sm inline-flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Retry 5-Question Drill for Badge</span>
+                </button>
+              )}
               <button
+                type="button"
                 onClick={onClose}
-                className="px-6 py-2.5 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold text-xs sm:text-sm shadow-xs transition-all"
+                className="px-6 py-2.5 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold text-xs sm:text-sm shadow-xs transition-all cursor-pointer"
               >
                 Continue Learning
               </button>

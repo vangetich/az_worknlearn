@@ -487,3 +487,170 @@ export async function syncAllPostgresUserProgress(params: {
 
   return await res.json();
 }
+
+export interface AdminModuleStatItem {
+  module_id: number;
+  module_number: number;
+  title: string;
+  path_id: 1 | 2 | 3;
+  path_title: string;
+  is_premium_default: boolean;
+  question_count: number;
+  difficulty_breakdown: {
+    Fundamental: number;
+    Intermediate: number;
+    Advanced: number;
+  };
+  total_attempts: number;
+  active_learners: number;
+  avg_score: number;
+  mastery_rate: number;
+}
+
+export interface AdminModuleStatsPayload {
+  total_modules: number;
+  total_questions: number;
+  total_users: number;
+  total_sessions: number;
+  modules: AdminModuleStatItem[];
+}
+
+export interface UpsertCurriculumQuestionInput {
+  id?: string;
+  module_id: number;
+  difficulty: 'Fundamental' | 'Intermediate' | 'Advanced';
+  scenario_text: string;
+  question_text: string;
+  options: { letter: 'A' | 'B' | 'C' | 'D'; text: string }[];
+  correct_answer: 'A' | 'B' | 'C' | 'D';
+  explanation_correct: string;
+  explanation_distractors: Record<string, string> | { letter: string; reason: string }[];
+  exam_tip: string;
+}
+
+/**
+ * Fetches aggregated module statistics from Supabase (`modules`, `questions`, `user_progress`)
+ * and the Express Postgres backend (`/api/admin/module-stats`).
+ */
+export async function fetchSupabaseAdminModuleStats(): Promise<AdminModuleStatsPayload> {
+  if (isSupabaseDirectConfigured) {
+    try {
+      const [modsRes, qsRes, progRes] = await Promise.all([
+        supabase.from('modules').select('*').order('module_number', { ascending: true }),
+        supabase.from('questions').select('id, module_id, difficulty'),
+        supabase.from('user_progress').select('module_id, score, status, attempts_count'),
+      ]);
+
+      if (!modsRes.error && modsRes.data && modsRes.data.length > 0) {
+        const qsList = (qsRes.data || []) as any[];
+        const progList = (progRes.data || []) as any[];
+
+        const modules: AdminModuleStatItem[] = modsRes.data.map((m: any) => {
+          const mQs = qsList.filter((q) => q.module_id === m.id);
+          const mProg = progList.filter((p) => p.module_id === m.id && p.attempts_count > 0);
+          const avgScore =
+            mProg.length > 0
+              ? Math.round(mProg.reduce((s, p) => s + (p.score || 0), 0) / mProg.length)
+              : 0;
+          const masteredCount = mProg.filter((p) => p.status === 'mastered').length;
+          return {
+            module_id: m.id,
+            module_number: m.module_number,
+            title: m.title,
+            path_id: m.path_id,
+            path_title: `Learning Path ${m.path_id}`,
+            is_premium_default: Boolean(m.is_premium_default),
+            question_count: mQs.length,
+            difficulty_breakdown: {
+              Fundamental: mQs.filter((q) => q.difficulty === 'Fundamental').length,
+              Intermediate: mQs.filter((q) => q.difficulty === 'Intermediate').length,
+              Advanced: mQs.filter((q) => q.difficulty === 'Advanced').length,
+            },
+            total_attempts: mProg.reduce((s, p) => s + (p.attempts_count || 0), 0),
+            active_learners: mProg.length,
+            avg_score: avgScore,
+            mastery_rate: mProg.length > 0 ? Math.round((masteredCount / mProg.length) * 100) : 0,
+          };
+        });
+
+        return {
+          total_modules: modules.length,
+          total_questions: qsList.length,
+          total_users: 1,
+          total_sessions: 0,
+          modules,
+        };
+      }
+    } catch (err) {
+      console.warn('Supabase admin stats fallback to /api/admin/module-stats:', err);
+    }
+  }
+
+  const res = await fetch('/api/admin/module-stats');
+  if (!res.ok) {
+    throw new Error('Failed to fetch module statistics from Postgres backend.');
+  }
+  return (await res.json()) as AdminModuleStatsPayload;
+}
+
+/**
+ * Adds or updates a curriculum question directly in the Supabase `questions` table
+ * and the Express Postgres backend store.
+ */
+export async function upsertSupabaseCurriculumQuestion(
+  input: UpsertCurriculumQuestionInput,
+  isEditing = false
+) {
+  const distractorRecord: Record<string, string> = Array.isArray(input.explanation_distractors)
+    ? input.explanation_distractors.reduce((acc, item) => {
+        acc[item.letter] = item.reason;
+        return acc;
+      }, {} as Record<string, string>)
+    : input.explanation_distractors;
+
+  if (isSupabaseDirectConfigured) {
+    try {
+      const targetId =
+        input.id && input.id.trim()
+          ? input.id.trim()
+          : `az900-m${input.module_id}-custom-${Date.now().toString(36)}`;
+      await (supabase.from('questions') as any).upsert(
+        {
+          id: targetId,
+          module_id: input.module_id,
+          difficulty: input.difficulty,
+          scenario_text: input.scenario_text,
+          question_text: input.question_text,
+          options: input.options,
+          correct_answer: input.correct_answer,
+          explanation_correct: input.explanation_correct,
+          explanation_distractors: distractorRecord,
+          exam_tip: input.exam_tip,
+        },
+        { onConflict: 'id' }
+      );
+    } catch (err) {
+      console.warn('Supabase direct question upsert fallback to backend API:', err);
+    }
+  }
+
+  const endpoint =
+    isEditing && input.id
+      ? `/api/admin/questions/${encodeURIComponent(input.id)}`
+      : '/api/admin/questions';
+  const method = isEditing && input.id ? 'PUT' : 'POST';
+
+  const res = await fetch(endpoint, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.error || 'Failed to save question to Postgres database.');
+  }
+
+  return await res.json();
+}
+

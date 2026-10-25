@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { MODULE_FREQUENTLY_MISSED_TERMS } from '../data/frequentlyMissedTerms';
+import { resolveAzureDocsLink } from '../data/azureGlossaryData';
 import { UserStats } from '../types/quiz';
 import { AppTab } from './Header';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
@@ -739,6 +740,26 @@ export const AzureCloudExplorer: React.FC<AzureCloudExplorerProps> = ({
                       >
                         Go to Module {activeServiceDetail.moduleId}
                       </button>
+
+                      {(() => {
+                        const srvDocs = resolveAzureDocsLink(
+                          activeServiceDetail.term,
+                          activeServiceDetail.moduleId
+                        );
+                        return (
+                          <a
+                            href={srvDocs.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-[#0078D4] border border-sky-200 text-xs font-extrabold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                            title={`Official Microsoft Learn Docs: ${srvDocs.label}`}
+                          >
+                            <BookOpen className="w-3 h-3" />
+                            <span>{srvDocs.label}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
@@ -875,6 +896,22 @@ export const AzureCloudExplorer: React.FC<AzureCloudExplorerProps> = ({
                   <div className="font-extrabold text-xs truncate">AI Knowledge Tutor</div>
                   <div className="text-[10px] text-slate-600 truncate">
                     Ask architecture questions
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('glossary')}
+                className="p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-slate-900 text-left flex items-center gap-2.5 transition-all cursor-pointer"
+              >
+                <div className="p-2 rounded-lg bg-emerald-600 text-white shrink-0">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-extrabold text-xs truncate">Azure Glossary</div>
+                  <div className="text-[10px] text-emerald-800 truncate">
+                    A–Z terms &amp; MS Learn links
                   </div>
                 </div>
               </button>

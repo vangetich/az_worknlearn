@@ -18,6 +18,7 @@ import {
   query,
   where,
   getDocs,
+  onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -45,7 +46,7 @@ export interface FirestoreErrorInfo {
     email?: string | null;
     emailVerified?: boolean | null;
     isAnonymous?: boolean | null;
-    tenantId?: string | null;
+    tenantId?: boolean | string | null;
     providerInfo?: {
       providerId?: string | null;
       email?: string | null;
@@ -168,9 +169,20 @@ export async function syncModuleProgressToFirestore(
         updatedAt: serverTimestamp(),
       });
     } else {
+      // Conflict-free cross-platform merge: preserve highest score across simultaneous mobile + laptop sessions
+      const prevData = existingSnap.data();
+      const prevScore = typeof prevData?.score === 'number' ? prevData.score : 0;
+      const mergedScore = Math.max(prevScore, clampedScore);
+      const mergedStatus: 'not_started' | 'in_progress' | 'mastered' =
+        mergedScore >= 80 || prevData?.status === 'mastered' || status === 'mastered'
+          ? 'mastered'
+          : mergedScore > 0 || status === 'in_progress'
+          ? 'in_progress'
+          : 'not_started';
+
       await updateDoc(ref, {
-        score: clampedScore,
-        status,
+        score: mergedScore,
+        status: mergedStatus,
         lastAttempted: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -242,4 +254,50 @@ export async function fetchUserProgressFromFirestore(userId: string) {
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
   }
+}
+
+/**
+ * Real-time cross-device Firestore listener (`onSnapshot`) for simultaneous
+ * mobile + laptop study sessions by the same authenticated user.
+ */
+export function subscribeToCrossDeviceProgress(
+  userId: string,
+  onProgressUpdate: (
+    records: Array<{
+      moduleId: number;
+      score: number;
+      status: 'not_started' | 'in_progress' | 'mastered';
+    }>
+  ) => void
+): () => void {
+  if (!auth.currentUser || auth.currentUser.uid !== userId) {
+    return () => {};
+  }
+  const path = 'user_progress';
+  const q = query(collection(db, path), where('userId', '==', userId));
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const records = snapshot.docs
+        .map((d) => {
+          const data = d.data();
+          return {
+            moduleId: Number(data.moduleId) || 1,
+            score: Number(data.score) || 0,
+            status: (data.status || 'not_started') as
+              | 'not_started'
+              | 'in_progress'
+              | 'mastered',
+          };
+        })
+        .filter((r) => r.moduleId >= 1 && r.moduleId <= 12);
+      onProgressUpdate(records);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+
+  return unsubscribe;
 }

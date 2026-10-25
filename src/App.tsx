@@ -27,6 +27,9 @@ import {
   ChevronDown,
   ArrowUpDown,
   Cloud,
+  Download,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 import { Header, AppTab } from './components/Header';
 import { QuizCard } from './components/QuizCard';
@@ -54,14 +57,16 @@ import { WeakAreasReviewModal } from './components/WeakAreasReviewModal';
 import { ReviewSessionModal } from './components/ReviewSessionModal';
 import { WeeklyLearningRoadmap } from './components/WeeklyLearningRoadmap';
 import { ProfileView } from './components/ProfileView';
+import { AzureGlossaryView } from './components/AzureGlossaryView';
 import { AchievementOverlay } from './components/AchievementOverlay';
 import { PostSessionWeakAreaReview } from './components/PostSessionWeakAreaReview';
 import { AzureCloudExplorer } from './components/AzureCloudExplorer';
 import { LearningPathProgressMap } from './components/LearningPathProgressMap';
 import { WeeklyExamReadiness } from './components/WeeklyExamReadiness';
 import { UserGuideModal } from './components/UserGuideModal';
-import { BackendCloudModal } from './components/BackendCloudModal';
+import { BackendCloudModal, HubSection } from './components/BackendCloudModal';
 import { ApiDocumentationModal } from './components/ApiDocumentationModal';
+import { ExitStudySessionModal } from './components/ExitStudySessionModal';
 import { ProtectedRoute, AuthenticatedSupabaseUser } from './components/ProtectedRoute';
 import { usePostgresDatabase } from './hooks/usePostgresDatabase';
 import { authService } from './services/authService';
@@ -76,6 +81,8 @@ import {
   KitengeRibbon,
   MaasaiMedallion,
   FooterAfricanMotifsBackground,
+  KenyanFlagQuickSortMotifs,
+  KenyanFlagMiniEmblem,
 } from './components/MotifDecorations';
 import { BUILTIN_QUESTIONS } from './data/questionBank';
 import { LEARNING_PATHS } from './data/curriculum';
@@ -92,7 +99,11 @@ import {
   getUnresolvedMistakesMap,
   saveQuestionConfidence,
   markQuestionSkipped,
+  getPastQuizSessions,
+  saveHarambeeDrillCompletion,
+  mergeCloudProgressIntoLocalStats,
 } from './utils/storage';
+import { generateDomainConfidencePdf } from './utils/pdfGenerator';
 import { fireModuleCompletionConfetti } from './utils/confetti';
 import { ThemeToggle } from './components/ThemeToggle';
 import { getStoredTheme, applyTheme } from './utils/theme';
@@ -121,6 +132,7 @@ export default function App() {
 
   // User performance stats
   const [stats, setStats] = useState<UserStats>(getInitialStats);
+  const todayAnsweredCount = useMemo(() => getTodaySolvedQuestionsCount(stats), [stats]);
 
   // Postgres & Supabase Database Utility Hook for curriculum modules & progress writes
   const {
@@ -131,6 +143,49 @@ export default function App() {
   } = usePostgresDatabase();
   const [authenticatedUser, setAuthenticatedUser] =
     useState<AuthenticatedSupabaseUser | null>(null);
+
+  // Listen for simultaneous cross-device (Mobile + Laptop) and cross-tab progress updates
+  useEffect(() => {
+    const handleCrossDeviceSync = (e: Event) => {
+      const customEvent = e as CustomEvent<{
+        records?: Array<{
+          moduleId: number;
+          score: number;
+          status: 'not_started' | 'in_progress' | 'mastered';
+        }>;
+      }>;
+      const records = customEvent.detail?.records;
+      if (records && records.length > 0) {
+        setStats((prev) => {
+          const { stats: merged, changed } = mergeCloudProgressIntoLocalStats(prev, records);
+          return changed ? merged : prev;
+        });
+      }
+    };
+
+    const handleCrossTabStorage = (e: StorageEvent) => {
+      if (e.key === 'az900_quiz_builder_stats_v1' && e.newValue) {
+        try {
+          const nextStats = JSON.parse(e.newValue) as UserStats;
+          setStats((prev) => {
+            if ((nextStats.totalAnswered || 0) >= (prev.totalAnswered || 0)) {
+              return { ...prev, ...nextStats };
+            }
+            return prev;
+          });
+        } catch {
+          // ignore malformed storage payload
+        }
+      }
+    };
+
+    window.addEventListener('az900-cross-device-sync', handleCrossDeviceSync);
+    window.addEventListener('storage', handleCrossTabStorage);
+    return () => {
+      window.removeEventListener('az900-cross-device-sync', handleCrossDeviceSync);
+      window.removeEventListener('storage', handleCrossTabStorage);
+    };
+  }, []);
 
   // Filter selections for Practice Mode
   const [selectedPathId, setSelectedPathId] = useState<number | 'all'>('all');
@@ -150,6 +205,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [pendingJumpQuestionId, setPendingJumpQuestionId] = useState<string | null>(null);
   const [showBackendCloudModal, setShowBackendCloudModal] = useState<boolean>(false);
+  const [backendModalSection, setBackendModalSection] = useState<HubSection>('auth-progress');
   const [showApiDocumentationModal, setShowApiDocumentationModal] = useState<boolean>(false);
   const initialDeepLinkHandledRef = React.useRef<boolean>(false);
 
@@ -269,6 +325,7 @@ export default function App() {
   const [microDrillTargetModuleId, setMicroDrillTargetModuleId] = useState<number>(5);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showUserGuideModal, setShowUserGuideModal] = useState<boolean>(false);
+  const [showExitSessionModal, setShowExitSessionModal] = useState<boolean>(false);
 
   // Focus Mode state (minimizes UI by hiding nav bar and footer)
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
@@ -981,7 +1038,7 @@ export default function App() {
             onOpenCloudBackend={() => setShowBackendCloudModal(true)}
             userEmail={authenticatedUser?.email || null}
             onLogout={() => {
-              authService.logout();
+              setShowExitSessionModal(true);
             }}
           />
         )}
@@ -1065,12 +1122,27 @@ export default function App() {
 
                   <button
                     type="button"
-                    onClick={() => setShowBackendCloudModal(true)}
+                    onClick={() => {
+                      setBackendModalSection('auth-progress');
+                      setShowBackendCloudModal(true);
+                    }}
                     className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer"
                     title="Open Cloud Account, Protected Curriculum API & M-Pesa / Stripe Unlocks"
                   >
                     <Cloud className="w-3.5 h-3.5" />
                     <span>Cloud Sync & M-Pesa Unlocks</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBackendModalSection('admin-dashboard');
+                      setShowBackendCloudModal(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition-all cursor-pointer"
+                    title="Open Supabase Admin Dashboard: Module Stats & Add/Edit Postgres Questions"
+                  >
+                    <span>Admin Question DB</span>
                   </button>
 
                   <button
@@ -1084,24 +1156,63 @@ export default function App() {
                 </div>
 
                 {/* Compact Responsive Heading */}
-                <div className="space-y-1">
-                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight animate-azure-shimmer text-center">
+                <div
+                  key={`heading-search-${searchQuery.trim() ? 'filtered' : 'all'}`}
+                  className="space-y-1 animate-search-fade-in"
+                >
+                  <h1
+                    className={`text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight animate-azure-shimmer text-center transition-all duration-300 ${
+                      searchQuery.trim() ? 'scale-[1.01]' : 'scale-100'
+                    }`}
+                  >
                     AZ-900 Azure Fundamentals Practice Studio
                   </h1>
-                  <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal">
-                    Explore official Azure Learning Paths, interactive service definitions, and scenario-based exam questions with instant distractor breakdowns.
+                  <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal transition-opacity duration-300">
+                    {searchQuery.trim()
+                      ? `Showing ${filteredQuestions.length} filtered result${
+                          filteredQuestions.length === 1 ? '' : 's'
+                        } matching "${searchQuery}" across official Azure Learning Paths.`
+                      : 'Explore official Azure Learning Paths, interactive service definitions, and scenario-based exam questions with instant distractor breakdowns.'}
                   </p>
                 </div>
               </div>
             )}
 
-            {/* Clean, Uncluttered Practice Control Strip: Quick-Sort Toggles + Centered Study Zone Accordion Launcher */}
-            {!isFocusMode && (
-              <div className="bg-white rounded-2xl border border-slate-200 card-elevation p-3.5 sm:px-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            {/* Clean, Uncluttered Practice Control Strip with Tasteful, Partially Animated Kenyan Flag Motifs */}
+            {!isFocusMode && (() => {
+              const pastSessions = getPastQuizSessions();
+              const lastSessionScore = pastSessions[0]?.scorePercent ?? 80;
+              const prevSessionScore = pastSessions[1]?.scorePercent ?? 75;
+              const currentPerf =
+                sessionAttempts.length > 0
+                  ? Math.round(
+                      (sessionAttempts.filter((a) => a.isCorrect).length /
+                        sessionAttempts.length) *
+                        100
+                    )
+                  : stats.totalAnswered > 0
+                  ? Math.round((stats.totalCorrect / stats.totalAnswered) * 100)
+                  : lastSessionScore;
+              const referenceScore =
+                sessionAttempts.length > 0 || stats.totalAnswered > 0
+                  ? lastSessionScore
+                  : prevSessionScore;
+              const trendDelta = currentPerf - referenceScore;
+              const isImproved = trendDelta >= 0;
+
+              return (
+              <div className="KenyanFlagQuickSortMotifs group relative overflow-hidden bg-white rounded-2xl border border-slate-200/90 hover:border-[#006600]/40 card-elevation p-3.5 sm:px-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 transition-all duration-300 ease-out hover:scale-[1.01] hover:animate-pulse hover:animate-kenyan-pulse hover:shadow-md">
+                {/* Random & Partially Animated Kenyan Motifs in Kenyan Flag Colours (Black, Red #BB0000, Green #006600, White) */}
+                <KenyanFlagQuickSortMotifs />
+
                 {/* Left: Quick-Sort Toggle Buttons */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5 mr-1">
-                    <ArrowUpDown className="w-3.5 h-3.5 text-[#0078D4]" />
+                <div className="relative z-10 flex flex-wrap items-center gap-1.5">
+                  <span
+                    className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5 mr-1 px-2.5 py-1 rounded-xl bg-white/90 border border-slate-200/80 shadow-2xs backdrop-blur-xs"
+                    title="Kenyan Heritage Quick-Sort Dashboard (Black • Red • Green • White)"
+                  >
+                    <KenyanFlagMiniEmblem size={16} />
+                    <ArrowUpDown className="w-3.5 h-3.5 text-[#BB0000]" />
                     <span>Quick-Sort:</span>
                   </span>
 
@@ -1120,31 +1231,76 @@ export default function App() {
                         key={sortOpt.id}
                         type="button"
                         onClick={() => handleChangeSortOrder(sortOpt.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer flex items-center gap-1.5 backdrop-blur-xs ${
                           isActive
-                            ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-2xs ring-2 ring-[#0078D4]/20'
-                            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                            ? 'bg-gradient-to-r from-[#0F172A] via-[#BB0000] to-[#006600] text-white border-white/40 shadow-xs ring-2 ring-[#006600]/25'
+                            : 'bg-white/90 hover:bg-slate-50 text-slate-800 border-slate-200/90 shadow-2xs'
                         }`}
                       >
+                        {isActive && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        )}
                         <span>{sortOpt.label}</span>
                       </button>
                     );
                   })}
                 </div>
 
-                {/* Right: Centered Study Zone Accordion Menu Trigger & Workspace Panels Toggle */}
-                <div className="flex flex-wrap items-center gap-2">
+                {/* Right: Dynamic Session Performance Trend Indicator, Download Report PDF Button & Study Zone Controls */}
+                <div className="relative z-10 flex flex-wrap items-center gap-2">
+                  {/* Dynamic Trend Indicator (Up/Down Arrow) vs Last Session */}
+                  <div
+                    className={`px-2.5 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 backdrop-blur-xs shadow-2xs transition-all ${
+                      isImproved
+                        ? 'bg-emerald-50/95 text-[#006600] border-emerald-300'
+                        : 'bg-red-50/95 text-[#BB0000] border-red-300'
+                    }`}
+                    title={`Performance Trend: Current ${currentPerf}% vs Last Session ${referenceScore}% (${
+                      isImproved ? `+${trendDelta}% Improved` : `${trendDelta}% Declined`
+                    })`}
+                  >
+                    {isImproved ? (
+                      <TrendingUp className="w-3.5 h-3.5 text-[#006600] shrink-0" />
+                    ) : (
+                      <TrendingDown className="w-3.5 h-3.5 text-[#BB0000] shrink-0" />
+                    )}
+                    <span>
+                      {isImproved ? '▲' : '▼'} {isImproved ? `+${trendDelta}%` : `${trendDelta}%`}{' '}
+                      <span className="hidden sm:inline font-bold opacity-85">
+                        ({isImproved ? 'Improved' : 'Declined'} vs Last)
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Download Report Button (Invokes PDF Export Utility for Current Dashboard Progress Data) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        generateDomainConfidencePdf(stats);
+                      } catch (err) {
+                        console.error('PDF export fallback triggered:', err);
+                        setShowExportModal(true);
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-white/95 hover:bg-emerald-50 text-slate-900 hover:text-[#006600] border border-slate-300 hover:border-[#006600] text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer backdrop-blur-xs"
+                    title="Download PDF Progress & Domain Confidence Report for current dashboard data"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#BB0000]" />
+                    <span>Download Report</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setShowWorkspacePanels((prev) => !prev)}
-                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs ${
                       showWorkspacePanels
-                        ? 'bg-amber-50 text-amber-900 border-amber-300'
-                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                        ? 'bg-amber-50/95 text-amber-900 border-amber-300 shadow-2xs'
+                        : 'bg-white/90 hover:bg-slate-50 text-slate-700 border-slate-200/90 shadow-2xs'
                     }`}
                     title="Toggle Cloud Explorer, Progress Map & Weekly Readiness panels"
                   >
-                    <Layers className="w-3.5 h-3.5 text-amber-600" />
+                    <Layers className="w-3.5 h-3.5 text-[#006600]" />
                     <span>{showWorkspacePanels ? 'Hide Maps & Explorer' : 'Maps & Readiness'}</span>
                     <ChevronDown
                       className={`w-3.5 h-3.5 transition-transform duration-200 ${
@@ -1165,7 +1321,8 @@ export default function App() {
                   </button>
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* Collapsible Practice Workspace Panels (Grouped to keep Practice view clean and uncluttered) */}
             {!isFocusMode && showWorkspacePanels && (
@@ -1350,25 +1507,43 @@ export default function App() {
                   onHideSidebar={() => setIsMenuHidden(true)}
                 />
 
-                {/* African Proverb & Focus Card */}
-                <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/80 p-3.5">
+                {/* African Proverb, Consistent Reading Motivation & Focus Card */}
+                <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 via-orange-50/80 to-sky-50 border border-amber-200/80 p-3.5 space-y-2.5">
                   <div className="flex items-start gap-2.5">
                     <MaasaiMedallion size={26} className="shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-amber-900">
-                        Harambee • Exam Wisdom
+                        Harambee • Consistent Reading &amp; Exam Success
                       </h4>
                       <p className="text-xs text-amber-950 mt-0.5 italic leading-relaxed">
-                        "Little by little, a little becomes a lot." — Master 5 scenarios daily!
+                        "Haba na haba hujaza kibaba — Little by little fills the measure."
                       </p>
-                      <button
-                        onClick={() => setActiveTab('wisdom')}
-                        className="mt-2 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-                      >
-                        <Sparkles className="w-3 h-3 fill-amber-200" />
-                        <span>Wisdom Slides</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </button>
+                      <p className="text-[11px] text-slate-700 mt-1 leading-relaxed">
+                        <strong>Daily Exam-Pass Habit:</strong> Read 3–5 Azure Glossary terms and 1 Study Deck unit daily before solving scenario questions. Consistent reading builds deep architectural memory that eliminates exam-day guessing!
+                      </p>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                        <button
+                          onClick={() => setActiveTab('glossary')}
+                          className="px-2.5 py-1 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white font-bold text-[11px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                        >
+                          <BookOpen className="w-3 h-3" />
+                          <span>Read Glossary</span>
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('study-decks')}
+                          className="px-2.5 py-1 rounded-lg bg-white hover:bg-amber-100 text-slate-800 border border-amber-300 font-bold text-[11px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                        >
+                          <Compass className="w-3 h-3 text-[#0078D4]" />
+                          <span>Study Decks</span>
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('wisdom')}
+                          className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                        >
+                          <Sparkles className="w-3 h-3 fill-amber-200" />
+                          <span>Wisdom</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1586,7 +1761,10 @@ export default function App() {
 
                 {/* Active Global Search Filter Indicator */}
                 {searchQuery.trim() && (
-                  <div className="mb-4 p-3.5 rounded-xl border bg-blue-50/80 border-blue-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+                  <div
+                    key={`search-banner-${searchQuery}`}
+                    className="mb-4 p-3.5 rounded-xl border bg-blue-50/80 border-blue-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 animate-search-fade-in"
+                  >
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
                       <Search className="w-4 h-4 text-[#0078D4]" />
                       <span>
@@ -1671,6 +1849,10 @@ export default function App() {
                   </div>
                 )}
 
+                <div
+                  key={`filtered-results-${searchQuery}`}
+                  className="animate-search-fade-in transition-opacity duration-300 ease-out"
+                >
                 {filteredQuestions.length > 0 && currentQ ? (
                   <QuizCard
                     question={currentQ}
@@ -1777,6 +1959,7 @@ export default function App() {
                     </button>
                   </div>
                 )}
+                </div>
               </div>
             </div>
             )}
@@ -1986,6 +2169,29 @@ export default function App() {
             onOpenUserGuide={() => setShowUserGuideModal(true)}
           />
         )}
+
+        {/* TAB: AZURE GLOSSARY & DICTIONARY (PLACED AFTER PROFILE) */}
+        {activeTab === 'glossary' && (
+          <AzureGlossaryView
+            onDrillTermInPractice={(term) => {
+              setSearchQuery(term);
+              setCurrentQuestionIndex(0);
+              setActiveTab('quiz');
+            }}
+            onSelectModule={(modId, pathId) => {
+              setSelectedPathId(pathId);
+              setSelectedModuleId(modId);
+              setCurrentQuestionIndex(0);
+              setShowPostSessionReview(false);
+              setActiveTab('quiz');
+            }}
+            onOpenStudyMode={(modId, pathId) => {
+              setSelectedPathId(pathId);
+              setSelectedModuleId(modId);
+              setActiveTab('study-decks');
+            }}
+          />
+        )}
       </main>
 
       {/* Timed Mock Exam Modal Dialog */}
@@ -2029,23 +2235,62 @@ export default function App() {
         />
       )}
 
-      {/* 3-Question Rapid Micro-Drill Modal */}
-      {showMicroDrill !== false && (
-        <MicroDrillModal
-          questions={
-            questions.filter((q) => q.moduleId === microDrillTargetModuleId).length > 0
-              ? questions.filter((q) => q.moduleId === microDrillTargetModuleId)
-              : questions.slice(0, 3)
+      {/* 5-Question Rapid Micro-Drill Modal (Daily Harambee Weakness Challenge) */}
+      {showMicroDrill !== false && (() => {
+        const targetModId = microDrillTargetModuleId || 11;
+        const targetModInfo = LEARNING_PATHS.flatMap((p) => p.modules).find(
+          (m) => m.id === targetModId
+        );
+        const modQuestions = questions.filter((q) => q.moduleId === targetModId);
+        const pathQuestions = questions.filter(
+          (q) =>
+            q.learningPathId === (targetModInfo?.pathId || 3) &&
+            q.moduleId !== targetModId
+        );
+        const combinedDrillPool = [...modQuestions, ...pathQuestions, ...questions];
+        const uniqueDrillFive: Question[] = [];
+        const seenIds = new Set<string>();
+        for (const q of combinedDrillPool) {
+          if (!seenIds.has(q.id)) {
+            seenIds.add(q.id);
+            uniqueDrillFive.push(q);
           }
-          targetModuleName={
-            LEARNING_PATHS.flatMap((p) => p.modules).find(
-              (m) => m.id === microDrillTargetModuleId
-            )?.title || 'Weakest Curriculum Area'
-          }
-          onAnswer={handleAnswerQuestion}
-          onClose={() => setShowMicroDrill(false)}
-        />
-      )}
+          if (uniqueDrillFive.length >= 5) break;
+        }
+
+        return (
+          <MicroDrillModal
+            questions={uniqueDrillFive}
+            targetModuleId={targetModId}
+            targetModuleName={
+              targetModInfo?.title || 'Azure Monitoring & Advisory Tools'
+            }
+            onAnswer={handleAnswerQuestion}
+            onCompleteDrill={(modId, score, total) => {
+              setStats((prev) => saveHarambeeDrillCompletion(prev, modId, score, total));
+              const scorePercent = total > 0 ? Math.round((score / total) * 100) : 0;
+              saveQuizSession({
+                id: `session-drill-${Date.now()}`,
+                timestamp: Date.now(),
+                dateStr: new Date().toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
+                title: `Harambee 5-Q Drill • Module ${modId}`,
+                mode: 'micro-drill',
+                totalQuestions: total,
+                correctCount: score,
+                scorePercent,
+                passed: scorePercent >= 80,
+                missedQuestions: [],
+              });
+            }}
+            onClose={() => setShowMicroDrill(false)}
+          />
+        );
+      })()}
 
       {/* Export Progress & Domain Confidence Report Modal */}
       {showExportModal && (
@@ -2119,11 +2364,35 @@ export default function App() {
         onClose={() => setShowBackendCloudModal(false)}
         stats={stats}
         onOpenApiDocs={() => setShowApiDocumentationModal(true)}
+        initialSection={backendModalSection}
+        onQuestionSaved={(savedQ) => {
+          setQuestions((prev) => {
+            const exists = prev.some((q) => q.id === savedQ.id);
+            if (exists) {
+              return prev.map((q) => (q.id === savedQ.id ? savedQ : q));
+            }
+            return [savedQ, ...prev];
+          });
+        }}
       />
 
       <ApiDocumentationModal
         isOpen={showApiDocumentationModal}
         onClose={() => setShowApiDocumentationModal(false)}
+      />
+
+      {/* 17-Second African Heritage Exit Page with WhatsApp Study Summary Handoff */}
+      <ExitStudySessionModal
+        isOpen={showExitSessionModal}
+        onClose={() => setShowExitSessionModal(false)}
+        onConfirmSignOut={() => {
+          setShowExitSessionModal(false);
+          authService.logout();
+        }}
+        stats={stats}
+        userEmail={authenticatedUser?.email || null}
+        userName={authenticatedUser?.full_name || null}
+        todayAnsweredCount={todayAnsweredCount}
       />
 
       {/* Footer with Randomly Placed Light-Azure Animated African Motifs & Heritage Accent (Hidden in Focus Mode) */}

@@ -631,5 +631,111 @@ export function saveModuleConfidence(
   return updated;
 }
 
+export function saveHarambeeDrillCompletion(
+  stats: UserStats,
+  moduleId: number,
+  score: number,
+  total: number
+): UserStats {
+  const existingMap = stats.harambeeChallengeBadges || {};
+  const prev = existingMap[moduleId];
+  const accuracy = total > 0 ? Math.round((score / total) * 100) : 0;
+  // Earn badge when completed accurately (e.g. >= 80% / at least 4 of 5 correct)
+  const isAccurate = accuracy >= 80;
+  const bestScore = prev ? Math.max(prev.bestScore, score) : score;
+  const bestAccuracy = prev ? Math.max(prev.accuracy, accuracy) : accuracy;
 
+  const updatedBadges = {
+    ...existingMap,
+    [moduleId]: {
+      bestScore,
+      total,
+      accuracy: bestAccuracy,
+      badgeEarned: (prev?.badgeEarned || false) || isAccurate,
+      completedAt: Date.now(),
+      attemptsCount: (prev?.attemptsCount || 0) + 1,
+    },
+  };
 
+  const updated: UserStats = {
+    ...stats,
+    harambeeChallengeBadges: updatedBadges,
+  };
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to save Harambee drill badge status', e);
+  }
+  return updated;
+}
+
+/**
+ * Non-destructively merges cloud module progress (from simultaneous mobile or laptop
+ * study sessions) into local UserStats, preserving whichever device has the higher
+ * module mastery score and unioning completedModules.
+ */
+export function mergeCloudProgressIntoLocalStats(
+  stats: UserStats,
+  cloudRecords: Array<{
+    moduleId: number;
+    score: number;
+    status: 'not_started' | 'in_progress' | 'mastered';
+  }>
+): { stats: UserStats; changed: boolean } {
+  if (!cloudRecords || cloudRecords.length === 0) {
+    return { stats, changed: false };
+  }
+
+  let changed = false;
+  const moduleMastery = { ...(stats.moduleMastery || {}) };
+  const completedSet = new Set<number>(stats.completedModules || []);
+
+  cloudRecords.forEach((rec) => {
+    const modId = Number(rec.moduleId);
+    if (!modId || modId < 1 || modId > 12) return;
+    const remoteScore = Math.max(0, Math.min(100, Math.round(Number(rec.score) || 0)));
+
+    const localMod = moduleMastery[modId];
+    const localScore =
+      localMod && localMod.total > 0
+        ? Math.round((localMod.correct / localMod.total) * 100)
+        : 0;
+
+    // Only upgrade local module mastery if remote device has higher mastery and local has fewer attempts or lower score
+    if (remoteScore > localScore) {
+      const baseTotal = Math.max(localMod?.total || 0, 5);
+      const mergedCorrect = Math.min(baseTotal, Math.round((remoteScore / 100) * baseTotal));
+      if (!localMod || mergedCorrect > localMod.correct) {
+        moduleMastery[modId] = {
+          correct: mergedCorrect,
+          total: baseTotal,
+        };
+        changed = true;
+      }
+    }
+
+    if ((rec.status === 'mastered' || remoteScore >= 85) && !completedSet.has(modId)) {
+      completedSet.add(modId);
+      changed = true;
+    }
+  });
+
+  if (!changed) {
+    return { stats, changed: false };
+  }
+
+  const updated: UserStats = {
+    ...stats,
+    moduleMastery,
+    completedModules: Array.from(completedSet),
+  };
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to persist merged cross-device stats', e);
+  }
+
+  return { stats: updated, changed: true };
+}

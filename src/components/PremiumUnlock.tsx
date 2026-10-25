@@ -44,6 +44,7 @@ interface PremiumUnlockProps {
   transactions: PaymentTransactionRecord[];
   onRefreshProgress: () => Promise<void>;
   onStatusBanner: (banner: { type: 'success' | 'info' | 'error'; message: string } | null) => void;
+  onPaymentInitiated?: (tx: PaymentTransactionRecord) => void;
 }
 
 const MODULE_TITLES: Record<number, string> = {
@@ -70,6 +71,7 @@ export const PremiumUnlock: React.FC<PremiumUnlockProps> = ({
   transactions,
   onRefreshProgress,
   onStatusBanner,
+  onPaymentInitiated,
 }) => {
   const [mpesaPhone, setMpesaPhone] = useState('0712345678');
   const [paymentPlan, setPaymentPlan] = useState<'all' | number>('all');
@@ -77,6 +79,8 @@ export const PremiumUnlock: React.FC<PremiumUnlockProps> = ({
   const [isSubmittingPush, setIsSubmittingPush] = useState(false);
   const [isConfirmingWebhook, setIsConfirmingWebhook] = useState(false);
   const [pendingElapsedSec, setPendingElapsedSec] = useState(0);
+  const [statusPollCount, setStatusPollCount] = useState(0);
+  const [lastStatusPollTime, setLastStatusPollTime] = useState<string | null>(null);
   const [lastWebhookPayload, setLastWebhookPayload] = useState<any>(null);
 
   // Sync activePendingTx with any pending transaction from backend progress report
@@ -95,27 +99,58 @@ export const PremiumUnlock: React.FC<PremiumUnlockProps> = ({
     }
   }, [transactions, activePendingTx]);
 
-  // Elapsed timer and polling while awaiting `/api/payments/webhook` confirmation
+  // Elapsed timer and polling via GET `/api/payments/status/:id` while awaiting webhook confirmation
   useEffect(() => {
     if (!activePendingTx) {
       setPendingElapsedSec(0);
+      setStatusPollCount(0);
+      setLastStatusPollTime(null);
       return;
     }
+
+    const pollId = activePendingTx.checkout_request_id || activePendingTx.id;
 
     const timerInterval = setInterval(() => {
       setPendingElapsedSec((prev) => prev + 1);
     }, 1000);
 
-    // Poll backend every 3.5s to detect external `/api/payments/webhook` callback completion
-    const pollInterval = setInterval(() => {
-      onRefreshProgress().catch(() => {});
-    }, 3500);
+    // Poll `/api/payments/status/:id` every 2s to detect webhook confirmation
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/payments/status/${encodeURIComponent(pollId)}`);
+        setStatusPollCount((prev) => prev + 1);
+        setLastStatusPollTime(new Date().toLocaleTimeString());
+
+        if (res.ok) {
+          const statusData = await res.json();
+          if (statusData.status === 'completed') {
+            setActivePendingTx(null);
+            onStatusBanner({
+              type: 'success',
+              message: `Payment confirmed via /api/payments/status/${pollId}! Receipt: ${
+                statusData.receipt_number || 'Confirmed'
+              }. Premium modules unlocked!`,
+            });
+            await onRefreshProgress();
+          } else if (statusData.status === 'failed') {
+            setActivePendingTx(null);
+            onStatusBanner({
+              type: 'error',
+              message: `Payment ${pollId} failed or was cancelled on handset.`,
+            });
+            await onRefreshProgress();
+          }
+        }
+      } catch {
+        // non-fatal network hiccup during poll
+      }
+    }, 2000);
 
     return () => {
       clearInterval(timerInterval);
       clearInterval(pollInterval);
     };
-  }, [activePendingTx, onRefreshProgress]);
+  }, [activePendingTx, onRefreshProgress, onStatusBanner]);
 
   const handleInitiateMpesaStkPush = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,6 +182,10 @@ export const PremiumUnlock: React.FC<PremiumUnlockProps> = ({
       } else {
         setActivePendingTx(data.transaction);
         setPendingElapsedSec(0);
+        setStatusPollCount(0);
+        if (onPaymentInitiated && data.transaction) {
+          onPaymentInitiated(data.transaction);
+        }
         if (firebaseUser && data.transaction) {
           await recordPendingPaymentToFirestore(
             firebaseUser.uid,
@@ -158,7 +197,7 @@ export const PremiumUnlock: React.FC<PremiumUnlockProps> = ({
         }
         onStatusBanner({
           type: 'info',
-          message: `${data.CustomerMessage} (CheckoutRequestID: ${data.CheckoutRequestID}) — Awaiting /api/payments/webhook confirmation.`,
+          message: `${data.CustomerMessage} (CheckoutRequestID: ${data.CheckoutRequestID}) — Polling /api/payments/status/${data.CheckoutRequestID} for webhook confirmation.`,
         });
         await onRefreshProgress();
       }
@@ -475,6 +514,13 @@ export const PremiumUnlock: React.FC<PremiumUnlockProps> = ({
                       {activePendingTx.module_id === 'all'
                         ? 'All 12 AZ-900 Modules (Pro)'
                         : `Module #${activePendingTx.module_id}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between pt-1 border-t border-amber-100">
+                    <span className="text-slate-500">Status Polling Endpoint:</span>
+                    <span className="font-bold text-[#0078D4]">
+                      GET /api/payments/status/{activePendingTx.checkout_request_id} (Poll #{statusPollCount}
+                      {lastStatusPollTime ? ` · ${lastStatusPollTime}` : ''})
                     </span>
                   </div>
                 </div>

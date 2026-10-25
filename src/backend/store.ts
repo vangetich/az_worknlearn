@@ -498,6 +498,149 @@ class Az900BackendDatabase {
 
     return { transaction: tx, user };
   }
+
+  public getPaymentTransactionStatus(idOrCheckoutId: string): {
+    transaction: DbPaymentTransaction | null;
+    user: DbUser | null;
+  } {
+    let foundTx = this.paymentTransactions.get(idOrCheckoutId) || null;
+    if (!foundTx) {
+      for (const tx of this.paymentTransactions.values()) {
+        if (tx.id === idOrCheckoutId || tx.checkout_request_id === idOrCheckoutId) {
+          foundTx = tx;
+          break;
+        }
+      }
+    }
+    if (!foundTx) {
+      return { transaction: null, user: null };
+    }
+    const user = this.users.get(foundTx.user_id) || this.getUserByIdOrDefault(foundTx.user_id);
+    return { transaction: foundTx, user };
+  }
+
+  public getAdminModuleStats() {
+    const allModules = Array.from(this.modules.values()).sort(
+      (a, b) => a.module_number - b.module_number
+    );
+    const allQuestions = Array.from(this.questions.values());
+    const allProgress = Array.from(this.userProgress.values());
+
+    const moduleStats = allModules.map((mod) => {
+      const modQuestions = allQuestions.filter((q) => q.module_id === mod.id);
+      const modProgress = allProgress.filter((p) => p.module_id === mod.id && p.attempts_count > 0);
+      const totalAttempts = modProgress.reduce((sum, p) => sum + p.attempts_count, 0);
+      const avgScore =
+        modProgress.length > 0
+          ? Math.round(modProgress.reduce((sum, p) => sum + p.score, 0) / modProgress.length)
+          : 0;
+      const masteredLearners = modProgress.filter((p) => p.status === 'mastered').length;
+      const masteryRate =
+        modProgress.length > 0 ? Math.round((masteredLearners / modProgress.length) * 100) : 0;
+
+      const difficultyBreakdown = {
+        Fundamental: modQuestions.filter((q) => q.difficulty === 'Fundamental').length,
+        Intermediate: modQuestions.filter((q) => q.difficulty === 'Intermediate').length,
+        Advanced: modQuestions.filter((q) => q.difficulty === 'Advanced').length,
+      };
+
+      const pathObj = this.learningPaths.get(mod.path_id);
+
+      return {
+        module_id: mod.id,
+        module_number: mod.module_number,
+        title: mod.title,
+        path_id: mod.path_id,
+        path_title: pathObj?.title || `Learning Path ${mod.path_id}`,
+        is_premium_default: mod.id > 4,
+        question_count: modQuestions.length,
+        difficulty_breakdown: difficultyBreakdown,
+        total_attempts: totalAttempts,
+        active_learners: modProgress.length,
+        avg_score: avgScore,
+        mastery_rate: masteryRate,
+      };
+    });
+
+    return {
+      total_modules: allModules.length,
+      total_questions: allQuestions.length,
+      total_users: this.users.size,
+      total_sessions: this.quizSessions.length,
+      modules: moduleStats,
+    };
+  }
+
+  public upsertQuestion(input: {
+    id?: string;
+    module_id: number;
+    difficulty?: 'Fundamental' | 'Intermediate' | 'Advanced';
+    scenario_text: string;
+    question_text: string;
+    options: { letter: string; text: string }[];
+    correct_answer: 'A' | 'B' | 'C' | 'D';
+    explanation_correct: string;
+    explanation_distractors: Record<string, string> | { letter: string; reason: string }[];
+    exam_tip: string;
+  }): DbQuestion {
+    const modId = Math.max(1, Math.min(12, Number(input.module_id) || 1));
+    const mod = this.modules.get(modId)!;
+    const pathObj = this.learningPaths.get(mod.path_id)!;
+
+    const existingId = input.id && input.id.trim() ? input.id.trim() : '';
+    const questionId =
+      existingId || `az900-m${modId}-custom-${Date.now().toString(36)}`;
+
+    const normalizedOptions = (input.options || []).map((opt, idx) => ({
+      letter: (opt.letter || ['A', 'B', 'C', 'D'][idx] || 'A').toUpperCase(),
+      text: String(opt.text || '').trim(),
+    }));
+
+    let normalizedDistractors: { letter: string; reason: string }[] = [];
+    if (Array.isArray(input.explanation_distractors)) {
+      normalizedDistractors = input.explanation_distractors.map((d) => ({
+        letter: String(d.letter).toUpperCase(),
+        reason: String(d.reason || '').trim(),
+      }));
+    } else if (input.explanation_distractors && typeof input.explanation_distractors === 'object') {
+      normalizedDistractors = Object.entries(input.explanation_distractors).map(
+        ([letter, reason]) => ({
+          letter: letter.toUpperCase(),
+          reason: String(reason || '').trim(),
+        })
+      );
+    }
+
+    const validDiff = ['Fundamental', 'Intermediate', 'Advanced'].includes(
+      input.difficulty || ''
+    )
+      ? (input.difficulty as 'Fundamental' | 'Intermediate' | 'Advanced')
+      : 'Intermediate';
+
+    const validCorrect = ['A', 'B', 'C', 'D'].includes(input.correct_answer)
+      ? input.correct_answer
+      : 'A';
+
+    const dbQuestion: DbQuestion = {
+      id: questionId,
+      module_id: mod.id,
+      learning_path_id: mod.path_id,
+      learning_path_title: pathObj.title,
+      module_title: mod.title,
+      difficulty: validDiff,
+      scenario_text: String(input.scenario_text || '').trim(),
+      question_text: String(input.question_text || '').trim(),
+      options: normalizedOptions,
+      correct_answer: validCorrect,
+      explanation_correct: String(input.explanation_correct || '').trim(),
+      explanation_distractors: normalizedDistractors,
+      exam_tip: String(input.exam_tip || '').trim(),
+    };
+
+    this.questions.set(questionId, dbQuestion);
+    return dbQuestion;
+  }
 }
 
 export const backendDb = new Az900BackendDatabase();
+

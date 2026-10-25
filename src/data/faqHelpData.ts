@@ -1,6 +1,10 @@
 export interface FaqHelpItem {
   id: string;
-  category: 'Getting Started' | 'Understanding Scoring' | 'Advanced Features';
+  category:
+    | 'Getting Started'
+    | 'Understanding Scoring'
+    | 'Advanced Features'
+    | 'Security, Privacy & Sync';
   question: string;
   summary: string;
   richAnswer: {
@@ -20,6 +24,7 @@ export const FAQ_HELP_CATEGORIES = [
   'Getting Started',
   'Understanding Scoring',
   'Advanced Features',
+  'Security, Privacy & Sync',
 ] as const;
 
 export type FaqCategoryType = (typeof FAQ_HELP_CATEGORIES)[number];
@@ -299,5 +304,97 @@ export const FAQ_HELP_DATASET: FaqHelpItem[] = [
       },
     },
     tags: ['PDF Generation', 'jsPDF', 'Domain Report', 'Progress Export'],
+  },
+
+  // -------------------------------------------------------------
+  // CATEGORY 4: SECURITY, PRIVACY & SYNC (KDPA 2019 • M-PESA • CROSS-PLATFORM)
+  // -------------------------------------------------------------
+  {
+    id: 'faq-sec-1',
+    category: 'Security, Privacy & Sync',
+    question: 'How does Authentication work and keep daily long-hour study sessions secure?',
+    summary: 'OAuth 2.0 & JWT tokens with silent background renewal keep multi-hour sessions uninterrupted.',
+    richAnswer: {
+      intro:
+        'The Studio uses encrypted token-based authentication designed for reliable daily study—even across 3 to 6+ hour marathon exam-prep sessions:',
+      keyPoints: [
+        'Token-Only Identity: Sign in via Google Cloud / Firebase OAuth 2.0 or Supabase/Postgres credentials. Raw passwords are never stored in browser localStorage.',
+        'Silent Long-Hour Token Refresh: An automatic background heartbeat renews your authentication token every 25 minutes and whenever your screen wakes up, preventing sudden logouts mid-quiz or during timed Mock Exams.',
+        'Local-First Safety Net: Every answer, confidence rating, and study note is saved locally first before syncing to the cloud—so brief Wi-Fi drops never lose your work.',
+        'Input & Session Hardening: All user inputs and API requests are sanitized and bound to your authenticated UID with strict role-based access rules.',
+      ],
+      callout: {
+        type: 'info',
+        title: 'Authentication Disclaimer',
+        text: 'On personal phones and laptops, your session remains safely persisted for daily study. Always click "Sign Out" in the header when studying on shared cybercafé, library, or workplace computers.',
+      },
+    },
+    tags: ['Authentication', 'Long-Hour Security', 'OAuth 2.0', 'Session Refresh', 'Disclaimer'],
+  },
+  {
+    id: 'faq-sec-2',
+    category: 'Security, Privacy & Sync',
+    question: 'How is my data protected under the Kenya Data Protection Act (KDPA, 2019)?',
+    summary: 'Strict data minimization, educational purpose limitation, and full user export/erasure rights.',
+    richAnswer: {
+      intro:
+        'We handle learner data in strict alignment with the Kenya Data Protection Act, No. 24 of 2019 (ODPC Principles) and international privacy standards:',
+      keyPoints: [
+        'Data Minimization: We collect only your account identifier (email, display name, role) and AZ-900 study telemetry (module mastery scores, quiz attempts, study streak, and personal notes).',
+        'Purpose Limitation: Your data is used exclusively to calculate exam readiness, power adaptive weak-area drills, and synchronize your progress across your devices.',
+        'Zero Third-Party Sale or Profiling: We never sell, rent, or share learner data with advertisers or external brokers.',
+        'Right to Access, Portability & Erasure: You can download a complete JSON or PDF copy of your records at any time via the Export Hub, or reset/clear module history directly in the app.',
+      ],
+      callout: {
+        type: 'warning',
+        title: 'Data Privacy Disclaimer (Ref: Kenya Data Protection Act, 2019)',
+        text: 'By signing in, you consent to the processing of your learning progress for AZ-900 certification prep. Please do not enter confidential corporate credentials or sensitive personal data into custom study notes.',
+      },
+    },
+    tags: ['Kenya Data Protection Act', 'KDPA 2019', 'Data Privacy', 'ODPC', 'Disclaimer'],
+  },
+  {
+    id: 'faq-sec-3',
+    category: 'Security, Privacy & Sync',
+    question: 'Can I use the same account on my Mobile Phone and Laptop simultaneously?',
+    summary: 'Yes! Real-time Cloud Sync merges progress across mobile and laptop at the same time.',
+    richAnswer: {
+      intro:
+        'You can stay signed in with the same learner account on your mobile phone, tablet, and laptop simultaneously without losing or overwriting progress:',
+      keyPoints: [
+        'Simultaneous Multi-Device Study: Review Architecture Study Decks on your laptop while answering Quick-Drill flashcards on your phone—both sessions stay active concurrently.',
+        'Real-Time Cloud Listeners: Cloud Firestore live listeners (onSnapshot) and PostgreSQL sync reconcile your module scores and premium unlocks across active devices automatically.',
+        'Conflict-Free Smart Merging: When two devices sync at once, the engine preserves your highest module mastery score, merges answered questions, and keeps your daily Harambee streak intact.',
+        'Live Header Sync Badge: Check the header indicator ("Synced", "Syncing...", or "Offline") at any time to confirm your progress is backed up to the cloud.',
+      ],
+      callout: {
+        type: 'tip',
+        title: 'Seamless Device Handoff',
+        text: 'Switching between laptop and mobile? Simply bring the app window into focus and your latest cloud mastery scores reconcile automatically within seconds.',
+      },
+    },
+    tags: ['Cross-Platform', 'Simultaneous Use', 'Cloud Sync', 'Mobile & Laptop', 'Multi-Device'],
+  },
+  {
+    id: 'faq-sec-4',
+    category: 'Security, Privacy & Sync',
+    question: 'Why is M-Pesa supported and how are mobile payments kept secure across devices?',
+    summary: 'Safaricom Daraja STK Push keeps PIN entry strictly on your phone SIM Toolkit and unlocks all devices.',
+    richAnswer: {
+      intro:
+        'M-Pesa (Safaricom Daraja API) provides accessible, instant mobile micro-payments for learners across Kenya and East Africa without needing international credit cards:',
+      keyPoints: [
+        'Zero PIN Exposure in the App: When you trigger an M-Pesa STK Push, the PIN prompt appears strictly on your mobile phone via Safaricom’s encrypted SIM Toolkit. This web app never asks for, sees, or stores your M-Pesa PIN.',
+        'Server-Side API Isolation: All Daraja consumer keys, passkeys, and webhook callbacks are processed on our hardened backend server over HTTPS/TLS—never exposed in client browser code.',
+        'Instant Cross-Platform Unlock: Once your CheckoutRequestID is confirmed, your account’s premium entitlement syncs immediately to both your mobile phone and laptop.',
+        'Verifiable Transaction Logs: Every transaction status (pending, completed, or failed) is logged with an auditable receipt ID tied to your learner UID.',
+      ],
+      callout: {
+        type: 'warning',
+        title: 'M-Pesa Security Disclaimer',
+        text: 'Always verify the merchant name and amount on your phone screen before entering your M-Pesa PIN. Never type your M-Pesa PIN into any website, chat window, or email.',
+      },
+    },
+    tags: ['M-Pesa', 'Daraja STK Push', 'Payment Security', 'Cross-Platform Unlock', 'Disclaimer'],
   },
 ];

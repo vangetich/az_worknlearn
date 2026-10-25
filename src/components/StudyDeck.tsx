@@ -12,12 +12,14 @@ import {
   Table,
   Compass,
   Check,
+  ExternalLink,
 } from 'lucide-react';
 import {
   CURRICULUM_STUDY_MODULES,
   HIGH_YIELD_CHEAT_SHEETS,
 } from '../data/studyNotes';
 import { LEARNING_PATHS } from '../data/curriculum';
+import { resolveAzureDocsLink } from '../data/azureGlossaryData';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
 
 interface StudyDeckProps {
@@ -157,6 +159,22 @@ export const StudyDeck: React.FC<StudyDeckProps> = ({
               <span>Comparison Matrices ({HIGH_YIELD_CHEAT_SHEETS.length})</span>
             </button>
           </div>
+        </div>
+
+        {/* Consistent Azure Reading & Learning Motivation Strip */}
+        <div className="px-5 py-3 bg-gradient-to-r from-amber-50/90 via-sky-50/80 to-emerald-50/80 border-b border-sky-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+          <div className="flex items-start sm:items-center gap-2 text-slate-800">
+            <Lightbulb className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+            <p className="leading-relaxed">
+              <strong className="font-black text-slate-900">
+                Why Consistent Azure Reading Matters:
+              </strong>{' '}
+              Reading 1–2 Study Units and Official Microsoft Learn articles daily builds deep conceptual clarity across all 3 AZ-900 domains—turning tricky scenario questions into effortless points on exam day!
+            </p>
+          </div>
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 border border-emerald-300 font-extrabold text-[11px] whitespace-nowrap self-start sm:self-center">
+            {completedUnitIds.length} Units Read &amp; Mastered
+          </span>
         </div>
 
         {/* =================================================================
@@ -380,19 +398,37 @@ export const StudyDeck: React.FC<StudyDeckProps> = ({
                             <span>Relevant Azure Services</span>
                           </span>
                           <div className="space-y-2">
-                            {unit.azureServices.map((srv, idx) => (
-                              <div
-                                key={idx}
-                                className="p-2.5 rounded-lg bg-white border border-blue-100 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2.5 text-xs"
-                              >
-                                <span className="font-extrabold text-[#0078D4] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shrink-0 self-start">
-                                  {srv.name}
-                                </span>
-                                <span className="text-slate-700 leading-relaxed">
-                                  {srv.role}
-                                </span>
-                              </div>
-                            ))}
+                            {unit.azureServices.map((srv, idx) => {
+                              const srvDocs = resolveAzureDocsLink(
+                                srv.name,
+                                activeModule.moduleId
+                              );
+                              return (
+                                <div
+                                  key={idx}
+                                  className="p-2.5 rounded-lg bg-white border border-blue-100 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2.5 text-xs"
+                                >
+                                  <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2.5 min-w-0">
+                                    <span className="font-extrabold text-[#0078D4] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shrink-0 self-start">
+                                      {srv.name}
+                                    </span>
+                                    <span className="text-slate-700 leading-relaxed">
+                                      {srv.role}
+                                    </span>
+                                  </div>
+                                  <a
+                                    href={srvDocs.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-sky-50 hover:bg-[#0078D4] text-[#0078D4] hover:text-white border border-sky-200 text-[10px] font-extrabold shrink-0 self-start sm:self-center transition-colors"
+                                    title={`Official Microsoft Learn Docs: ${srvDocs.label}`}
+                                  >
+                                    <span>MS Learn</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
 

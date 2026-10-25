@@ -535,6 +535,20 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
             </div>
           </div>
 
+          <div class="faq-item">
+            <div class="faq-q">Q11: How does Authentication &amp; Simultaneous Cross-Platform Cloud Sync work?</div>
+            <div class="faq-a">
+              Sessions use encrypted OAuth 2.0 / JWT tokens with silent 25-minute background renewal for uninterrupted multi-hour daily study. You can sign in with the same account on your mobile phone and laptop simultaneously—progress, module mastery scores, and streaks merge non-destructively in real time via Cloud Firestore and PostgreSQL. <em>Disclaimer: Always sign out when using shared public or cybercafé computers.</em>
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-q">Q12: How are my data and M-Pesa payments protected (Ref: Kenya Data Protection Act, 2019)?</div>
+            <div class="faq-a">
+              In compliance with the <strong>Kenya Data Protection Act, No. 24 of 2019 (ODPC Principles)</strong>, we collect only essential learner identity and AZ-900 study telemetry solely for exam preparation—never sold or shared with third parties, with full JSON/PDF export and reset rights. M-Pesa Daraja STK Push prompts run strictly on your phone's encrypted SIM Toolkit; this web app never requests, sees, or stores your M-Pesa PIN.
+            </div>
+          </div>
+
           <!-- SECTION 5: RECOMMENDED 4-WEEK STUDY SCHEDULE -->
           <div class="page-break"></div>
           <h2>5. Recommended 4-Week Study Schedule</h2>
@@ -613,6 +627,7 @@ Generated: ${today}
 6. 5-Minute Quick-Retry Queue: Hyper-focused error drilling right after review sessions.
 7. Focus Session Pomodoro: Synchronizes daily study seconds across browser tabs with 25-minute break chimes.
 8. Full-Length 45-Minute Mock Exam: Real test conditions, weighted questions, and score breakdown.
+9. Simultaneous Cross-Platform Sync & Security: Real-time mobile + laptop sync, silent token refresh for long study hours, M-Pesa STK Push SIM isolation, and Kenya Data Protection Act (2019) compliance.
     `.trim();
 
     navigator.clipboard.writeText(textContent);
@@ -1120,6 +1135,54 @@ ${
                 })}
               </div>
 
+              {/* Succinct Security, Kenya Data Protection Act (2019), Cloud Sync & M-Pesa Disclaimers Card */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-[#0c2340] text-white border border-sky-500/30 shadow-sm space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                      Trust &amp; Compliance Notice
+                    </span>
+                    <h4 className="text-xs sm:text-sm font-black text-white">
+                      Security, Kenya Data Protection Act (2019), Cloud Sync &amp; M-Pesa Disclaimers
+                    </h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFaqCategory('Security, Privacy & Sync')}
+                    className="text-[11px] font-extrabold text-sky-300 hover:text-white underline underline-offset-2 cursor-pointer"
+                  >
+                    Filter Security &amp; Sync FAQs &rarr;
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px] text-slate-200 leading-relaxed">
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                    <strong className="text-sky-300 font-extrabold block mb-0.5">
+                      1. Auth &amp; Long-Hour Daily Study Security
+                    </strong>
+                    Uses OAuth 2.0 / JWT tokens with silent 25-min background renewal for uninterrupted multi-hour study. Passwords are never saved in localStorage. <em>Sign out on shared public devices.</em>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                    <strong className="text-emerald-300 font-extrabold block mb-0.5">
+                      2. Kenya Data Protection Act (KDPA, 2019)
+                    </strong>
+                    Aligned with ODPC principles (data minimization &amp; purpose limitation). Only AZ-900 progress telemetry is stored; zero data selling; full JSON/PDF export &amp; reset rights at any time.
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                    <strong className="text-amber-300 font-extrabold block mb-0.5">
+                      3. Simultaneous Mobile + Laptop Cloud Sync
+                    </strong>
+                    Use the same account on your phone and laptop at the same time. Firestore live listeners &amp; PostgreSQL sync merge scores non-destructively (keeping highest mastery) with offline fallback.
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                    <strong className="text-purple-300 font-extrabold block mb-0.5">
+                      4. Why M-Pesa &amp; Secure Payment Isolation
+                    </strong>
+                    Enables instant East African mobile unlocks. Safaricom Daraja STK Push prompts appear <em>only</em> on your phone SIM Toolkit—this app never sees or stores your M-Pesa PIN, and unlocks sync across all devices.
+                  </div>
+                </div>
+              </div>
+
               {/* Rich-Text Accordion FAQ List */}
               <div className="space-y-3">
                 {filteredFaqs.map((item) => {
@@ -1129,6 +1192,8 @@ ${
                       ? 'bg-blue-100 text-[#0078D4] border-blue-200'
                       : item.category === 'Understanding Scoring'
                       ? 'bg-amber-100 text-amber-900 border-amber-200'
+                      : item.category === 'Security, Privacy & Sync'
+                      ? 'bg-purple-100 text-purple-900 border-purple-200'
                       : 'bg-emerald-100 text-emerald-900 border-emerald-200';
 
                   return (

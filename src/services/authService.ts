@@ -59,17 +59,77 @@ export interface LoginParams {
 
 const BACKEND_TOKEN_STORAGE_KEY = 'az900_backend_token';
 const BACKEND_USER_STORAGE_KEY = 'az900_backend_user';
+const LONG_SESSION_REFRESH_INTERVAL_MS = 25 * 60 * 1000; // 25 minutes silent token keep-alive
+
+function sanitizeUserField(input: string, maxLen = 120): string {
+  return input
+    .replace(/[<>"'`\u0000-\u001F\u007F]/g, '')
+    .trim()
+    .slice(0, maxLen);
+}
 
 /**
  * Dedicated Authentication Service Layer linked to the existing `auth` instance
  * from `src/lib/firebase.ts`. Coordinates Firebase Auth (Google OAuth & Email/Password),
- * Cloud Firestore user profile provisioning, and Backend API JWT session exchange.
+ * Cloud Firestore user profile provisioning, Backend API JWT session exchange,
+ * and silent token renewal for uninterrupted multi-hour daily study sessions.
  */
-class FirebaseBackendAuthService {
+export class FirebaseBackendAuthService {
   public readonly authInstance: Auth;
+  private keepAliveIntervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor(firebaseAuthInstance: Auth) {
     this.authInstance = firebaseAuthInstance;
+    this.initLongHourSessionKeepAlive();
+  }
+
+  /**
+   * Keeps daily multi-hour study sessions active and secure by silently refreshing
+   * the Firebase JWT every 25 minutes and reconciling session state when a mobile
+   * or laptop window regains focus or network connectivity.
+   */
+  private initLongHourSessionKeepAlive(): void {
+    if (typeof window === 'undefined') return;
+
+    const refreshActiveSessionSilently = async () => {
+      try {
+        const currentUser = this.authInstance.currentUser;
+        if (currentUser) {
+          const freshToken = await currentUser.getIdToken(true);
+          if (freshToken) {
+            localStorage.setItem(BACKEND_TOKEN_STORAGE_KEY, freshToken);
+          }
+        }
+      } catch {
+        // Silent fallback: keep existing cached session during transient offline drops
+      }
+    };
+
+    this.keepAliveIntervalId = setInterval(
+      refreshActiveSessionSilently,
+      LONG_SESSION_REFRESH_INTERVAL_MS
+    );
+
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshActiveSessionSilently();
+      }
+    });
+
+    window.addEventListener('online', () => {
+      refreshActiveSessionSilently();
+    });
+
+    // Cross-tab auth synchronization
+    window.addEventListener('storage', (e: StorageEvent) => {
+      if (e.key === BACKEND_USER_STORAGE_KEY || e.key === BACKEND_TOKEN_STORAGE_KEY) {
+        const user = this.getStoredBackendUser();
+        const token = this.getStoredBackendToken();
+        window.dispatchEvent(
+          new CustomEvent('az900-auth-session-change', { detail: { user, token } })
+        );
+      }
+    });
   }
 
   /**
@@ -130,8 +190,9 @@ class FirebaseBackendAuthService {
    * and synchronizes the account with `POST /api/auth/signup`.
    */
   public async signup(params: SignupParams): Promise<AuthSessionResult> {
-    const cleanEmail = params.email.trim().toLowerCase();
-    const cleanName = params.fullName.trim() || cleanEmail.split('@')[0] || 'AZ-900 Learner';
+    const cleanEmail = sanitizeUserField(params.email, 254).toLowerCase();
+    const cleanName =
+      sanitizeUserField(params.fullName, 120) || cleanEmail.split('@')[0] || 'AZ-900 Learner';
     const role: LearnerRole = params.role || 'student';
 
     let fbUser: FirebaseUser | null = this.authInstance.currentUser;

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Question } from '../types/quiz';
 import { AZ900_FLASHCARDS, Flashcard } from '../data/flashcardsData';
+import { resolveAzureDocsLink } from '../data/azureGlossaryData';
 
 export interface ConceptDefinition {
   id: string;
@@ -277,6 +278,28 @@ export const KeyConceptSidePanel: React.FC<KeyConceptSidePanelProps> = ({
                 </p>
               </div>
             )}
+
+            {/* Verified Official Microsoft Learn Reference Link */}
+            {(() => {
+              const docsRef = resolveAzureDocsLink(activeConcept.term, question.moduleId);
+              return (
+                <div className="pt-1">
+                  <a
+                    href={docsRef.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full px-3 py-2 rounded-xl bg-blue-50/90 hover:bg-[#0078D4] text-[#0078D4] hover:text-white border border-blue-200 hover:border-[#0078D4] text-xs font-extrabold flex items-center justify-between gap-2 transition-all shadow-2xs cursor-pointer"
+                    title={`Open verified Microsoft Learn documentation: ${docsRef.url}`}
+                  >
+                    <span className="flex items-center gap-1.5 truncate">
+                      <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{docsRef.label}</span>
+                    </span>
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                  </a>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

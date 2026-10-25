@@ -358,6 +358,27 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     },
     tipToUnlock: 'Answer at least 10 questions in Path 3 (Management & Governance) with 70%+ accuracy.',
   },
+  {
+    id: 'harambee-weakness-conqueror',
+    title: 'Harambee Weakness Conqueror',
+    subtitle: '5-Question Target Drill Champion',
+    description: 'Completed a 5-question Daily Harambee Weakness Drill with 80%+ accuracy.',
+    category: 'mastery',
+    tier: 'gold',
+    iconName: 'Award',
+    proverbQuote: '“Where the shield is tested most, the warrior grows strongest.” — Kenyan Proverb',
+    targetValue: 1,
+    unit: 'accurate 5-Q drill',
+    isUnlocked: (stats) => {
+      const badges = stats.harambeeChallengeBadges || {};
+      return Object.values(badges).some((b) => b.badgeEarned);
+    },
+    getCurrentValue: (stats) => {
+      const badges = stats.harambeeChallengeBadges || {};
+      return Object.values(badges).filter((b) => b.badgeEarned).length;
+    },
+    tipToUnlock: 'Complete a 5-question Daily Harambee Challenge drill with at least 4/5 (80%+) accuracy.',
+  },
 ];
 
 export interface EvaluatedBadge extends BadgeDefinition {

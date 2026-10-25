@@ -24,7 +24,7 @@ import {
   FileCode,
 } from 'lucide-react';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
-import { UserStats } from '../types/quiz';
+import { UserStats, Question } from '../types/quiz';
 import {
   FirebaseUser,
 } from '../lib/firebase';
@@ -32,23 +32,35 @@ import { authService } from '../services/authService';
 import { usePostgresDatabase } from '../hooks/usePostgresDatabase';
 import { PremiumUnlock } from './PremiumUnlock';
 import { ApiDocumentationModal } from './ApiDocumentationModal';
+import { AdminDashboard } from './AdminDashboard';
 
 interface BackendCloudModalProps {
   isOpen: boolean;
   onClose: () => void;
   stats: UserStats;
   onOpenApiDocs?: () => void;
+  onQuestionSaved?: (newOrUpdatedQuestion: Question) => void;
+  initialSection?: HubSection;
 }
 
-type HubSection = 'auth-progress' | 'curriculum-api' | 'mpesa-payments' | 'supabase-migrations';
+export type HubSection =
+  | 'auth-progress'
+  | 'curriculum-api'
+  | 'mpesa-payments'
+  | 'supabase-migrations'
+  | 'admin-dashboard';
 
 export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
   isOpen,
   onClose,
   stats,
   onOpenApiDocs,
+  onQuestionSaved,
+  initialSection,
 }) => {
-  const [activeSection, setActiveSection] = useState<HubSection>('auth-progress');
+  const [activeSection, setActiveSection] = useState<HubSection>(
+    initialSection || 'auth-progress'
+  );
   const [showInternalApiDocs, setShowInternalApiDocs] = useState<boolean>(false);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(
     authService.getCurrentFirebaseUser()
@@ -126,6 +138,12 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
         const progData = await progRes.json();
         setProgressReport(progData);
         if (progData.user) setBackendUser(progData.user);
+        const pendingFromReport = (progData.payment_transactions || []).find(
+          (t: any) => t.status === 'pending'
+        );
+        if (pendingFromReport) {
+          setPendingTx(pendingFromReport);
+        }
       }
       if (modRes.ok) {
         const modData = await modRes.json();
@@ -139,6 +157,53 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
       console.error('Error loading backend overview:', err);
     }
   }, [authToken, currentUserId, postgresDb.fetchCurriculumModules]);
+
+  // Sync initialSection when opened with a specific target tab
+  useEffect(() => {
+    if (isOpen && initialSection) {
+      setActiveSection(initialSection);
+    }
+  }, [isOpen, initialSection]);
+
+  // Polling mechanism in BackendCloudModal checking `/api/payments/status/:id` after STK push is initiated
+  useEffect(() => {
+    if (!isOpen || !pendingTx) return;
+    const txIdentifier = pendingTx.checkout_request_id || pendingTx.id;
+    if (!txIdentifier) return;
+
+    const pollTimer = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/payments/status/${encodeURIComponent(txIdentifier)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status === 'completed') {
+          setPendingTx(null);
+          if (data.user) {
+            setBackendUser(data.user);
+          }
+          setStatusBanner({
+            type: 'success',
+            message: `Webhook confirmed via GET /api/payments/status/${txIdentifier}! Receipt: ${
+              data.receipt_number || 'Verified'
+            } — Premium Azure Modules Unlocked!`,
+          });
+          await fetchBackendOverview();
+        } else if (data.status === 'failed') {
+          setPendingTx(null);
+          setStatusBanner({
+            type: 'error',
+            message: `Payment ${txIdentifier} reported status 'failed' via /api/payments/status/${txIdentifier}.`,
+          });
+          await fetchBackendOverview();
+        }
+      } catch {
+        // Ignore transient network poll errors
+      }
+    }, 2500);
+
+    return () => clearInterval(pollTimer);
+  }, [isOpen, pendingTx, fetchBackendOverview]);
 
   const fetchModuleQuestions = useCallback(
     async (modId: number, protect: boolean) => {
@@ -402,9 +467,41 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
             }`}
           >
             <Database className="w-4 h-4" />
-            <span>4. Supabase PostgreSQL Migrations</span>
+            <span>4. Supabase Migrations</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('admin-dashboard')}
+            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+              activeSection === 'admin-dashboard'
+                ? 'bg-white text-amber-800 border-amber-600 shadow-2xs'
+                : 'text-slate-600 border-transparent hover:text-slate-900'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>5. Admin Question Manager</span>
           </button>
         </div>
+
+        {/* Live Payment Polling Indicator Banner when STK Push is Pending */}
+        {pendingTx && (
+          <div className="mx-6 mt-3 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs font-bold flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-3.5 h-3.5 text-amber-700 animate-spin shrink-0" />
+              <span>
+                Polling{' '}
+                <code className="font-mono font-extrabold bg-amber-100 px-1.5 py-0.5 rounded">
+                  GET /api/payments/status/{pendingTx.checkout_request_id || pendingTx.id}
+                </code>{' '}
+                for STK Push webhook confirmation...
+              </span>
+            </div>
+            <span className="font-mono text-[11px] uppercase px-2 py-0.5 rounded bg-amber-200/80 text-amber-900 font-black">
+              Status: {pendingTx.status}
+            </span>
+          </div>
+        )}
 
         {/* Status Banner */}
         {statusBanner && (
@@ -863,6 +960,7 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
               transactions={progressReport?.payment_transactions || []}
               onRefreshProgress={fetchBackendOverview}
               onStatusBanner={setStatusBanner}
+              onPaymentInitiated={(tx) => setPendingTx(tx)}
             />
           )}
 
@@ -999,6 +1097,22 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
                 </div>
               )}
             </div>
+          )}
+
+          {/* =================================================================
+              TAB 5: ADMIN DASHBOARD (SUPABASE MODULE STATS & QUESTION CRUD)
+             ================================================================= */}
+          {activeSection === 'admin-dashboard' && (
+            <AdminDashboard
+              onQuestionSaved={async (savedQ) => {
+                if (onQuestionSaved) {
+                  onQuestionSaved(savedQ);
+                }
+                await fetchBackendOverview();
+                await fetchModuleQuestions(selectedModuleId, protectAnswersMode);
+              }}
+              onStatusBanner={setStatusBanner}
+            />
           )}
         </div>
       </div>

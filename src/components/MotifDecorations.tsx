@@ -469,5 +469,337 @@ export const FooterAfricanMotifsBackground: React.FC<{ className?: string }> = (
   );
 };
 
+/**
+ * Compact Kenyan Flag Shield & Beadwork Micro-Emblem for the Quick-Sort label
+ */
+export const KenyanFlagMiniEmblem: React.FC<{ size?: number; className?: string }> = ({
+  size = 18,
+  className = '',
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 28 28"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={`inline-block shrink-0 ${className}`}
+    aria-hidden="true"
+  >
+    {/* Crossed White/Slate Spears */}
+    <line x1="4" y1="24" x2="24" y2="4" stroke="#0F172A" strokeWidth="1.6" strokeLinecap="round" />
+    <line x1="24" y1="24" x2="4" y2="4" stroke="#0F172A" strokeWidth="1.6" strokeLinecap="round" />
+    {/* Outer Ring in Kenyan Green, Red, Black segments */}
+    <circle cx="14" cy="14" r="11.5" stroke="#006600" strokeWidth="1.6" strokeDasharray="6 3" />
+    {/* Maasai Shield in Kenyan Flag Colours */}
+    <path
+      d="M14 3.5 C8.5 8.5, 8.5 19.5, 14 24.5 C19.5 19.5, 19.5 8.5, 14 3.5 Z"
+      fill="#BB0000"
+      stroke="#FFFFFF"
+      strokeWidth="1.3"
+    />
+    {/* Left & Right Black Flanks */}
+    <path d="M14 4.5 C10 8.5, 10 19.5, 14 23.5 Z" fill="#0F172A" fillOpacity="0.85" />
+    {/* Green Lower Trim & White Center Boss */}
+    <circle cx="14" cy="14" r="3.2" fill="#006600" stroke="#FFFFFF" strokeWidth="1.2" />
+    <circle cx="14" cy="14" r="1.2" fill="#FFFFFF" />
+  </svg>
+);
+
+/**
+ * Tasteful, Partially Animated Kenyan Motifs in Kenyan Flag Colours
+ * (Black #0F172A, Crimson Red #BB0000, Highland Green #006600, White #FFFFFF)
+ * Randomly distributed across the Quick-Sort Dashboard Area to brighten the section.
+ */
+export const KenyanFlagQuickSortMotifs: React.FC<{ className?: string }> = ({
+  className = '',
+}) => {
+  const kenyanMotifs = [
+    {
+      id: 'ke-1',
+      type: 'kenyan-shield',
+      left: '2.5%',
+      top: '10%',
+      size: 38,
+      anim: 'animate-warrior-vitality',
+      delay: '0s',
+      duration: '5s',
+      rotate: -14,
+      opacity: 0.24,
+    },
+    {
+      id: 'ke-2',
+      type: 'kenyan-diamond',
+      left: '16%',
+      top: '54%',
+      size: 30,
+      anim: 'animate-pulse',
+      delay: '0.6s',
+      duration: '4.2s',
+      rotate: 18,
+      opacity: 0.22,
+    },
+    {
+      id: 'ke-3',
+      type: 'kenyan-rosette',
+      left: '31%',
+      top: '8%',
+      size: 34,
+      anim: 'animate-spin',
+      delay: '0.2s',
+      duration: '28s',
+      rotate: 0,
+      opacity: 0.20,
+    },
+    {
+      id: 'ke-4',
+      type: 'kenyan-chevron',
+      left: '46%',
+      top: '58%',
+      size: 36,
+      anim: 'animate-pulse',
+      delay: '1.2s',
+      duration: '4.8s',
+      rotate: -8,
+      opacity: 0.24,
+    },
+    {
+      id: 'ke-5',
+      type: 'kenyan-shield',
+      left: '61%',
+      top: '12%',
+      size: 34,
+      anim: 'animate-pulse',
+      delay: '0.9s',
+      duration: '5.5s',
+      rotate: 15,
+      opacity: 0.21,
+    },
+    {
+      id: 'ke-6',
+      type: 'kenyan-diamond',
+      left: '74%',
+      top: '52%',
+      size: 32,
+      anim: 'animate-bounce',
+      delay: '1.5s',
+      duration: '6s',
+      rotate: -20,
+      opacity: 0.20,
+    },
+    {
+      id: 'ke-7',
+      type: 'kenyan-rosette',
+      left: '86%',
+      top: '14%',
+      size: 36,
+      anim: 'animate-spin',
+      delay: '0.4s',
+      duration: '34s',
+      rotate: 0,
+      opacity: 0.22,
+    },
+    {
+      id: 'ke-8',
+      type: 'kenyan-chevron',
+      left: '95%',
+      top: '56%',
+      size: 30,
+      anim: 'animate-pulse',
+      delay: '0.7s',
+      duration: '4.4s',
+      rotate: 12,
+      opacity: 0.25,
+    },
+  ];
+
+  return (
+    <div
+      className={`KenyanFlagQuickSortMotifs pointer-events-none absolute inset-0 overflow-hidden select-none rounded-2xl transition-all duration-300 ease-out hover:scale-[1.01] group-hover:scale-[1.01] group-hover:animate-pulse hover:animate-pulse hover:animate-kenyan-pulse group-hover:animate-kenyan-pulse ${className}`}
+      aria-hidden="true"
+    >
+      {/* Top Kenyan Flag Tri-Band Woven Accent Thread (Black - White - Red - White - Green) */}
+      <div className="absolute top-0 left-0 right-0 h-[3px] flex opacity-85 transition-opacity duration-300 group-hover:opacity-100 group-hover:animate-pulse">
+        <div className="flex-1 bg-[#0F172A]" />
+        <div className="w-2 bg-white" />
+        <div className="flex-1 bg-[#BB0000]" />
+        <div className="w-2 bg-white" />
+        <div className="flex-1 bg-[#006600]" />
+        <div className="w-2 bg-white" />
+        <div className="flex-1 bg-[#BB0000]" />
+        <div className="w-2 bg-white" />
+        <div className="flex-1 bg-[#006600]" />
+      </div>
+
+      {/* Subtle Warm Kenyan Heritage Ambient Glow */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-red-50/25 via-white/10 to-emerald-50/30 transition-opacity duration-300 group-hover:opacity-95 group-hover:animate-pulse" />
+
+      {/* Bottom Fine Kenyan Beadwork Stitch Line */}
+      <div className="absolute bottom-0 left-0 right-0 h-[2px] flex opacity-65 transition-opacity duration-300 group-hover:opacity-100 group-hover:animate-pulse">
+        <div className="flex-1 bg-gradient-to-r from-[#0F172A] via-[#BB0000] to-[#006600]" />
+      </div>
+
+      {/* Randomly Scattered & Partially Animated Kenyan Flag Motifs with Hover-Triggered Pulse */}
+      {kenyanMotifs.map((m) => (
+        <div
+          key={m.id}
+          className={`absolute pointer-events-auto ${m.anim} group-hover:animate-pulse hover:animate-pulse transition-transform duration-300 group-hover:scale-110 hover:scale-125`}
+          style={{
+            left: m.left,
+            top: m.top,
+            opacity: m.opacity,
+            transform: `rotate(${m.rotate}deg)`,
+            animationDelay: m.delay,
+            animationDuration: m.duration,
+          }}
+        >
+          {/* 1. Kenyan Maasai Shield & Crossed Spears in Black, Red, Green & White */}
+          {m.type === 'kenyan-shield' && (
+            <svg width={m.size} height={m.size} viewBox="0 0 48 48" fill="none">
+              <line
+                x1="7"
+                y1="41"
+                x2="41"
+                y2="7"
+                stroke="#0F172A"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <line
+                x1="41"
+                y1="41"
+                x2="7"
+                y2="7"
+                stroke="#0F172A"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M24 5 C14 14, 14 34, 24 43 C34 34, 34 14, 24 5 Z"
+                fill="#BB0000"
+                stroke="#FFFFFF"
+                strokeWidth="2"
+              />
+              {/* Black & Green Shield Bands */}
+              <path
+                d="M24 7 C17 15, 17 33, 24 41"
+                fill="#0F172A"
+                fillOpacity="0.85"
+              />
+              <path
+                d="M24 7 C31 15, 31 33, 24 41"
+                fill="#006600"
+                fillOpacity="0.85"
+              />
+              <path
+                d="M24 6 L24 42"
+                stroke="#FFFFFF"
+                strokeWidth="1.8"
+                strokeDasharray="3 2"
+              />
+              <circle cx="24" cy="24" r="5" fill="#BB0000" stroke="#FFFFFF" strokeWidth="1.6" />
+              <circle cx="24" cy="24" r="2" fill="#FFFFFF" />
+            </svg>
+          )}
+
+          {/* 2. Kitenge Concentric Diamond in Kenyan Flag Colours */}
+          {m.type === 'kenyan-diamond' && (
+            <svg width={m.size} height={m.size} viewBox="0 0 44 44" fill="none">
+              <polygon
+                points="22,2 42,22 22,42 2,22"
+                fill="#006600"
+                fillOpacity="0.18"
+                stroke="#006600"
+                strokeWidth="2"
+              />
+              <polygon
+                points="22,8 36,22 22,36 8,22"
+                fill="#BB0000"
+                fillOpacity="0.22"
+                stroke="#FFFFFF"
+                strokeWidth="1.6"
+              />
+              <polygon
+                points="22,14 30,22 22,30 14,22"
+                fill="#0F172A"
+                stroke="#BB0000"
+                strokeWidth="1.4"
+              />
+              <circle cx="22" cy="22" r="2.5" fill="#FFFFFF" />
+            </svg>
+          )}
+
+          {/* 3. Kenyan Beadwork Sunburst Rosette */}
+          {m.type === 'kenyan-rosette' && (
+            <svg width={m.size} height={m.size} viewBox="0 0 48 48" fill="none">
+              <circle
+                cx="24"
+                cy="24"
+                r="19"
+                stroke="#0F172A"
+                strokeWidth="2"
+                strokeDasharray="4 3"
+              />
+              <circle
+                cx="24"
+                cy="24"
+                r="14"
+                stroke="#BB0000"
+                strokeWidth="2"
+                strokeDasharray="6 2"
+              />
+              <circle
+                cx="24"
+                cy="24"
+                r="9"
+                fill="#006600"
+                fillOpacity="0.25"
+                stroke="#006600"
+                strokeWidth="1.8"
+              />
+              <circle cx="24" cy="24" r="4" fill="#BB0000" stroke="#FFFFFF" strokeWidth="1.5" />
+              {/* Cardinal Bead Nodes */}
+              <circle cx="24" cy="3" r="2.2" fill="#BB0000" />
+              <circle cx="24" cy="45" r="2.2" fill="#006600" />
+              <circle cx="3" cy="24" r="2.2" fill="#0F172A" />
+              <circle cx="45" cy="24" r="2.2" fill="#006600" />
+            </svg>
+          )}
+
+          {/* 4. Kenyan Tri-Colour Rift Valley Chevrons */}
+          {m.type === 'kenyan-chevron' && (
+            <svg width={m.size} height={m.size} viewBox="0 0 48 34" fill="none">
+              <polyline
+                points="2,9 13,2 24,12 35,2 46,9"
+                stroke="#0F172A"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <polyline
+                points="2,18 13,11 24,21 35,11 46,18"
+                stroke="#BB0000"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <polyline
+                points="2,27 13,20 24,30 35,20 46,27"
+                stroke="#006600"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <circle cx="24" cy="6" r="2" fill="#BB0000" />
+              <circle cx="13" cy="26" r="1.8" fill="#006600" />
+              <circle cx="35" cy="26" r="1.8" fill="#0F172A" />
+            </svg>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+
 
 

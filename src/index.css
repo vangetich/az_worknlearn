@@ -2,6 +2,18 @@
 
 @theme {
   --breakpoint-xs: 400px;
+  --animate-kenyan-pulse: kenyanQuickSortPulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  @keyframes kenyanQuickSortPulse {
+    0%, 100% {
+      opacity: 1;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    }
+    50% {
+      opacity: 0.94;
+      box-shadow: 0 8px 28px rgba(0, 102, 0, 0.14), 0 0 14px rgba(187, 0, 0, 0.12);
+    }
+  }
 }
 
 :root {
@@ -469,6 +481,32 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   animation: azureShimmer 4s linear infinite;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), filter 0.35s ease;
+}
+
+@keyframes searchFilterSoftFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-search-fade-in {
+  animation: searchFilterSoftFadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.KenyanFlagQuickSortMotifs {
+  transition: opacity 0.3s ease, filter 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.group:hover .KenyanFlagQuickSortMotifs,
+.KenyanFlagQuickSortMotifs:hover {
+  animation: kenyanQuickSortPulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  filter: drop-shadow(0 0 6px rgba(187, 0, 0, 0.18)) drop-shadow(0 0 8px rgba(0, 102, 0, 0.18));
 }
 
 @keyframes azureBorderGlow {
