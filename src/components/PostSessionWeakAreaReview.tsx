@@ -18,6 +18,8 @@ import {
   Check,
   X,
   Loader2,
+  Zap,
+  Clock,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { LEARNING_PATHS } from '../data/curriculum';
@@ -45,6 +47,7 @@ interface PostSessionWeakAreaReviewProps {
   onAddGeneratedQuestionsToBank?: (questions: Question[]) => void;
   onSelectPathForPractice?: (pathId: 1 | 2 | 3 | 'all', moduleId?: number | 'all') => void;
   onStartPersonalizedReview?: () => void;
+  onQuickRetrySessionQuestions?: (questionsToQueue: Question[]) => void;
   unresolvedMistakesCount?: number;
   onClose: () => void;
 }
@@ -349,6 +352,7 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
   onAddGeneratedQuestionsToBank,
   onSelectPathForPractice,
   onStartPersonalizedReview,
+  onQuickRetrySessionQuestions,
   unresolvedMistakesCount = 0,
   onClose,
 }) => {
@@ -615,6 +619,26 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
     return <ShieldCheck className="w-4 h-4" />;
   };
 
+  // Build combined list of current review session questions (generated weak-area questions + session attempts)
+  const handleQuickRetryClick = () => {
+    if (onAddGeneratedQuestionsToBank && generatedQuestions.length > 0) {
+      onAddGeneratedQuestionsToBank(generatedQuestions);
+      setSavedToBank(true);
+    }
+
+    const sessionAttemptQuestionIds = new Set(sessionAttempts.map((a) => a.questionId));
+    const sessionBankQuestions = allQuestions.filter((q) => sessionAttemptQuestionIds.has(q.id));
+
+    const combinedMap = new Map<string, Question>();
+    generatedQuestions.forEach((q) => combinedMap.set(q.id, q));
+    sessionBankQuestions.forEach((q) => combinedMap.set(q.id, q));
+
+    const queueQuestions = Array.from(combinedMap.values());
+    if (onQuickRetrySessionQuestions && queueQuestions.length > 0) {
+      onQuickRetrySessionQuestions(queueQuestions);
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 card-elevation overflow-hidden space-y-0 animate-in fade-in duration-200">
       <KitengeRibbon height={4} />
@@ -663,6 +687,19 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
                 <span>2. Weak-Area Review Set ({generatedQuestions.length})</span>
               </button>
             </div>
+
+            {onQuickRetrySessionQuestions && (
+              <button
+                type="button"
+                onClick={handleQuickRetryClick}
+                disabled={isGenerating || generatedQuestions.length === 0}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-slate-950 text-xs font-black transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                title="Instantly add all questions from this review session to a temporary 5-minute 'Retry Queue' filter in the main quiz view"
+              >
+                <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                <span>Quick-Retry (5m Queue)</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -824,15 +861,30 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setViewMode('review-quiz')}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#0078D4] to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all cursor-pointer shrink-0"
-              >
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>Start Separate Weak-Area Review ({generatedQuestions.length} Qs)</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {onQuickRetrySessionQuestions && (
+                  <button
+                    type="button"
+                    onClick={handleQuickRetryClick}
+                    disabled={isGenerating || generatedQuestions.length === 0}
+                    className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                    title="Instantly push all questions from this review session into a 5-minute Retry Queue filter in the main quiz view"
+                  >
+                    <Clock className="w-4 h-4" />
+                    <span>Quick-Retry in Main Quiz (5m Queue)</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setViewMode('review-quiz')}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#0078D4] to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>Start Separate Weak-Area Review ({generatedQuestions.length} Qs)</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -972,6 +1024,18 @@ export const PostSessionWeakAreaReview: React.FC<PostSessionWeakAreaReviewProps>
                 )}
                 <span>Generate New Weak-Area Set</span>
               </button>
+
+              {onQuickRetrySessionQuestions && generatedQuestions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleQuickRetryClick}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                  title="Send all questions from this review session to the main quiz view as a 5-minute temporary Retry Queue filter"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                  <span>Quick-Retry (5m Queue)</span>
+                </button>
+              )}
 
               {onAddGeneratedQuestionsToBank && !savedToBank && generatedQuestions.length > 0 && (
                 <button

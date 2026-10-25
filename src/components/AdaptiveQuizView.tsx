@@ -62,23 +62,48 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
   const [usedQuestionIds, setUsedQuestionIds] = useState<Set<string>>(new Set());
   const [focusedWeakModuleFilter, setFocusedWeakModuleFilter] = useState<number[] | null>(null);
 
+  // Rolling-Average Adaptive Difficulty State (Starts at Medium / 'Intermediate')
+  const ROLLING_WINDOW_SIZE = 4;
+  const [rollingOutcomes, setRollingOutcomes] = useState<boolean[]>([]);
+  const [rollingDifficulty, setRollingDifficulty] = useState<
+    'Fundamental' | 'Intermediate' | 'Advanced'
+  >('Intermediate');
+
+  // Learning Path Focus Selection & Confirmation State
+  const [pendingPathFocus, setPendingPathFocus] = useState<1 | 2 | 3>(1);
+  const [confirmedPathFocus, setConfirmedPathFocus] = useState<1 | 2 | 3 | null>(null);
+  const [showPathSelectorPanel, setShowPathSelectorPanel] = useState<boolean>(false);
+
+  const rollingAvgPercent = useMemo(() => {
+    if (rollingOutcomes.length === 0) return null;
+    const correctCount = rollingOutcomes.filter(Boolean).length;
+    return Math.round((correctCount / rollingOutcomes.length) * 100);
+  }, [rollingOutcomes]);
+
   // Current session questions list generated adaptively
   const [sessionQuestions, setSessionQuestions] = useState<Question[]>([]);
   const [adaptiveReasons, setAdaptiveReasons] = useState<string[]>([]);
 
-  // Function to adaptively pick the next best question prioritizing weak modules & missed concepts
+  // Function to adaptively pick the next best question prioritizing weak modules, confirmed Learning Path, & rolling difficulty
   const pickNextAdaptiveQuestion = (
     currentUsed: Set<string>,
     currentStats: UserStats,
-    overrideModules?: number[] | null
+    overrideModules?: number[] | null,
+    targetDifficulty: 'Fundamental' | 'Intermediate' | 'Advanced' = rollingDifficulty,
+    targetLearningPath: 1 | 2 | 3 | null = confirmedPathFocus
   ): { question: Question; reason: string } | null => {
-    // 1. Calculate confidence for each of the 12 modules
+    // 1. Calculate confidence for each module (scoped to confirmedLearningPath if selected)
     const moduleConfidenceMap: Record<number, number> = {};
     const strugglingModules: number[] = [];
     const intermediateModules: number[] = [];
     const masteredModules: number[] = [];
 
-    LEARNING_PATHS.forEach((path) => {
+    const activePaths =
+      targetLearningPath !== null
+        ? LEARNING_PATHS.filter((p) => p.id === targetLearningPath)
+        : LEARNING_PATHS;
+
+    activePaths.forEach((path) => {
       path.modules.forEach((mod) => {
         const mastery = currentStats.moduleMastery[mod.id] || { correct: 0, total: 0 };
         const conf = mastery.total > 0 ? Math.round((mastery.correct / mastery.total) * 100) : 0;
@@ -130,7 +155,15 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
       (q) => q.moduleId === targetModuleId && !currentUsed.has(q.id)
     );
 
-    // Fallback: any unused question if module pool exhausted
+    // Fallback: unused questions in the confirmed learning path (if any) or across all questions
+    if (availableQuestions.length === 0) {
+      availableQuestions = questions.filter(
+        (q) =>
+          (targetLearningPath === null || q.learningPathId === targetLearningPath) &&
+          !currentUsed.has(q.id)
+      );
+    }
+
     if (availableQuestions.length === 0) {
       availableQuestions = questions.filter((q) => !currentUsed.has(q.id));
     }
@@ -139,15 +172,22 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
       availableQuestions = questions;
     }
 
-    // Prioritize previously missed questions or unattempted questions in that module
-    const previouslyMissedInPool = availableQuestions.filter((q) => {
+    // Prioritize questions matching the current rolling-average difficulty tier ('Fundamental' / 'Intermediate' / 'Advanced')
+    const difficultyMatchedPool = availableQuestions.filter(
+      (q) => q.difficulty === targetDifficulty
+    );
+    const candidatePool =
+      difficultyMatchedPool.length > 0 ? difficultyMatchedPool : availableQuestions;
+
+    // Prioritize previously missed questions or unattempted questions in that pool
+    const previouslyMissedInPool = candidatePool.filter((q) => {
       const qAttempts = currentStats.attempts?.[q.id] || [];
       if (qAttempts.length === 0) return false;
       const latest = [...qAttempts].sort((a, b) => b.timestamp - a.timestamp)[0];
       return !latest.isCorrect;
     });
 
-    const unattemptedInPool = availableQuestions.filter(
+    const unattemptedInPool = candidatePool.filter(
       (q) => !currentStats.attempts?.[q.id] || currentStats.attempts[q.id].length === 0
     );
 
@@ -162,11 +202,17 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
       selected = unattemptedInPool[Math.floor(Math.random() * unattemptedInPool.length)];
       conceptNote = `${priorityLabel} • Unseen Concept`;
     } else {
-      selected = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
+      selected = candidatePool[Math.floor(Math.random() * candidatePool.length)];
     }
 
     const currentModConf = moduleConfidenceMap[selected.moduleId] ?? 0;
-    const reasonText = `Targeting M${selected.moduleId}: ${selected.moduleTitle} (Confidence: ${currentModConf}% • ${conceptNote})`;
+    const diffLabel =
+      selected.difficulty === 'Fundamental'
+        ? 'Easy / Fundamental'
+        : selected.difficulty === 'Intermediate'
+        ? 'Medium / Intermediate'
+        : 'Hard / Advanced';
+    const reasonText = `Targeting M${selected.moduleId}: ${selected.moduleTitle} (${diffLabel} • Confidence: ${currentModConf}% • ${conceptNote})`;
 
     return { question: selected, reason: reasonText };
   };
@@ -239,6 +285,27 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
       setSessionMissedQuestions((prev) => [...prev, missedEntry]);
     }
 
+    // Update rolling window of recent answers in current session and adjust difficulty dynamically
+    const nextWindow = [...rollingOutcomes, isCorrect].slice(-ROLLING_WINDOW_SIZE);
+    setRollingOutcomes(nextWindow);
+    const nextAvg = Math.round(
+      (nextWindow.filter(Boolean).length / nextWindow.length) * 100
+    );
+
+    if (nextWindow.length >= 2) {
+      if (nextAvg >= 75) {
+        setRollingDifficulty((prev) =>
+          prev === 'Fundamental' ? 'Intermediate' : 'Advanced'
+        );
+      } else if (nextAvg <= 40) {
+        setRollingDifficulty((prev) =>
+          prev === 'Advanced' ? 'Intermediate' : 'Fundamental'
+        );
+      } else if (nextWindow.length >= 3) {
+        setRollingDifficulty('Intermediate');
+      }
+    }
+
     // Save attempt to global stats immediately
     const attempt: QuestionAttempt = {
       questionId: currentQuestion.id,
@@ -263,8 +330,14 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
       return;
     }
 
-    // Pick next adaptive question with updated stats
-    const nextPick = pickNextAdaptiveQuestion(usedQuestionIds, stats, focusedWeakModuleFilter);
+    // Pick next adaptive question with updated stats, rolling difficulty, and confirmed learning path
+    const nextPick = pickNextAdaptiveQuestion(
+      usedQuestionIds,
+      stats,
+      focusedWeakModuleFilter,
+      rollingDifficulty,
+      confirmedPathFocus
+    );
     if (nextPick) {
       setSessionQuestions((prev) => [...prev, nextPick.question]);
       setAdaptiveReasons((prev) => [...prev, nextPick.reason]);
@@ -314,8 +387,16 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
     }
   };
 
-  const handleRestartSession = (targetWeakModules?: number[] | null) => {
+  const handleRestartSession = (
+    targetWeakModules?: number[] | null,
+    overridePathFocus?: 1 | 2 | 3 | null
+  ) => {
+    const nextPathFocus =
+      overridePathFocus !== undefined ? overridePathFocus : confirmedPathFocus;
+    setConfirmedPathFocus(nextPathFocus);
     setFocusedWeakModuleFilter(targetWeakModules ?? null);
+    setRollingOutcomes([]);
+    setRollingDifficulty('Intermediate'); // Always start session at Medium difficulty
     setSessionQuestionIndex(0);
     setSelectedAnswer(null);
     setIsAnswerSubmitted(false);
@@ -323,9 +404,25 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
     setSessionMissedQuestions([]);
     setSessionAttemptLog([]);
     setIsSessionComplete(false);
-    setSessionQuestions([]);
-    setAdaptiveReasons([]);
-    setUsedQuestionIds(new Set());
+
+    const freshUsed = new Set<string>();
+    const firstPick = pickNextAdaptiveQuestion(
+      freshUsed,
+      stats,
+      targetWeakModules ?? null,
+      'Intermediate',
+      nextPathFocus
+    );
+    if (firstPick) {
+      setSessionQuestions([firstPick.question]);
+      setAdaptiveReasons([firstPick.reason]);
+      setUsedQuestionIds(new Set([firstPick.question.id]));
+    } else {
+      setSessionQuestions([]);
+      setAdaptiveReasons([]);
+      setUsedQuestionIds(new Set());
+    }
+    setShowPathSelectorPanel(false);
   };
 
   // If session is complete, display results + summary of performance by Learning Path and Module
@@ -713,20 +810,135 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
           </div>
         </div>
 
-        {/* Dynamic Question Rationale Banner */}
-        <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-black/20 backdrop-blur-sm text-xs text-blue-50 border border-white/10">
-          <Target className="w-4 h-4 text-amber-300 shrink-0" />
-          <span className="font-medium truncate">{currentReason}</span>
+        {/* Dynamic Question Rationale + Rolling-Average Adaptive Difficulty & Path Focus Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-black/20 backdrop-blur-sm text-xs text-blue-50 border border-white/10">
+          <div className="flex items-center gap-2 min-w-0">
+            <Target className="w-4 h-4 text-amber-300 shrink-0" />
+            <span className="font-medium truncate">{currentReason}</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <span className="px-2.5 py-1 rounded-lg bg-white/15 border border-white/20 text-[11px] font-bold text-white flex items-center gap-1.5">
+              <span>Difficulty:</span>
+              <span className="text-amber-300 font-black">
+                {rollingDifficulty === 'Fundamental'
+                  ? 'Easy (Fundamental)'
+                  : rollingDifficulty === 'Intermediate'
+                  ? 'Medium (Intermediate)'
+                  : 'Hard (Advanced)'}
+              </span>
+              <span className="text-[10px] text-sky-200">
+                {rollingAvgPercent !== null
+                  ? `• Rolling Avg ${rollingAvgPercent}%`
+                  : '• Starts at Medium'}
+              </span>
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setShowPathSelectorPanel((prev) => !prev)}
+              className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[11px] transition-colors cursor-pointer"
+            >
+              {confirmedPathFocus
+                ? `Focus: Path ${confirmedPathFocus} (Change)`
+                : 'Select Learning Path Focus'}
+            </button>
+          </div>
         </div>
+
+        {/* Learning Path Focus Selector & Confirmation Panel inside Adaptive Quiz */}
+        {showPathSelectorPanel && (
+          <div className="p-4 rounded-xl bg-white text-slate-900 border border-blue-200 shadow-lg space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#0078D4]">
+                  Select & Confirm AZ-900 Learning Path Focus
+                </h4>
+                <p className="text-[11px] text-slate-600">
+                  Choose one of the 3 AZ-900 Learning Paths below and confirm to generate a focused 10-question adaptive sprint.
+                </p>
+              </div>
+              {confirmedPathFocus !== null && (
+                <button
+                  type="button"
+                  onClick={() => handleRestartSession(null, null)}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] cursor-pointer"
+                >
+                  All 3 Paths (Balanced)
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {LEARNING_PATHS.map((path) => {
+                const isSelected = pendingPathFocus === path.id;
+                const shortTitle =
+                  path.id === 1
+                    ? 'Cloud Concepts'
+                    : path.id === 2
+                    ? 'Azure Architecture & Services'
+                    : 'Management & Governance';
+                return (
+                  <button
+                    key={path.id}
+                    type="button"
+                    onClick={() => setPendingPathFocus(path.id)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-blue-50 border-[#0078D4] ring-2 ring-[#0078D4]/20'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-black text-[#0078D4]">
+                      <span>PATH {path.id}</span>
+                      <span className="text-slate-500">{path.examWeight}</span>
+                    </div>
+                    <div className="text-xs font-extrabold text-slate-900 mt-1">
+                      {shortTitle}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-200">
+              <span className="text-xs font-bold text-slate-700">
+                Selected Focus:{' '}
+                <strong className="text-[#0078D4]">
+                  {LEARNING_PATHS.find((p) => p.id === pendingPathFocus)?.title}
+                </strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => handleRestartSession(null, pendingPathFocus)}
+                className="px-4 py-2 rounded-xl bg-[#0078D4] hover:bg-blue-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4 text-amber-300" />
+                <span>Confirm Path {pendingPathFocus} & Generate Adaptive Questions</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Adaptive Quiz Card */}
       <div className="bg-white rounded-2xl border border-slate-200 card-elevation overflow-hidden p-6 sm:p-8 space-y-6">
         {/* Module Header Tag */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-[#0078D4] border border-blue-200">
               M{currentQuestion.moduleId}: {currentQuestion.moduleTitle}
+            </span>
+            <span
+              className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold border ${
+                currentQuestion.difficulty === 'Fundamental'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : currentQuestion.difficulty === 'Intermediate'
+                  ? 'bg-blue-50 text-[#0078D4] border-blue-200'
+                  : 'bg-purple-50 text-purple-700 border-purple-200'
+              }`}
+            >
+              {currentQuestion.difficulty}
             </span>
             <span className="text-xs text-slate-400 font-medium hidden sm:inline">
               {currentQuestion.learningPathTitle}

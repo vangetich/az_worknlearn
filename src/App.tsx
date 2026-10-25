@@ -22,6 +22,10 @@ import {
   RotateCcw,
   Volume2,
   VolumeX,
+  Clock,
+  SlidersHorizontal,
+  ChevronDown,
+  ArrowUpDown,
 } from 'lucide-react';
 import { Header, AppTab } from './components/Header';
 import { QuizCard } from './components/QuizCard';
@@ -53,6 +57,7 @@ import { AchievementOverlay } from './components/AchievementOverlay';
 import { PostSessionWeakAreaReview } from './components/PostSessionWeakAreaReview';
 import { AzureCloudExplorer } from './components/AzureCloudExplorer';
 import { LearningPathProgressMap } from './components/LearningPathProgressMap';
+import { WeeklyExamReadiness } from './components/WeeklyExamReadiness';
 import {
   AfricanWatermarkPattern,
   KitengeRibbon,
@@ -109,14 +114,117 @@ export default function App() {
   >('all');
   const [onlyBookmarks, setOnlyBookmarks] = useState<boolean>(false);
   const [onlyAiGenerated, setOnlyAiGenerated] = useState<boolean>(false);
+  const [onlyUnresolvedMistakes, setOnlyUnresolvedMistakes] = useState<boolean>(false);
+  const [retryQueueQuestionIds, setRetryQueueQuestionIds] = useState<string[]>([]);
+  const [retryQueueExpiresAt, setRetryQueueExpiresAt] = useState<number | null>(null);
+  const [retryQueueSecondsLeft, setRetryQueueSecondsLeft] = useState<number>(0);
+  const [onlyRetryQueue, setOnlyRetryQueue] = useState<boolean>(false);
   const [retryIncorrectPathId, setRetryIncorrectPathId] = useState<1 | 2 | 3 | null>(null);
   const [retryIncorrectSnapshotIds, setRetryIncorrectSnapshotIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [pendingJumpQuestionId, setPendingJumpQuestionId] = useState<string | null>(null);
   const initialDeepLinkHandledRef = React.useRef<boolean>(false);
 
+  // Tick down temporary 5-minute 'Retry Queue' filter every second and auto-expire after 5 minutes
+  useEffect(() => {
+    if (!retryQueueExpiresAt) {
+      setRetryQueueSecondsLeft(0);
+      return;
+    }
+
+    const updateRemaining = () => {
+      const remaining = Math.max(0, Math.ceil((retryQueueExpiresAt - Date.now()) / 1000));
+      setRetryQueueSecondsLeft(remaining);
+      if (remaining <= 0) {
+        setRetryQueueExpiresAt(null);
+        setRetryQueueQuestionIds([]);
+        setOnlyRetryQueue(false);
+      }
+    };
+
+    updateRemaining();
+    const interval = setInterval(updateRemaining, 1000);
+    return () => clearInterval(interval);
+  }, [retryQueueExpiresAt]);
+
+  // Handler for 'Quick-Retry' button in PostSessionWeakAreaReview (5-minute temporary Retry Queue)
+  const handleQuickRetrySessionQuestions = (questionsToQueue: Question[]) => {
+    if (questionsToQueue.length === 0) return;
+
+    setQuestions((prev) => {
+      const existingIds = new Set(prev.map((q) => q.id));
+      const uniqueNew = questionsToQueue.filter((q) => !existingIds.has(q.id));
+      if (uniqueNew.length === 0) return prev;
+      return [...uniqueNew, ...prev];
+    });
+
+    const queuedIds = questionsToQueue.map((q) => q.id);
+    setRetryQueueQuestionIds(queuedIds);
+    setRetryQueueExpiresAt(Date.now() + 5 * 60 * 1000); // 5 minutes
+    setRetryQueueSecondsLeft(300);
+    setOnlyRetryQueue(true);
+    setOnlyBookmarks(false);
+    setOnlyAiGenerated(false);
+    setOnlyUnresolvedMistakes(false);
+    setRetryIncorrectPathId(null);
+    setRetryIncorrectSnapshotIds([]);
+    setSelectedPathId('all');
+    setSelectedModuleId('all');
+    setSelectedDifficultyFilter('all');
+    setSearchQuery('');
+    setCurrentQuestionIndex(0);
+    setShowPostSessionReview(false);
+    setActiveTab('quiz');
+  };
+
+  // Active Quick Switcher filter state & handler for mobile horizontal swipe or pill tap
+  const activeQuickFilter: 'all' | 'bookmarks' | 'ai' | 'mistakes' | 'retry-queue' =
+    onlyRetryQueue && retryQueueSecondsLeft > 0
+      ? 'retry-queue'
+      : onlyBookmarks
+      ? 'bookmarks'
+      : onlyAiGenerated
+      ? 'ai'
+      : onlyUnresolvedMistakes
+      ? 'mistakes'
+      : 'all';
+
+  const handleSelectQuickFilter = (
+    nextFilter: 'all' | 'bookmarks' | 'ai' | 'mistakes' | 'retry-queue'
+  ) => {
+    setRetryIncorrectPathId(null);
+    setRetryIncorrectSnapshotIds([]);
+    setOnlyBookmarks(nextFilter === 'bookmarks');
+    setOnlyAiGenerated(nextFilter === 'ai');
+    setOnlyUnresolvedMistakes(nextFilter === 'mistakes');
+    setOnlyRetryQueue(nextFilter === 'retry-queue' && retryQueueSecondsLeft > 0);
+    if (nextFilter !== 'all') {
+      setSelectedPathId('all');
+      setSelectedModuleId('all');
+    }
+    setCurrentQuestionIndex(0);
+  };
+
   // Active question index in filtered list
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+
+  // Quick-Sort order for Practice Tab question list
+  const [questionSortOrder, setQuestionSortOrder] = useState<
+    'default' | 'newest-first' | 'hardest-first' | 'module-progression' | 'easiest-first'
+  >('default');
+
+  // Toggle for secondary Practice workspace panels (keeps Practice view clean & uncluttered)
+  const [showWorkspacePanels, setShowWorkspacePanels] = useState<boolean>(false);
+
+  // Trigger to open the centered Study Zone accordion modal from the Practice toolbar
+  const [externalStudyZoneOpenTrigger, setExternalStudyZoneOpenTrigger] = useState<number>(0);
+
+  const handleChangeSortOrder = (
+    nextSort: 'default' | 'newest-first' | 'hardest-first' | 'module-progression' | 'easiest-first'
+  ) => {
+    setQuestionSortOrder(nextSort);
+    setCurrentQuestionIndex(0);
+  };
 
   // Context for passing a question to Knowledge Assistant
   const [tutorQuestionContext, setTutorQuestionContext] = useState<Question | null>(null);
@@ -189,6 +297,8 @@ export default function App() {
   });
   const [consecutiveCorrect, setConsecutiveCorrect] = useState<number>(0);
   const [consecutiveIncorrect, setConsecutiveIncorrect] = useState<number>(0);
+  const [sessionRollingOutcomes, setSessionRollingOutcomes] = useState<boolean[]>([]);
+  const ROLLING_WINDOW_SIZE = 5;
   const [dynamicDifficulty, setDynamicDifficulty] = useState<
     'Fundamental' | 'Intermediate' | 'Advanced'
   >(() => {
@@ -200,8 +310,43 @@ export default function App() {
     } catch {
       // ignore
     }
-    return 'Intermediate';
+    return 'Intermediate'; // Always start at Medium (Intermediate) difficulty
   });
+
+  // Learning Path Focus Selection & Explicit Confirmation state for upcoming quiz session
+  const [pendingFocusPathId, setPendingFocusPathId] = useState<1 | 2 | 3>(1);
+  const [confirmedFocusPathId, setConfirmedFocusPathId] = useState<1 | 2 | 3 | null>(null);
+  const [isPathSelectorExpanded, setIsPathSelectorExpanded] = useState<boolean>(false);
+
+  // Rolling average accuracy across recent answers in the current session
+  const rollingAverageAccuracy = useMemo(() => {
+    if (sessionRollingOutcomes.length === 0) return null;
+    const correctInWindow = sessionRollingOutcomes.filter(Boolean).length;
+    return Math.round((correctInWindow / sessionRollingOutcomes.length) * 100);
+  }, [sessionRollingOutcomes]);
+
+  // Confirm selected Learning Path focus and generate/reset quiz session starting at Medium difficulty
+  const handleConfirmLearningPathFocus = (pathToConfirm: 1 | 2 | 3) => {
+    setConfirmedFocusPathId(pathToConfirm);
+    setPendingFocusPathId(pathToConfirm);
+    setRetryIncorrectPathId(null);
+    setRetryIncorrectSnapshotIds([]);
+    setSelectedPathId(pathToConfirm);
+    setSelectedModuleId('all');
+    setSelectedDifficultyFilter('all');
+    setOnlyBookmarks(false);
+    setOnlyAiGenerated(false);
+    setSearchQuery('');
+    setSessionRollingOutcomes([]);
+    setConsecutiveCorrect(0);
+    setConsecutiveIncorrect(0);
+    if (!lockedDifficulty) {
+      setDynamicDifficulty('Intermediate'); // Start fresh session at Medium difficulty
+    }
+    setCurrentQuestionIndex(0);
+    setShowPostSessionReview(false);
+    setIsPathSelectorExpanded(false);
+  };
 
   // Handler to permanently lock or unlock dynamic difficulty
   const handleChangeLockedDifficulty = (
@@ -302,10 +447,15 @@ export default function App() {
     setActiveTab('quiz');
   };
 
-  // Filtered question set with multi-state difficulty filter, dynamic difficulty lock, and global search
+  // Filtered question set with multi-state difficulty filter, dynamic difficulty lock, 5m retry queue, and global search
   const filteredQuestions = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
+    const unresolvedMap = getUnresolvedMistakesMap(stats);
+
     const list = questions.filter((q) => {
+      if (onlyRetryQueue && retryQueueSecondsLeft > 0 && retryQueueQuestionIds.length > 0) {
+        if (!retryQueueQuestionIds.includes(q.id)) return false;
+      }
       if (retryIncorrectPathId !== null) {
         if (q.learningPathId !== retryIncorrectPathId) return false;
         const allowedIds =
@@ -329,6 +479,9 @@ export default function App() {
       if (onlyAiGenerated && !q.isAiGenerated) {
         return false;
       }
+      if (onlyUnresolvedMistakes && !unresolvedMap.has(q.id)) {
+        return false;
+      }
       if (normalizedSearch) {
         const matchesSearch =
           q.question.toLowerCase().includes(normalizedSearch) ||
@@ -344,7 +497,49 @@ export default function App() {
       return true;
     });
 
-    // If dynamic difficulty is permanently locked or enabled, prioritize the target difficulty
+    // Apply explicit Quick-Sort toggle order when selected by student
+    if (questionSortOrder === 'newest-first') {
+      const reversed = [...list].reverse();
+      return reversed.sort((a, b) => {
+        if (a.isAiGenerated && !b.isAiGenerated) return -1;
+        if (b.isAiGenerated && !a.isAiGenerated) return 1;
+        return 0;
+      });
+    }
+
+    if (questionSortOrder === 'hardest-first') {
+      const difficultyWeight: Record<'Fundamental' | 'Intermediate' | 'Advanced', number> = {
+        Advanced: 3,
+        Intermediate: 2,
+        Fundamental: 1,
+      };
+      return [...list].sort((a, b) => {
+        const diffDelta = difficultyWeight[b.difficulty] - difficultyWeight[a.difficulty];
+        if (diffDelta !== 0) return diffDelta;
+        return a.learningPathId - b.learningPathId || a.moduleId - b.moduleId;
+      });
+    }
+
+    if (questionSortOrder === 'easiest-first') {
+      const difficultyWeight: Record<'Fundamental' | 'Intermediate' | 'Advanced', number> = {
+        Fundamental: 1,
+        Intermediate: 2,
+        Advanced: 3,
+      };
+      return [...list].sort((a, b) => {
+        const diffDelta = difficultyWeight[a.difficulty] - difficultyWeight[b.difficulty];
+        if (diffDelta !== 0) return diffDelta;
+        return a.learningPathId - b.learningPathId || a.moduleId - b.moduleId;
+      });
+    }
+
+    if (questionSortOrder === 'module-progression') {
+      return [...list].sort(
+        (a, b) => a.learningPathId - b.learningPathId || a.moduleId - b.moduleId
+      );
+    }
+
+    // If dynamic difficulty is permanently locked, prioritize the locked difficulty
     if (lockedDifficulty !== null) {
       return [...list].sort((a, b) => {
         if (a.difficulty === lockedDifficulty && b.difficulty !== lockedDifficulty) return -1;
@@ -353,23 +548,35 @@ export default function App() {
       });
     }
 
-    // When a specific learning path is selected, present questions sequentially within that path
-    if (selectedPathId !== 'all') {
-      return [...list].sort((a, b) => a.moduleId - b.moduleId);
+    // If adaptive difficulty is enabled (rolling average mechanism), prioritize questions matching effectiveDynamicDifficulty
+    // while preserving module order as secondary tie-breaker (works both within a focused Learning Path and across all paths)
+    if (isDynamicDifficultyEnabled && selectedDifficultyFilter === 'all') {
+      return [...list].sort((a, b) => {
+        if (
+          a.difficulty === effectiveDynamicDifficulty &&
+          b.difficulty !== effectiveDynamicDifficulty
+        )
+          return -1;
+        if (
+          b.difficulty === effectiveDynamicDifficulty &&
+          a.difficulty !== effectiveDynamicDifficulty
+        )
+          return 1;
+        return a.moduleId - b.moduleId;
+      });
     }
 
-    // If dynamic difficulty is enabled and browsing all modules, prioritize matching difficulty
-    if (isDynamicDifficultyEnabled && selectedModuleId === 'all') {
-      return [...list].sort((a, b) => {
-        if (a.difficulty === effectiveDynamicDifficulty && b.difficulty !== effectiveDynamicDifficulty) return -1;
-        if (b.difficulty === effectiveDynamicDifficulty && a.difficulty !== effectiveDynamicDifficulty) return 1;
-        return 0;
-      });
+    // When a specific learning path is selected and dynamic difficulty is off, present sequentially
+    if (selectedPathId !== 'all') {
+      return [...list].sort((a, b) => a.moduleId - b.moduleId);
     }
 
     return list;
   }, [
     questions,
+    onlyRetryQueue,
+    retryQueueSecondsLeft,
+    retryQueueQuestionIds,
     retryIncorrectPathId,
     retryIncorrectSnapshotIds,
     missedQuestionsByPath,
@@ -378,11 +585,13 @@ export default function App() {
     selectedDifficultyFilter,
     onlyBookmarks,
     onlyAiGenerated,
+    onlyUnresolvedMistakes,
     searchQuery,
-    stats.bookmarks,
+    stats,
     isDynamicDifficultyEnabled,
     effectiveDynamicDifficulty,
     lockedDifficulty,
+    questionSortOrder,
   ]);
 
   // Handle jumping directly to a specific question selected in GlobalSearchBar or via Deep-Link
@@ -470,40 +679,43 @@ export default function App() {
     setStats(updatedStats);
     setSessionAttempts((prev) => [...prev, attempt]);
 
-    // Dynamic Difficulty Adjustment:
-    // Only auto-adjust if not permanently locked to Fundamental, Intermediate, or Advanced
-    if (isDynamicDifficultyEnabled && lockedDifficulty === null) {
-      if (isCorrect) {
-        const nextCorrectStreak = consecutiveCorrect + 1;
-        setConsecutiveCorrect(nextCorrectStreak);
-        setConsecutiveIncorrect(0);
-        if (nextCorrectStreak >= 2) {
-          if (dynamicDifficulty === 'Fundamental') {
-            setDynamicDifficulty('Intermediate');
-          } else if (dynamicDifficulty === 'Intermediate') {
-            setDynamicDifficulty('Advanced');
-          }
+    // Update rolling window of recent answers in current session (last 5 answers)
+    const nextRollingWindow = [...sessionRollingOutcomes, isCorrect].slice(-ROLLING_WINDOW_SIZE);
+    setSessionRollingOutcomes(nextRollingWindow);
+    const nextRollingAvg = Math.round(
+      (nextRollingWindow.filter(Boolean).length / nextRollingWindow.length) * 100
+    );
+
+    // Maintain streak counters
+    if (isCorrect) {
+      setConsecutiveCorrect((prev) => prev + 1);
+      setConsecutiveIncorrect(0);
+    } else {
+      setConsecutiveIncorrect((prev) => prev + 1);
+      setConsecutiveCorrect(0);
+    }
+
+    // Rolling-Average Adaptive Difficulty Mechanism:
+    // Starts at Medium ('Intermediate') and dynamically adjusts up or down based on the rolling average
+    // of correct/incorrect answers within the current session (when not permanently locked).
+    if (isDynamicDifficultyEnabled && lockedDifficulty === null && nextRollingWindow.length >= 2) {
+      if (nextRollingAvg >= 75) {
+        if (dynamicDifficulty === 'Fundamental') {
+          setDynamicDifficulty('Intermediate');
+        } else if (dynamicDifficulty === 'Intermediate') {
+          setDynamicDifficulty('Advanced');
+        }
+      } else if (nextRollingAvg <= 40) {
+        if (dynamicDifficulty === 'Advanced') {
+          setDynamicDifficulty('Intermediate');
+        } else if (dynamicDifficulty === 'Intermediate') {
+          setDynamicDifficulty('Fundamental');
         }
       } else {
-        const nextIncorrectStreak = consecutiveIncorrect + 1;
-        setConsecutiveIncorrect(nextIncorrectStreak);
-        setConsecutiveCorrect(0);
-        if (nextIncorrectStreak >= 1) {
-          if (dynamicDifficulty === 'Advanced') {
-            setDynamicDifficulty('Intermediate');
-          } else if (dynamicDifficulty === 'Intermediate') {
-            setDynamicDifficulty('Fundamental');
-          }
+        // Balanced rolling average (41% - 74%) calibrates toward Medium (Intermediate)
+        if (nextRollingWindow.length >= 3 && dynamicDifficulty !== 'Intermediate') {
+          setDynamicDifficulty('Intermediate');
         }
-      }
-    } else if (lockedDifficulty !== null) {
-      // Maintain streak counters while keeping difficulty permanently locked
-      if (isCorrect) {
-        setConsecutiveCorrect((prev) => prev + 1);
-        setConsecutiveIncorrect(0);
-      } else {
-        setConsecutiveIncorrect((prev) => prev + 1);
-        setConsecutiveCorrect(0);
       }
     }
 
@@ -742,86 +954,167 @@ export default function App() {
               </div>
             )}
 
-            {/* Functional, Compact & CSS-Responsive Azure Cloud Explorer Menus Window */}
+            {/* Clean, Uncluttered Practice Control Strip: Quick-Sort Toggles + Centered Study Zone Accordion Launcher */}
             {!isFocusMode && (
-              <AzureCloudExplorer
-                selectedPathId={selectedPathId}
-                selectedModuleId={selectedModuleId}
-                onSelectPath={(pathId) => {
-                  setSelectedPathId(pathId);
-                  setSelectedModuleId('all');
-                  setCurrentQuestionIndex(0);
-                  setShowPostSessionReview(false);
-                }}
-                onSelectModule={(modId, pathId) => {
-                  if (pathId !== undefined) setSelectedPathId(pathId);
-                  setSelectedModuleId(modId);
-                  setCurrentQuestionIndex(0);
-                  setShowPostSessionReview(false);
-                }}
-                stats={stats}
-                questionCountByModule={questionCountByModule}
-                searchQuery={searchQuery}
-                onSearchQueryChange={(q) => {
-                  setSearchQuery(q);
-                  setCurrentQuestionIndex(0);
-                }}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                onToggleModuleComplete={handleToggleModuleComplete}
-                onOpenPersonalizedReview={() => setShowReviewSession(true)}
-                onOpenWeakAreasReview={() => setShowPostSessionReview(true)}
-                onOpenStudyRoom={() => setShowStudyRoom(true)}
-                onOpenMockExam={() => setShowMockExam(true)}
-                unresolvedMistakesCount={unresolvedMistakesCount}
-                isSidebarHidden={isMenuHidden}
-                onToggleSidebar={() => setIsMenuHidden((prev) => !prev)}
-              />
+              <div className="bg-white rounded-2xl border border-slate-200 card-elevation p-3.5 sm:px-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                {/* Left: Quick-Sort Toggle Buttons */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5 mr-1">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-[#0078D4]" />
+                    <span>Quick-Sort:</span>
+                  </span>
+
+                  {(
+                    [
+                      { id: 'newest-first', label: 'Newest First' },
+                      { id: 'hardest-first', label: 'Hardest First' },
+                      { id: 'module-progression', label: 'Module Progression' },
+                      { id: 'easiest-first', label: 'Easiest First' },
+                      { id: 'default', label: 'Adaptive Default' },
+                    ] as const
+                  ).map((sortOpt) => {
+                    const isActive = questionSortOrder === sortOpt.id;
+                    return (
+                      <button
+                        key={sortOpt.id}
+                        type="button"
+                        onClick={() => handleChangeSortOrder(sortOpt.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isActive
+                            ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-2xs ring-2 ring-[#0078D4]/20'
+                            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        <span>{sortOpt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Right: Centered Study Zone Accordion Menu Trigger & Workspace Panels Toggle */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowWorkspacePanels((prev) => !prev)}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      showWorkspacePanels
+                        ? 'bg-amber-50 text-amber-900 border-amber-300'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                    }`}
+                    title="Toggle Cloud Explorer, Progress Map & Weekly Readiness panels"
+                  >
+                    <Layers className="w-3.5 h-3.5 text-amber-600" />
+                    <span>{showWorkspacePanels ? 'Hide Maps & Explorer' : 'Maps & Readiness'}</span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        showWorkspacePanels ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setExternalStudyZoneOpenTrigger((prev) => prev + 1)}
+                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] hover:opacity-95 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                    title="Open Centered Study Zone Accordion Menu"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Study Zone Menu</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-amber-300" />
+                  </button>
+                </div>
+              </div>
             )}
 
-            {/* Interactive Learning Path Navigation System & Prominent Active Path Display */}
-            {!isFocusMode && (
-              <LearningPathOverview
-                selectedPathId={selectedPathId}
-                selectedModuleId={selectedModuleId}
-                onSelectPath={(pathId) => {
-                  setSelectedPathId(pathId);
-                  setSelectedModuleId('all');
-                  setCurrentQuestionIndex(0);
-                  setShowPostSessionReview(false);
-                }}
-                onSelectModule={(modId, pathId) => {
-                  if (pathId !== undefined) setSelectedPathId(pathId);
-                  setSelectedModuleId(modId);
-                  setCurrentQuestionIndex(0);
-                  setShowPostSessionReview(false);
-                }}
-                stats={stats}
-                sessionAttempts={sessionAttempts}
-                onFinishSessionAndReviewWeakAreas={() => setShowPostSessionReview(true)}
-                onStartPersonalizedReview={() => setShowReviewSession(true)}
-                onToggleModuleComplete={handleToggleModuleComplete}
-                filteredQuestionsCount={filteredQuestions.length}
-                currentQuestionIndex={currentQuestionIndex}
-              />
-            )}
+            {/* Collapsible Practice Workspace Panels (Grouped to keep Practice view clean and uncluttered) */}
+            {!isFocusMode && showWorkspacePanels && (
+              <div className="space-y-4 animate-in fade-in duration-150">
+                {/* Functional, Compact & CSS-Responsive Azure Cloud Explorer Menus Window */}
+                <AzureCloudExplorer
+                  selectedPathId={selectedPathId}
+                  selectedModuleId={selectedModuleId}
+                  onSelectPath={(pathId) => {
+                    setSelectedPathId(pathId);
+                    setSelectedModuleId('all');
+                    setCurrentQuestionIndex(0);
+                    setShowPostSessionReview(false);
+                  }}
+                  onSelectModule={(modId, pathId) => {
+                    if (pathId !== undefined) setSelectedPathId(pathId);
+                    setSelectedModuleId(modId);
+                    setCurrentQuestionIndex(0);
+                    setShowPostSessionReview(false);
+                  }}
+                  stats={stats}
+                  questionCountByModule={questionCountByModule}
+                  searchQuery={searchQuery}
+                  onSearchQueryChange={(q) => {
+                    setSearchQuery(q);
+                    setCurrentQuestionIndex(0);
+                  }}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  onToggleModuleComplete={handleToggleModuleComplete}
+                  onOpenPersonalizedReview={() => setShowReviewSession(true)}
+                  onOpenWeakAreasReview={() => setShowPostSessionReview(true)}
+                  onOpenStudyRoom={() => setShowStudyRoom(true)}
+                  onOpenMockExam={() => setShowMockExam(true)}
+                  unresolvedMistakesCount={unresolvedMistakesCount}
+                  isSidebarHidden={isMenuHidden}
+                  onToggleSidebar={() => setIsMenuHidden((prev) => !prev)}
+                />
 
-            {/* Step-by-Step Visual Learning Path Progress Map */}
-            {!isFocusMode && (
-              <LearningPathProgressMap
-                stats={stats}
-                selectedPathId={selectedPathId}
-                selectedModuleId={selectedModuleId}
-                onSelectModule={(modId, pathId) => {
-                  setSelectedPathId(pathId);
-                  setSelectedModuleId(modId);
-                  setCurrentQuestionIndex(0);
-                  setShowPostSessionReview(false);
-                }}
-                onToggleModuleComplete={handleToggleModuleComplete}
-                questionCountByModule={questionCountByModule}
-                defaultExpanded={false}
-              />
+                {/* Interactive Learning Path Navigation System & Prominent Active Path Display */}
+                <LearningPathOverview
+                  selectedPathId={selectedPathId}
+                  selectedModuleId={selectedModuleId}
+                  onSelectPath={(pathId) => {
+                    setSelectedPathId(pathId);
+                    setSelectedModuleId('all');
+                    setCurrentQuestionIndex(0);
+                    setShowPostSessionReview(false);
+                  }}
+                  onSelectModule={(modId, pathId) => {
+                    if (pathId !== undefined) setSelectedPathId(pathId);
+                    setSelectedModuleId(modId);
+                    setCurrentQuestionIndex(0);
+                    setShowPostSessionReview(false);
+                  }}
+                  stats={stats}
+                  sessionAttempts={sessionAttempts}
+                  onFinishSessionAndReviewWeakAreas={() => setShowPostSessionReview(true)}
+                  onStartPersonalizedReview={() => setShowReviewSession(true)}
+                  onToggleModuleComplete={handleToggleModuleComplete}
+                  filteredQuestionsCount={filteredQuestions.length}
+                  currentQuestionIndex={currentQuestionIndex}
+                />
+
+                {/* Step-by-Step Visual Learning Path Progress Map */}
+                <LearningPathProgressMap
+                  stats={stats}
+                  selectedPathId={selectedPathId}
+                  selectedModuleId={selectedModuleId}
+                  onSelectModule={(modId, pathId) => {
+                    setSelectedPathId(pathId);
+                    setSelectedModuleId(modId);
+                    setCurrentQuestionIndex(0);
+                    setShowPostSessionReview(false);
+                  }}
+                  onToggleModuleComplete={handleToggleModuleComplete}
+                  questionCountByModule={questionCountByModule}
+                  defaultExpanded={false}
+                />
+
+                {/* Weekly Exam Readiness & Daily 'Azure Fact of the Day' Notification Component */}
+                <WeeklyExamReadiness
+                  stats={stats}
+                  onSelectModule={handleSelectModuleFromTracker}
+                  onLaunchMicroDrill={(moduleId) => {
+                    setMicroDrillTargetModuleId(moduleId);
+                    setShowMicroDrill(moduleId);
+                  }}
+                />
+              </div>
             )}
 
             {/* Separate Post-Session Weak-Area Review & Practice Question Generator */}
@@ -853,6 +1146,7 @@ export default function App() {
                   setShowPostSessionReview(false);
                 }}
                 onStartPersonalizedReview={() => setShowReviewSession(true)}
+                onQuickRetrySessionQuestions={handleQuickRetrySessionQuestions}
                 unresolvedMistakesCount={unresolvedMistakesCount}
                 onClose={() => setShowPostSessionReview(false)}
               />
@@ -942,54 +1236,210 @@ export default function App() {
 
               {/* Right Column: Active Scenario Question Card (Takes full width in Focus Mode or when sidebar is collapsed) */}
               <div className={isFocusMode || isMenuHidden ? "w-full lg:col-span-12" : "lg:col-span-8"}>
-                {/* Sequential Path Focus & Progress Bar when a specific Learning Path is selected */}
-                {selectedPathId !== 'all' && (
-                  <div className="mb-4 p-4 rounded-xl border bg-gradient-to-r from-slate-50 to-blue-50/60 border-blue-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-xl bg-[#0078D4] text-white shadow-2xs shrink-0">
-                        <Layers className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-black uppercase tracking-wider text-[#0078D4]">
-                            Sequential Path Focus
-                          </span>
-                          <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-blue-100 text-blue-900">
-                            Path {selectedPathId} of 3
-                          </span>
+                {/* Learning Path Focus Selector & Confirmation + Rolling-Average Adaptive Difficulty Bar */}
+                {!isFocusMode && (
+                  <div className="mb-4 rounded-xl border border-slate-200 bg-white card-elevation overflow-hidden">
+                    {/* Top Summary Bar: Active Path Focus + Rolling-Average Adaptive Difficulty Status */}
+                    <div className="p-3.5 sm:px-4 bg-gradient-to-r from-slate-900 via-[#0078D4] to-sky-700 text-white flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 rounded-lg bg-white/15 text-amber-300 shrink-0">
+                          <Target className="w-4 h-4" />
                         </div>
-                        <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
-                          {LEARNING_PATHS.find((p) => p.id === selectedPathId)?.title}
-                        </h3>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 sm:self-center shrink-0">
-                      <div className="text-left sm:text-right">
-                        <span className="text-xs font-bold text-slate-700 block">
-                          Question {currentQuestionIndex + 1} of {filteredQuestions.length}
-                        </span>
-                        <div className="w-28 bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1">
-                          <div
-                            className="h-full rounded-full bg-[#0078D4] transition-all duration-300"
-                            style={{
-                              width: `${Math.round(((currentQuestionIndex + 1) / Math.max(1, filteredQuestions.length)) * 100)}%`,
-                            }}
-                          />
+                        <div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-sky-200">
+                              Session Learning Path Focus
+                            </span>
+                            {confirmedFocusPathId !== null && selectedPathId === confirmedFocusPathId ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-400 text-slate-950">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Confirmed: Path {confirmedFocusPathId}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-300 text-slate-950">
+                                {selectedPathId === 'all'
+                                  ? 'All 3 AZ-900 Paths'
+                                  : `Path ${selectedPathId} Selected`}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs font-extrabold text-white mt-0.5">
+                            {selectedPathId === 'all'
+                              ? 'Select one of the 3 AZ-900 Learning Paths below to focus your quiz session'
+                              : LEARNING_PATHS.find((p) => p.id === selectedPathId)?.title}
+                          </p>
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => {
-                          setSelectedPathId('all');
-                          setCurrentQuestionIndex(0);
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors cursor-pointer shadow-2xs"
-                        title="View all 3 learning paths together"
-                      >
-                        All Paths
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Rolling-Average Adaptive Difficulty Pill */}
+                        <div
+                          className="px-2.5 py-1 rounded-lg bg-black/25 border border-white/15 text-[11px] flex items-center gap-1.5"
+                          title="Adaptive difficulty starts at Medium (Intermediate) and dynamically increases or decreases based on your rolling average of recent answers in this session."
+                        >
+                          <Zap className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                          <span className="text-sky-100 font-semibold">Adaptive Difficulty:</span>
+                          <span className="font-black text-white">
+                            {effectiveDynamicDifficulty === 'Fundamental'
+                              ? 'Easy (Fundamental)'
+                              : effectiveDynamicDifficulty === 'Intermediate'
+                              ? 'Medium (Intermediate)'
+                              : 'Hard (Advanced)'}
+                          </span>
+                          <span className="px-1.5 py-0.2 rounded bg-white/15 text-[10px] font-black text-amber-200">
+                            {rollingAverageAccuracy !== null
+                              ? `Rolling Avg: ${rollingAverageAccuracy}% (${sessionRollingOutcomes.length}/${ROLLING_WINDOW_SIZE})`
+                              : 'Starts at Medium'}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsPathSelectorExpanded((prev) => !prev)}
+                          className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs transition-colors cursor-pointer shadow-2xs"
+                        >
+                          {isPathSelectorExpanded ? 'Hide Path Selector' : 'Select Focus Path'}
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Interactive 3-Learning-Path Selection & Explicit Confirmation Step */}
+                    {(isPathSelectorExpanded || confirmedFocusPathId === null) && (
+                      <div className="p-4 bg-slate-50/80 border-t border-slate-200/80 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
+                              1. Choose Your AZ-900 Learning Path Focus
+                            </h4>
+                            <p className="text-[11px] text-slate-600">
+                              Select one of the three official AZ-900 Learning Paths and confirm below to generate your focused quiz session.
+                            </p>
+                          </div>
+                          {selectedPathId !== 'all' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setConfirmedFocusPathId(null);
+                                setSelectedPathId('all');
+                                setCurrentQuestionIndex(0);
+                              }}
+                              className="self-start sm:self-auto px-2.5 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-[11px] font-bold text-slate-700 cursor-pointer"
+                            >
+                              Reset to All 3 Paths
+                            </button>
+                          )}
+                        </div>
+
+                        {/* 3 Learning Path Cards */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          {LEARNING_PATHS.map((path) => {
+                            const isCandidate = pendingFocusPathId === path.id;
+                            const isConfirmed =
+                              confirmedFocusPathId === path.id && selectedPathId === path.id;
+                            const pathQCount = questions.filter(
+                              (q) => q.learningPathId === path.id
+                            ).length;
+                            const shortName =
+                              path.id === 1
+                                ? 'Cloud Concepts'
+                                : path.id === 2
+                                ? 'Azure Architecture & Services'
+                                : 'Management & Governance';
+
+                            return (
+                              <button
+                                key={path.id}
+                                type="button"
+                                onClick={() => setPendingFocusPathId(path.id)}
+                                className={`text-left p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                                  isCandidate
+                                    ? 'bg-blue-50/90 border-[#0078D4] ring-2 ring-[#0078D4]/20 shadow-2xs'
+                                    : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between gap-1.5">
+                                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-[#0078D4]/10 text-[#0078D4]">
+                                      Learning Path {path.id}
+                                    </span>
+                                    <span className="text-[10px] font-bold text-slate-500">
+                                      {path.examWeight}
+                                    </span>
+                                  </div>
+                                  <h5 className="text-xs font-extrabold text-slate-900 mt-1.5">
+                                    {shortName}
+                                  </h5>
+                                  <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                                    {path.modules.length} Modules • {pathQCount} Questions
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60 text-[10px] font-bold">
+                                  {isConfirmed ? (
+                                    <span className="text-emerald-700 flex items-center gap-1 font-extrabold">
+                                      <CheckCircle2 className="w-3 h-3" /> Active Session Focus
+                                    </span>
+                                  ) : isCandidate ? (
+                                    <span className="text-[#0078D4] font-extrabold">
+                                      Selected — Ready to Confirm
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">Click to select</span>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Step 2: Explicit Confirmation Bar before generating session questions */}
+                        {(() => {
+                          const candidatePath = LEARNING_PATHS.find(
+                            (p) => p.id === pendingFocusPathId
+                          );
+                          const candidateQCount = questions.filter(
+                            (q) => q.learningPathId === pendingFocusPathId
+                          ).length;
+                          const isAlreadyConfirmed =
+                            confirmedFocusPathId === pendingFocusPathId &&
+                            selectedPathId === pendingFocusPathId;
+
+                          return (
+                            <div className="p-3 rounded-xl bg-gradient-to-r from-blue-50 via-sky-50 to-emerald-50 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-[#0078D4]">
+                                    2. Confirm Learning Path Focus
+                                  </span>
+                                  <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-white border border-blue-200 text-slate-700">
+                                    Starts at Medium Difficulty
+                                  </span>
+                                </div>
+                                <p className="text-xs font-bold text-slate-900">
+                                  {candidatePath?.title} ({candidateQCount} questions across{' '}
+                                  {candidatePath?.modules.length} modules • Weight:{' '}
+                                  {candidatePath?.examWeight})
+                                </p>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmLearningPathFocus(pendingFocusPathId)}
+                                className="px-4 py-2 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0"
+                              >
+                                <CheckCircle2 className="w-4 h-4 text-amber-300" />
+                                <span>
+                                  {isAlreadyConfirmed
+                                    ? `Restart Path ${pendingFocusPathId} Session`
+                                    : `Confirm Path ${pendingFocusPathId} & Generate Questions`}
+                                </span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1016,6 +1466,67 @@ export default function App() {
                     >
                       Clear Search Filter
                     </button>
+                  </div>
+                )}
+
+                {/* Temporary 5-Minute 'Retry Queue' Filter Banner (From Post-Session Weak-Area Quick-Retry) */}
+                {retryQueueSecondsLeft > 0 && retryQueueQuestionIds.length > 0 && (
+                  <div className="mb-4 p-3.5 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50/70 to-amber-50 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 text-xs font-bold text-slate-900">
+                      <span className="p-1.5 rounded-lg bg-amber-500 text-slate-950">
+                        <Clock className="w-4 h-4" />
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-black text-amber-950 uppercase tracking-wider">
+                            Temporary Quick-Retry Queue
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-900 text-amber-300 font-mono">
+                            Expires in {Math.floor(retryQueueSecondsLeft / 60)}:
+                            {retryQueueSecondsLeft % 60 < 10 ? '0' : ''}
+                            {retryQueueSecondsLeft % 60}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-200 text-amber-950">
+                            {retryQueueQuestionIds.length} Review Questions
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-0.5">
+                          {onlyRetryQueue
+                            ? 'Drilling strictly on your Post-Session Weak-Area Review queue.'
+                            : 'Your 5-minute Retry Queue is available—click below to filter to it.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOnlyRetryQueue((prev) => !prev);
+                          setCurrentQuestionIndex(0);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                          onlyRetryQueue
+                            ? 'bg-slate-900 text-amber-300'
+                            : 'bg-amber-500 hover:bg-amber-600 text-slate-950'
+                        }`}
+                      >
+                        {onlyRetryQueue ? 'Show All Questions' : 'Activate Retry Queue Filter'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRetryQueueExpiresAt(null);
+                          setRetryQueueQuestionIds([]);
+                          setOnlyRetryQueue(false);
+                          setCurrentQuestionIndex(0);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 text-xs font-bold cursor-pointer"
+                      >
+                        Clear Queue
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -1065,6 +1576,22 @@ export default function App() {
                       missedQuestionsByPath[currentQ.learningPathId]?.length || 0
                     }
                     isAudioMuted={isAudioMuted}
+                    rollingAverageAccuracy={rollingAverageAccuracy}
+                    rollingWindowCount={sessionRollingOutcomes.length}
+                    activeQuickFilter={activeQuickFilter}
+                    onSelectQuickFilter={handleSelectQuickFilter}
+                    bookmarksCount={stats.bookmarks.length}
+                    aiScenariosCount={questions.filter((q) => q.isAiGenerated).length}
+                    retryQueueCount={retryQueueQuestionIds.length}
+                    retryQueueSecondsLeft={retryQueueSecondsLeft}
+                    questionSortOrder={questionSortOrder}
+                    onChangeSortOrder={handleChangeSortOrder}
+                    onOpenMockExam={() => setShowMockExam(true)}
+                    onOpenAiGenerator={() => setActiveTab('ai-builder')}
+                    onNavigateTab={(tab) => setActiveTab(tab)}
+                    showWorkspacePanels={showWorkspacePanels}
+                    onToggleWorkspacePanels={() => setShowWorkspacePanels((prev) => !prev)}
+                    externalStudyZoneOpenTrigger={externalStudyZoneOpenTrigger}
                   />
                 ) : (
                   <div className="bg-white rounded-xl border border-slate-200 card-elevation p-12 text-center space-y-4">

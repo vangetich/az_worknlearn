@@ -34,6 +34,9 @@ import {
   Lock,
   Unlock,
   QrCode,
+  ChevronDown,
+  SlidersHorizontal,
+  Layers,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
@@ -75,6 +78,28 @@ interface QuizCardProps {
   isRetryingIncorrectInPath?: boolean;
   incorrectCountInCurrentPath?: number;
   isAudioMuted?: boolean;
+  rollingAverageAccuracy?: number | null;
+  rollingWindowCount?: number;
+  activeQuickFilter?: 'all' | 'bookmarks' | 'ai' | 'mistakes' | 'retry-queue';
+  onSelectQuickFilter?: (
+    nextFilter: 'all' | 'bookmarks' | 'ai' | 'mistakes' | 'retry-queue'
+  ) => void;
+  bookmarksCount?: number;
+  aiScenariosCount?: number;
+  retryQueueCount?: number;
+  retryQueueSecondsLeft?: number;
+  questionSortOrder?: 'default' | 'newest-first' | 'hardest-first' | 'module-progression' | 'easiest-first';
+  onChangeSortOrder?: (
+    nextSort: 'default' | 'newest-first' | 'hardest-first' | 'module-progression' | 'easiest-first'
+  ) => void;
+  onOpenMockExam?: () => void;
+  onOpenAiGenerator?: () => void;
+  onNavigateTab?: (
+    tab: 'study-decks' | 'flashcards' | 'assistant' | 'adaptive' | 'history' | 'analytics'
+  ) => void;
+  showWorkspacePanels?: boolean;
+  onToggleWorkspacePanels?: () => void;
+  externalStudyZoneOpenTrigger?: number;
 }
 
 const EXAM_SIMULATION_DURATION_SECONDS = 45 * 60; // 45:00 standard AZ-900 exam duration
@@ -151,6 +176,111 @@ function getFoundationalConceptSentence(question: Question): string {
   return `${serviceLabel} — ${coreSentence}`;
 }
 
+// Predefined child-friendly, non-technical ELI5 Azure analogies mapped to question concepts & modules
+function getEli5AnalogyForQuestion(question: Question): {
+  title: string;
+  analogy: string;
+  takeaway: string;
+} {
+  const combined = `${question.scenario} ${question.question} ${question.whyCorrect} ${question.moduleTitle}`.toLowerCase();
+
+  if (combined.includes('shared responsibility') || combined.includes('iaas') || combined.includes('paas') || combined.includes('saas')) {
+    return {
+      title: 'The Apartment vs. Hotel Analogy (Shared Responsibility)',
+      analogy:
+        'Imagine living in a house: with IaaS, Microsoft builds the empty apartment building, and you bring your own furniture and cook your own food. With PaaS, Microsoft furnishes the kitchen and cleans the stove—you just bring your recipe and ingredients. With SaaS, it is like ordering at a restaurant! But in ALL three, you are always in charge of locking your own diary (your Data), holding your own phone (Endpoints), and deciding who gets a spare key (Accounts & Identities).',
+      takeaway: 'No matter how much Microsoft manages the building, your Data, Devices, and Keys (Identities) always belong to you!',
+    };
+  }
+  if (combined.includes('scale out') || combined.includes('scale up') || combined.includes('horizontal') || combined.includes('vertical') || combined.includes('elasticity')) {
+    return {
+      title: 'The Grocery Store Checkout Lanes (Scaling & Elasticity)',
+      analogy:
+        'Vertical Scaling (Scale Up) is like giving one cashier superpowers so they scan items twice as fast. Horizontal Scaling (Scale Out) is like opening 5 more checkout lanes when a big crowd arrives. Elasticity is an automatic sensor that opens extra lanes when the line gets long and closes them when shoppers go home!',
+      takeaway: 'Scale Up = 1 bigger machine. Scale Out = more machines working together. Elasticity = automatic!',
+    };
+  }
+  if (combined.includes('capex') || combined.includes('opex') || combined.includes('consumption')) {
+    return {
+      title: 'Buying a School Bus vs. Riding a City Bus (CapEx vs. OpEx)',
+      analogy:
+        'CapEx is like buying a whole school bus upfront with a giant piggy bank—even if it sits parked all summer. OpEx (Cloud) is like tapping a bus card only when you actually take a ride: zero upfront cost, and you only pay for the exact minutes you travel!',
+      takeaway: 'CapEx = big upfront purchase. OpEx = pay-as-you-go for what you use right now.',
+    };
+  }
+  if (combined.includes('availability zone') || combined.includes('region pair')) {
+    return {
+      title: 'Three Treehouses in One Backyard vs. Another City (AZs vs. Region Pairs)',
+      analogy:
+        'Availability Zones are 3 separate treehouses in the same neighborhood, each with its own flashlight and snack box—if one tree branch shakes, your friends hop to the next treehouse in seconds. A Region Pair is a backup clubhouse 300 miles away in another town in case a huge snowstorm hits your whole city!',
+      takeaway: 'Same neighborhood, separate power = Availability Zones. 300+ miles away = Region Pairs.',
+    };
+  }
+  if (combined.includes('expressroute') || combined.includes('vpn gateway') || combined.includes('peering')) {
+    return {
+      title: 'Public Highway Tunnel vs. Private Underground Train (VPN vs. ExpressRoute)',
+      analogy:
+        'A VPN Gateway is like driving an armored car on the busy public highway—your boxes are locked inside, but you still share the road with everyone else. ExpressRoute is your own private underground train track straight to Azure where nobody else is allowed!',
+      takeaway: 'Encrypted over public internet = VPN Gateway. Private dedicated track bypassing the internet = ExpressRoute.',
+    };
+  }
+  if (combined.includes('archive') || combined.includes('cool') || combined.includes('hot tier') || combined.includes('access tier')) {
+    return {
+      title: 'Backpack, Bedroom Closet, and Grandpa’s Attic (Storage Tiers)',
+      analogy:
+        'The Hot Tier is your school backpack—you grab pencils every 5 minutes, so it stays right beside you. The Cool/Cold Tier is your bedroom closet for winter jackets you only wear next month. The Archive Tier is a locked box in the deep attic: super cheap to leave there for years, but it takes a few hours to climb up the ladder and unpack it!',
+      takeaway: 'Everyday use = Hot. Occasional = Cool (30d) / Cold (90d). Deep long-term storage (180d+, hours to fetch) = Archive.',
+    };
+  }
+  if (combined.includes('lrs') || combined.includes('zrs') || combined.includes('grs') || combined.includes('redundancy')) {
+    return {
+      title: 'Photocopying Your Favorite Drawing (LRS, ZRS & GRS)',
+      analogy:
+        'LRS means making 3 photocopies of your drawing and keeping all 3 in your desk drawer (1 building). ZRS puts 1 copy in your house, 1 at your neighbor’s, and 1 at the library down the street (3 buildings in 1 town). GRS makes 3 copies in your town PLUS mails 3 extra copies to your cousin 300 miles away (6 copies total)!',
+      takeaway: 'LRS = 1 building (3 copies). ZRS = 3 buildings in 1 region. GRS = 2 regions (6 copies).',
+    };
+  }
+  if (combined.includes('conditional access') || combined.includes('entra') || combined.includes('mfa') || combined.includes('zero trust')) {
+    return {
+      title: 'The Smart Clubhouse Bouncer (Conditional Access & Zero Trust)',
+      analogy:
+        'When you walk up to the clubhouse door from your normal bicycle, the bouncer recognizes your badge right away. But if you show up at midnight wearing a space helmet from another country, the bouncer says: "Hold on! Show me your secret second password (MFA) first!"',
+      takeaway: 'Checking WHO you are + WHERE you are + WHAT device you use before opening the door = Conditional Access.',
+    };
+  }
+  if (combined.includes('tco') || combined.includes('pricing calculator') || combined.includes('cost management')) {
+    return {
+      title: 'Moving Cost Estimator vs. Grocery Receipt Calculator (TCO vs. Pricing)',
+      analogy:
+        'The TCO Calculator is like comparing how much money your family saves by selling a gas-guzzling van and electricity bills versus switching to the cloud. The Pricing Calculator is like adding items to a shopping cart to see how much 3 cloud computers will cost per month!',
+      takeaway: 'Compare old basement servers vs. Azure savings = TCO Calculator. Price out new Azure toys = Pricing Calculator.',
+    };
+  }
+  if (combined.includes('policy') || combined.includes('rbac') || combined.includes('lock') || combined.includes('cannotdelete')) {
+    return {
+      title: 'Hall Pass vs. School Rules vs. Superglue (RBAC, Policy & Locks)',
+      analogy:
+        'RBAC is your hall pass—it says WHO is allowed into the art room. Azure Policy is the school rulebook—it says "Everyone may only use washable paint, never permanent markers!" And a CanNotDelete Lock is like putting safety superglue on the class trophy so even the Principal cannot accidentally throw it in the trash!',
+      takeaway: 'RBAC = Who has permission. Policy = What rules resources must follow. Lock = Nobody can accidentally delete it!',
+    };
+  }
+  if (combined.includes('arc') || combined.includes('bicep') || combined.includes('arm template')) {
+    return {
+      title: 'The Universal Remote & LEGO Instruction Book (Azure Arc & ARM/Bicep)',
+      analogy:
+        'ARM Templates and Bicep are like an official LEGO instruction booklet—hand it to Azure and it builds the exact same castle every single time. Azure Arc is a universal remote control that lets Azure manage toys sitting in your own bedroom or even at a friend’s house!',
+      takeaway: 'Repeatable blueprint = ARM/Bicep. Manage servers outside Azure from one screen = Azure Arc.',
+    };
+  }
+
+  return {
+    title: `Kid-Friendly Cloud Analogy • Module ${question.moduleId}`,
+    analogy:
+      'Think of Azure like a giant, friendly utility company for computer power. Instead of buying heavy machines and keeping them in your garage, you rent just the exact puzzle piece you need—and Microsoft takes care of the plugs, security guards, and backup generators!',
+    takeaway: `Focus on the main goal in the story: pick the simplest Azure tool that solves the problem without extra chore work.`,
+  };
+}
+
 export const QuizCard: React.FC<QuizCardProps> = ({
   question,
   questionIndex,
@@ -181,6 +311,22 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   isRetryingIncorrectInPath = false,
   incorrectCountInCurrentPath = 0,
   isAudioMuted,
+  rollingAverageAccuracy = null,
+  rollingWindowCount = 0,
+  activeQuickFilter = 'all',
+  onSelectQuickFilter,
+  bookmarksCount = 0,
+  aiScenariosCount = 0,
+  retryQueueCount = 0,
+  retryQueueSecondsLeft = 0,
+  questionSortOrder = 'default',
+  onChangeSortOrder,
+  onOpenMockExam,
+  onOpenAiGenerator,
+  onNavigateTab,
+  showWorkspacePanels = false,
+  onToggleWorkspacePanels,
+  externalStudyZoneOpenTrigger = 0,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
@@ -195,6 +341,157 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const [shareCopiedToast, setShareCopiedToast] = useState<boolean>(false);
   const [showQuickStudy, setShowQuickStudy] = useState<boolean>(false);
+  const [showStudyZoneMenu, setShowStudyZoneMenu] = useState<boolean>(false);
+  const studyZoneMenuRef = React.useRef<HTMLDivElement>(null);
+
+  // Accordion section states inside the centered Study Zone popup
+  const [openStudyZoneSections, setOpenStudyZoneSections] = useState<{
+    sort: boolean;
+    mode: boolean;
+    aids: boolean;
+    tools: boolean;
+  }>({
+    sort: true,
+    mode: true,
+    aids: false,
+    tools: true,
+  });
+
+  const toggleStudyZoneSection = (section: 'sort' | 'mode' | 'aids' | 'tools') => {
+    setOpenStudyZoneSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
+
+  React.useEffect(() => {
+    if (externalStudyZoneOpenTrigger > 0) {
+      setShowStudyZoneMenu(true);
+    }
+  }, [externalStudyZoneOpenTrigger]);
+
+  // ELI5 (Explain Like I'm 5) analogy toggle state
+  const [showEli5Analogy, setShowEli5Analogy] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('az900_eli5_enabled') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleEli5 = () => {
+    setShowEli5Analogy((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('az900_eli5_enabled', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const eli5Content = React.useMemo(() => getEli5AnalogyForQuestion(question), [question]);
+
+  // Mobile-responsive Quick Switcher horizontal swipe state
+  const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
+  const [swipeFeedbackToast, setSwipeFeedbackToast] = useState<string | null>(null);
+
+  const quickSwitcherOptions = React.useMemo(() => {
+    const items: Array<{
+      id: 'all' | 'bookmarks' | 'ai' | 'mistakes' | 'retry-queue';
+      label: string;
+      shortLabel: string;
+      count?: number;
+    }> = [
+      { id: 'all', label: 'All Questions', shortLabel: 'All Qs', count: totalQuestions },
+      { id: 'bookmarks', label: 'Bookmarks', shortLabel: 'Saved', count: bookmarksCount },
+      { id: 'ai', label: 'AI Scenarios', shortLabel: 'AI Set', count: aiScenariosCount },
+      { id: 'mistakes', label: 'Unresolved Mistakes', shortLabel: 'Mistakes', count: unresolvedMistakesCount },
+    ];
+    if (retryQueueCount > 0 && retryQueueSecondsLeft > 0) {
+      items.unshift({
+        id: 'retry-queue',
+        label: `Retry Queue (${Math.floor(retryQueueSecondsLeft / 60)}:${
+          retryQueueSecondsLeft % 60 < 10 ? '0' : ''
+        }${retryQueueSecondsLeft % 60})`,
+        shortLabel: '5m Retry Queue',
+        count: retryQueueCount,
+      });
+    }
+    return items;
+  }, [
+    totalQuestions,
+    bookmarksCount,
+    aiScenariosCount,
+    unresolvedMistakesCount,
+    retryQueueCount,
+    retryQueueSecondsLeft,
+  ]);
+
+  const handleCycleQuickFilter = (direction: 'next' | 'prev') => {
+    if (!onSelectQuickFilter || quickSwitcherOptions.length === 0) return;
+    const currentIdx = Math.max(
+      0,
+      quickSwitcherOptions.findIndex((o) => o.id === activeQuickFilter)
+    );
+    const nextIdx =
+      direction === 'next'
+        ? (currentIdx + 1) % quickSwitcherOptions.length
+        : (currentIdx - 1 + quickSwitcherOptions.length) % quickSwitcherOptions.length;
+    const target = quickSwitcherOptions[nextIdx];
+    onSelectQuickFilter(target.id);
+    setSwipeFeedbackToast(`Switched to: ${target.label}`);
+    setTimeout(() => setSwipeFeedbackToast(null), 2200);
+  };
+
+  const handleCardTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  };
+
+  const handleCardTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.changedTouches.length !== 1) return;
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+
+    // Trigger Quick Switcher horizontal swipe when horizontal movement > 68px and dominates vertical scroll
+    if (Math.abs(dx) > 68 && Math.abs(dx) > Math.abs(dy) * 1.6) {
+      if (dx < 0) {
+        handleCycleQuickFilter('next');
+      } else {
+        handleCycleQuickFilter('prev');
+      }
+    }
+  };
+
+  // Close Study Zone dropdown when clicking outside or pressing Escape
+  React.useEffect(() => {
+    if (!showStudyZoneMenu) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        studyZoneMenuRef.current &&
+        !studyZoneMenuRef.current.contains(event.target as Node)
+      ) {
+        setShowStudyZoneMenu(false);
+      }
+    };
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowStudyZoneMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [showStudyZoneMenu]);
 
   // Local fallback state for permanent difficulty lock if parent doesn't control it
   const [localLockedDifficulty, setLocalLockedDifficulty] = useState<
@@ -805,488 +1102,1001 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       ? 'border-blue-200 bg-blue-50 text-blue-800'
       : 'border-orange-200 bg-orange-50 text-orange-800';
 
+  // Count active Study Zone tools/filters so user can see at a glance
+  const activeStudyZoneToolsCount = [
+    isExamMode,
+    selectedDifficultyFilter !== 'all',
+    activeLockedDifficulty !== null,
+    showEli5Analogy && !isExamMode,
+    showQuickStudy && !isExamMode,
+    showKnowledgeCheck && !isExamMode,
+    isSpeaking,
+    hasNote,
+    isDeepWorkEnabled,
+    isFocusMode,
+    isRetryingIncorrectInPath,
+  ].filter(Boolean).length;
+
   return (
-    <div className="bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden transition-all">
-      {/* Top Motif Header Bar */}
-      <div className="relative px-6 py-4 bg-slate-50/70 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Learning Path & Module Badges */}
-          <span
-            className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border ${pathColor}`}
-          >
-            Path {question.learningPathId}: Module {question.moduleId}
-          </span>
-          <span className="text-xs font-medium text-slate-600 hidden sm:inline">
-            {question.moduleTitle}
-          </span>
+    <div
+      onTouchStart={handleCardTouchStart}
+      onTouchEnd={handleCardTouchEnd}
+      className="bg-white rounded-xl border border-slate-200/90 card-elevation overflow-visible transition-all"
+    >
+      {/* Mobile-Responsive 'Quick Switcher' Swipe Gesture Bar (Toggle Active Filtered Lists Without Opening Menu) */}
+      {onSelectQuickFilter && (
+        <div className="px-4 sm:px-6 py-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border-b border-slate-700/80 flex flex-wrap items-center justify-between gap-2 rounded-t-xl">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1 shrink-0 mr-1">
+              <Layers className="w-3 h-3 text-amber-400" />
+              <span>Quick Switcher:</span>
+            </span>
 
-          {/* Clickable Multi-State Difficulty Badge & Filter (Fundamental, Intermediate, Advanced) */}
-          <div className="inline-flex items-center rounded-lg border border-slate-200/90 bg-white p-0.5 shadow-2xs">
-            <button
-              type="button"
-              onClick={handleCycleDifficultyBadgeFilter}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                question.difficulty === 'Fundamental'
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                  : question.difficulty === 'Intermediate'
-                  ? 'bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100'
-                  : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
-              }`}
-              title={`Current Question Difficulty: ${question.difficulty}. Click to cycle multi-state difficulty filter (${
-                selectedDifficultyFilter === 'all' ? 'All Difficulties' : `Filtered: ${selectedDifficultyFilter}`
-              })`}
-            >
-              <Filter className="w-2.5 h-2.5 opacity-75" />
-              <span>{question.difficulty}</span>
-            </button>
-
-            {onSelectDifficultyFilter && (
-              <div
-                className="inline-flex items-center gap-0.5 pl-1 ml-1 border-l border-slate-200 text-[10px] font-extrabold"
-                role="group"
-                aria-label="Filter active quiz questions by difficulty level"
-              >
-                {(['Fundamental', 'Intermediate', 'Advanced'] as const).map((level) => {
-                  const isFiltered = selectedDifficultyFilter === level;
-                  const shortLabel =
-                    level === 'Fundamental' ? 'Fund' : level === 'Intermediate' ? 'Inter' : 'Adv';
-                  const activeColor =
-                    level === 'Fundamental'
-                      ? 'bg-emerald-600 text-white'
-                      : level === 'Intermediate'
-                      ? 'bg-[#0078D4] text-white'
-                      : 'bg-purple-600 text-white';
-
-                  return (
-                    <button
-                      key={level}
-                      type="button"
-                      onClick={() =>
-                        onSelectDifficultyFilter(isFiltered ? 'all' : level)
-                      }
-                      className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
-                        isFiltered
-                          ? `${activeColor} shadow-2xs`
-                          : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+            {quickSwitcherOptions.map((item) => {
+              const isActive = activeQuickFilter === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onSelectQuickFilter(item.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                    isActive
+                      ? item.id === 'retry-queue'
+                        ? 'bg-amber-400 text-slate-950 font-black shadow-2xs'
+                        : 'bg-[#0078D4] text-white font-extrabold shadow-2xs'
+                      : 'bg-white/10 hover:bg-white/20 text-slate-200'
+                  }`}
+                  title={`Switch active question list to ${item.label} (or swipe horizontally on the card)`}
+                >
+                  <span>{item.shortLabel}</span>
+                  {item.count !== undefined && (
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                        isActive ? 'bg-black/20 text-current' : 'bg-white/15 text-slate-300'
                       }`}
-                      title={
-                        isFiltered
-                          ? `Showing only ${level} questions. Click to show all difficulties.`
-                          : `Filter active quiz questions to ${level} difficulty only`
-                      }
                     >
-                      {shortLabel}
-                    </button>
-                  );
-                })}
-                {selectedDifficultyFilter !== 'all' && (
-                  <button
-                    type="button"
-                    onClick={() => onSelectDifficultyFilter('all')}
-                    className="px-1 py-0.5 rounded text-rose-600 hover:bg-rose-50 font-black cursor-pointer"
-                    title="Clear difficulty filter (show all)"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            )}
+                      {item.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          {question.isAiGenerated && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-gradient-to-r from-amber-100 to-orange-100 text-amber-900 border border-amber-300">
-              <Sparkles className="w-3 h-3 text-amber-600" />
-              AI Scenario
-            </span>
-          )}
-
-          {/* Dynamic Difficulty Scaling & Permanent Difficulty Lock UI Toggle */}
-          <div className="inline-flex items-center rounded-lg border border-slate-200/90 bg-white p-0.5 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => {
-                if (activeLockedDifficulty !== null) {
-                  handleSetLockedDifficulty(null);
-                } else if (onToggleDynamicDifficulty) {
-                  onToggleDynamicDifficulty();
-                }
-              }}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                activeLockedDifficulty !== null
-                  ? 'bg-amber-100 text-amber-950 border border-amber-300'
-                  : isDynamicDifficultyEnabled
-                  ? 'bg-sky-50 text-[#0078D4] border border-sky-200'
-                  : 'bg-slate-100 text-slate-500'
-              }`}
-              title={
-                activeLockedDifficulty !== null
-                  ? `Dynamic Difficulty is permanently locked to ${activeLockedDifficulty} mode. Click to unlock automatic progression.`
-                  : 'Dynamic Difficulty: Automatically adjusts based on your consecutive answers, or click a mode to lock permanently.'
-              }
-            >
-              {activeLockedDifficulty !== null ? (
-                <Lock className="w-3 h-3 text-amber-700" />
-              ) : (
-                <Unlock className="w-3 h-3 text-[#0078D4]" />
-              )}
-              <span>
-                {activeLockedDifficulty !== null
-                  ? `Locked: ${activeLockedDifficulty}`
-                  : `Dynamic: ${dynamicDifficulty || 'Intermediate'}`}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {swipeFeedbackToast ? (
+              <span className="text-[10px] font-extrabold text-amber-300 bg-white/10 px-2 py-0.5 rounded-md animate-pulse">
+                {swipeFeedbackToast}
               </span>
-              {consecutiveStreak > 0 && (
-                <span className="text-[10px] font-black bg-amber-200/90 text-amber-950 px-1 rounded-sm">
-                  {consecutiveStreak}🔥
-                </span>
-              )}
-            </button>
-
-            {/* Permanent Lock Mode Selector Buttons (Fundamental / Intermediate / Advanced) */}
-            <div
-              className="inline-flex items-center gap-0.5 pl-1 ml-1 border-l border-slate-200 text-[10px] font-extrabold"
-              role="group"
-              aria-label="Permanently lock dynamic difficulty adjustment mode"
-            >
-              {(['Fundamental', 'Intermediate', 'Advanced'] as const).map((mode) => {
-                const isLockedToMode = activeLockedDifficulty === mode;
-                const shortMode =
-                  mode === 'Fundamental' ? 'F' : mode === 'Intermediate' ? 'I' : 'A';
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() =>
-                      handleSetLockedDifficulty(isLockedToMode ? null : mode)
-                    }
-                    className={`px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-all cursor-pointer ${
-                      isLockedToMode
-                        ? 'bg-amber-600 text-white shadow-2xs font-black'
-                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                    title={
-                      isLockedToMode
-                        ? `Unlock ${mode} mode and return to automatic difficulty progression`
-                        : `Permanently lock dynamic difficulty to ${mode} mode (overrides automatic progression)`
-                    }
-                  >
-                    {isLockedToMode && <Lock className="w-2.5 h-2.5" />}
-                    <span>{shortMode}</span>
-                  </button>
-                );
-              })}
+            ) : (
+              <span className="text-[10px] text-slate-300 hidden sm:inline">
+                Swipe ⇄ on card to switch lists
+              </span>
+            )}
+            <div className="inline-flex items-center rounded-lg bg-white/10 border border-white/15 p-0.5">
+              <button
+                type="button"
+                onClick={() => handleCycleQuickFilter('prev')}
+                className="p-1 hover:bg-white/15 rounded text-slate-200 hover:text-white cursor-pointer"
+                title="Previous filtered list"
+                aria-label="Previous filtered list"
+              >
+                <ArrowLeft className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCycleQuickFilter('next')}
+                className="p-1 hover:bg-white/15 rounded text-slate-200 hover:text-white cursor-pointer"
+                title="Next filtered list"
+                aria-label="Next filtered list"
+              >
+                <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Counter, Study vs Exam Mode Toggle, Exam Countdown Timer, Share Deep-Link, Focus Mode Toggle and Bookmark */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-          {/* Global Toggle: Study Mode vs. Exam Simulation Mode */}
-          <div
-            className="inline-flex items-center p-0.5 rounded-xl bg-slate-200/90 border border-slate-300/80 text-[11px] font-bold shadow-2xs"
-            role="group"
-            aria-label="Switch between Study Mode and Exam Simulation Mode"
+      {/* Uncluttered, Neatly Ordered Top Header Bar with Study Zone Dropdown Menu */}
+      <div
+        className={`relative px-4 sm:px-6 py-3 bg-slate-50/80 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2.5 ${
+          !onSelectQuickFilter ? 'rounded-t-xl' : ''
+        }`}
+      >
+        {/* Left Group: Path/Module Identity + Compact Difficulty Status + Active Mode Indicators */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${pathColor}`}
           >
-            <button
-              type="button"
-              onClick={() => handleToggleQuizCardMode('study')}
-              className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
-                !isExamMode
-                  ? 'bg-[#0078D4] text-white font-extrabold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Study Mode: Immediate answer feedback, hints, and distractor explanations enabled"
-            >
-              <BookOpen className="w-3 h-3" />
-              <span>Study Mode</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleToggleQuizCardMode('exam')}
-              className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
-                isExamMode
-                  ? 'bg-slate-900 text-amber-300 font-extrabold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Exam Simulation Mode: No hints, no immediate answer feedback, and active Time Remaining countdown"
-            >
-              <ShieldCheck className="w-3 h-3" />
-              <span>Exam Simulation</span>
-            </button>
-          </div>
+            Path {question.learningPathId}: Module {question.moduleId}
+          </span>
 
-          {/* Exam Simulation Mode 'Time Remaining' Countdown Timer */}
+          <span className="text-xs font-semibold text-slate-700 hidden md:inline max-w-[230px] truncate">
+            {question.moduleTitle}
+          </span>
+
+          {/* Compact Difficulty & Adaptive Status Pill */}
+          <button
+            type="button"
+            onClick={handleCycleDifficultyBadgeFilter}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+              question.difficulty === 'Fundamental'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                : question.difficulty === 'Intermediate'
+                ? 'bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100'
+                : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
+            }`}
+            title={`Question Difficulty: ${question.difficulty} • Adaptive Tier: ${
+              activeLockedDifficulty
+                ? `Locked (${activeLockedDifficulty})`
+                : dynamicDifficulty || 'Intermediate'
+            }. Click to cycle difficulty filter or open Study Zone menu for granular controls.`}
+          >
+            <span>{question.difficulty}</span>
+            <span className="opacity-40">•</span>
+            <span className="text-[10px] font-extrabold text-slate-600">
+              {activeLockedDifficulty
+                ? `🔒 ${activeLockedDifficulty.slice(0, 4)}`
+                : `Adaptive: ${
+                    (dynamicDifficulty || 'Intermediate') === 'Fundamental'
+                      ? 'Easy'
+                      : (dynamicDifficulty || 'Intermediate') === 'Intermediate'
+                      ? 'Med'
+                      : 'Hard'
+                  }`}
+            </span>
+            {consecutiveStreak > 0 && (
+              <span className="text-[10px] font-black bg-amber-200/90 text-amber-950 px-1 rounded-sm">
+                {consecutiveStreak}🔥
+              </span>
+            )}
+          </button>
+
+          {question.isAiGenerated && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-300">
+              <Sparkles className="w-3 h-3 text-amber-600" />
+              <span>AI</span>
+            </span>
+          )}
+
+          {/* Exam Simulation Live Countdown Pill (Only shown when Exam Mode is active) */}
           {isExamMode && (
             <div
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-extrabold shadow-xs transition-all ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-extrabold shadow-2xs ${
                 examTimeRemaining <= 180
-                  ? 'bg-rose-950 text-rose-200 border-rose-500 ring-2 ring-rose-500/40 animate-pulse'
-                  : examTimeRemaining <= 600
-                  ? 'bg-amber-950 text-amber-200 border-amber-500 ring-1 ring-amber-400/30'
+                  ? 'bg-rose-950 text-rose-200 border-rose-500 animate-pulse'
                   : 'bg-slate-900 text-amber-300 border-slate-700'
               }`}
-              title="Certification Exam Simulation Countdown: Official 45-minute AZ-900 exam time pressure"
             >
-              <Clock
-                className={`w-3.5 h-3.5 ${
-                  examTimeRemaining <= 180 ? 'text-rose-400 animate-spin' : 'text-amber-400'
-                }`}
-              />
-              <span className="uppercase tracking-wider text-[10px] text-slate-300">
-                Time Remaining:
-              </span>
-              <span className="font-mono text-xs font-black tracking-tight text-white">
-                {examTimeRemaining > 0 ? formatTimer(examTimeRemaining) : '0:00 (Time Up)'}
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span className="font-mono text-white">
+                {examTimeRemaining > 0 ? formatTimer(examTimeRemaining) : '0:00'}
               </span>
               <button
                 type="button"
                 onClick={handleResetExamCountdown}
-                className="ml-0.5 p-0.5 rounded hover:bg-white/15 text-slate-300 hover:text-white transition-colors cursor-pointer"
-                title="Reset 45:00 Exam Simulation countdown timer"
-                aria-label="Reset Exam Simulation countdown timer"
+                className="p-0.5 rounded hover:bg-white/15 text-slate-300 hover:text-white cursor-pointer"
+                title="Reset 45:00 Exam Simulation timer"
               >
                 <RotateCcw className="w-3 h-3" />
               </button>
             </div>
           )}
 
-          {/* Focus Mode Toggle */}
-          {onToggleFocusMode && (
+          {/* Active ELI5 Indicator Chip */}
+          {showEli5Analogy && !isExamMode && (
             <button
               type="button"
-              onClick={onToggleFocusMode}
-              className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                isFocusMode
-                  ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-xs'
-                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-              }`}
-              title={
-                isFocusMode
-                  ? 'Exit Focus Mode: Restore navigation bar and footer'
-                  : 'Focus Mode: Hide navigation bar and footer to maximize test-like concentration'
-              }
+              onClick={handleToggleEli5}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-amber-100 text-amber-950 border border-amber-300 cursor-pointer"
+              title="ELI5 Child-Friendly Analogy active. Click to hide."
             >
-              {isFocusMode ? (
-                <>
-                  <Minimize2 className="w-3.5 h-3.5" />
-                  <span>Exit Focus</span>
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="w-3.5 h-3.5 text-[#0078D4]" />
-                  <span>Focus Mode</span>
-                </>
-              )}
+              <Sparkles className="w-3 h-3 text-amber-600" />
+              <span>ELI5 On</span>
             </button>
           )}
+        </div>
 
-          {/* Read Question (SpeechSynthesis API) Button */}
-          <button
-            type="button"
-            onClick={handleToggleReadQuestion}
-            className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              isSpeaking
-                ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs ring-2 ring-emerald-400/40'
-                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-            }`}
-            title={
-              isSpeaking
-                ? 'Stop reading question audio'
-                : 'Read question aloud with browser SpeechSynthesis for accessibility'
-            }
-          >
-            {isSpeaking ? (
-              <>
-                <Square className="w-3.5 h-3.5 fill-current text-white" />
-                <span>Stop</span>
-                <span className="flex items-center gap-0.5 ml-0.5">
-                  <span className="w-1 h-2.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1 h-3.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-1 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </span>
-              </>
-            ) : (
-              <>
-                <Volume2 className="w-3.5 h-3.5 text-[#0078D4]" />
-                <span className="hidden sm:inline">Read Question</span>
-                <span className="sm:hidden">Read</span>
-              </>
-            )}
-          </button>
-
-          {/* Quick Notes Slide-Out Trigger */}
-          <button
-            type="button"
-            onClick={() => setShowQuickNotes(true)}
-            className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              hasNote
-                ? 'bg-amber-50 text-amber-900 border-amber-300 shadow-2xs ring-1 ring-amber-400/30'
-                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-            }`}
-            title={
-              hasNote
-                ? 'Open all saved study notes drawer'
-                : 'Open study notes drawer'
-            }
-          >
-            <FileText className={`w-3.5 h-3.5 ${hasNote ? 'text-amber-600' : 'text-slate-400'}`} />
-            <span>Notes</span>
-            {hasNote && (
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            )}
-          </button>
-
-          {/* Retry Incorrect in Current Learning Path Button */}
-          {onToggleRetryIncorrectInPath && (
-            <button
-              type="button"
-              onClick={handleRetryIncorrectClick}
-              className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                isRetryingIncorrectInPath
-                  ? 'bg-rose-600 text-white border-rose-700 shadow-xs ring-2 ring-rose-400/40'
-                  : incorrectCountInCurrentPath > 0
-                  ? 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-300 shadow-2xs'
-                  : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200 shadow-2xs'
-              }`}
-              title={
-                isRetryingIncorrectInPath
-                  ? `Showing only missed questions in Learning Path ${question.learningPathId}. Click to restore all path questions.`
-                  : `Filter this quiz session to only show your previously missed questions in Learning Path ${question.learningPathId} (${incorrectCountInCurrentPath} missed)`
-              }
-            >
-              <RotateCcw
-                className={`w-3.5 h-3.5 ${
-                  isRetryingIncorrectInPath
-                    ? 'text-white'
-                    : incorrectCountInCurrentPath > 0
-                    ? 'text-rose-600'
-                    : 'text-slate-400'
-                }`}
-              />
-              <span>{isRetryingIncorrectInPath ? 'Exit Retry Incorrect' : 'Retry Incorrect'}</span>
-              <span
-                className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                  isRetryingIncorrectInPath
-                    ? 'bg-white/25 text-white'
-                    : incorrectCountInCurrentPath > 0
-                    ? 'bg-rose-600 text-white'
-                    : 'bg-slate-100 text-slate-600'
-                }`}
-              >
-                {incorrectCountInCurrentPath} • P{question.learningPathId}
-              </span>
-            </button>
-          )}
-
-          {/* Virtual Study Room Trigger */}
-          {onOpenStudyRoom && (
-            <button
-              type="button"
-              onClick={onOpenStudyRoom}
-              className="px-2.5 py-1 rounded-lg border border-sky-200 bg-sky-50/80 hover:bg-sky-100 text-[#0078D4] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              title="Open Virtual Study Room to discuss this question with peers"
-            >
-              <Users className="w-3.5 h-3.5 text-[#0078D4]" />
-              <span className="hidden sm:inline">Study Room</span>
-            </button>
-          )}
-
-          {/* Quick Study Toggle: Frequently Missed Key Terms (Hidden in Exam Simulation Mode) */}
-          {!isExamMode && (
-            <button
-              type="button"
-              onClick={() => setShowQuickStudy(!showQuickStudy)}
-              className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                showQuickStudy
-                  ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white border-amber-600 shadow-xs ring-2 ring-amber-400/40'
-                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-              }`}
-              title={showQuickStudy ? 'Hide Quick Study overlay' : 'Toggle Quick Study: displays only the most frequently missed key terms for this module'}
-            >
-              <Zap className={`w-3.5 h-3.5 ${showQuickStudy ? 'text-amber-200 fill-amber-200' : 'text-amber-500'}`} />
-              <span className="hidden sm:inline">Quick Study</span>
-              <span className="sm:hidden">Terms</span>
-              {showQuickStudy && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
-            </button>
-          )}
-
-          {/* Share Question Icon Button (Generates & Copies Deep-Link URL Directly to Clipboard + QR Option) */}
-          <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white shadow-2xs overflow-hidden">
-            <button
-              type="button"
-              onClick={handleShareDeepLinkCopy}
-              className={`px-2.5 py-1 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                shareCopiedToast
-                  ? 'bg-emerald-600 text-white'
-                  : 'hover:bg-slate-100 text-slate-700'
-              }`}
-              title="Copy Deep-Link URL to clipboard: Opens this specific question and its Learning Path directly"
-              aria-label="Share question deep-link URL to clipboard"
-            >
-              {shareCopiedToast ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-white" />
-                  <span>Link Copied!</span>
-                </>
-              ) : (
-                <>
-                  <Share2 className="w-3.5 h-3.5 text-[#0078D4]" />
-                  <span className="hidden sm:inline">Share</span>
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowShareModal(true)}
-              className="px-1.5 py-1 border-l border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-[#0078D4] transition-colors cursor-pointer"
-              title="Open QR Code & Study Peer Share Modal"
-              aria-label="Open QR Code Share Modal"
-            >
-              <QrCode className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Deep Work Timer Toggle */}
-          <button
-            type="button"
-            onClick={handleToggleDeepWork}
-            className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              isDeepWorkEnabled
-                ? 'bg-gradient-to-r from-blue-700 to-indigo-800 text-white border-blue-600 shadow-xs ring-2 ring-blue-400/40'
-                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
-            }`}
-            title={
-              isDeepWorkEnabled
-                ? 'Hide Deep Work timer'
-                : 'Enable Deep Work timer: tracks active study time per module session and provides gentle daily goal summary'
-            }
-          >
-            <Clock className={`w-3.5 h-3.5 ${isDeepWorkEnabled ? 'text-blue-200' : 'text-[#0078D4]'}`} />
-            <span className="hidden sm:inline">Deep Work</span>
-            <span className="sm:hidden">Timer</span>
-            {isDeepWorkEnabled && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
-          </button>
-
-          {/* Visible Color-Coded Question Timer Badge (Green -> Amber -> Red) */}
+        {/* Right Group: Compact Question Timer + Question X of Y + Neatly Ordered Study Zone Dropdown + Bookmark */}
+        <div className="flex items-center gap-2">
+          {/* Compact Color-Coded Question Timer Pill */}
           <div
-            className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold transition-colors duration-300 flex items-center gap-1.5 shadow-2xs ${timerColorConfig.badge}`}
+            className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs ${timerColorConfig.badge}`}
             title={`Question Timer: ${formatTimer(elapsedSeconds)} spent vs. ${formatTimer(
               avgCompletionSeconds
-            )} average completion time (${timerColorConfig.label})`}
+            )} avg (${timerColorConfig.label})`}
           >
             <Timer className={`w-3.5 h-3.5 ${timerColorConfig.icon}`} />
             <span className="font-mono tracking-tight">{formatTimer(elapsedSeconds)}</span>
-            <span className="text-[10px] opacity-75 hidden md:inline">
-              / avg {formatTimer(avgCompletionSeconds)}
-            </span>
             <span className={`w-1.5 h-1.5 rounded-full ${timerColorConfig.dot}`} />
           </div>
 
-          <span className="text-xs font-bold text-slate-500">
-            Question {questionIndex + 1} of {totalQuestions}
+          {/* Question Counter */}
+          <span className="text-xs font-bold text-slate-600 whitespace-nowrap px-1">
+            Q {questionIndex + 1}/{totalQuestions}
           </span>
+
+          {/* STUDY ZONE ACCORDION MENU (Centered Popup Modal in Middle of Page) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowStudyZoneMenu((prev) => !prev)}
+              className={`px-3.5 py-1.5 rounded-xl border text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                showStudyZoneMenu
+                  ? 'bg-[#0078D4] text-white border-[#0078D4] ring-2 ring-[#0078D4]/25'
+                  : 'bg-gradient-to-r from-sky-50 via-white to-blue-50 hover:from-sky-100 hover:to-blue-100 text-slate-900 border-sky-300'
+              }`}
+              aria-expanded={showStudyZoneMenu}
+              aria-haspopup="dialog"
+              title="Open Study Zone (Centered Accordion Menu): Quick-Sort, Quiz Mode, Difficulty Calibration, ELI5 Analogy, Audio, Notes, Simulators & Study Links"
+            >
+              <SlidersHorizontal
+                className={`w-3.5 h-3.5 ${showStudyZoneMenu ? 'text-amber-300' : 'text-[#0078D4]'}`}
+              />
+              <span>Study Zone</span>
+              {activeStudyZoneToolsCount > 0 && (
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                    showStudyZoneMenu
+                      ? 'bg-amber-300 text-slate-950'
+                      : 'bg-[#0078D4] text-white'
+                  }`}
+                >
+                  {activeStudyZoneToolsCount}
+                </span>
+              )}
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                  showStudyZoneMenu ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {/* Centered Modal Popup in the Middle of the Page (Not Sideways) */}
+            {showStudyZoneMenu && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150"
+                onClick={() => setShowStudyZoneMenu(false)}
+              >
+                <div
+                  ref={studyZoneMenuRef}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full max-w-xl max-h-[86vh] overflow-y-auto rounded-2xl bg-white border border-slate-200 shadow-2xl text-left animate-in zoom-in-95 duration-150"
+                >
+                  {/* Modal Header */}
+                  <div className="sticky top-0 z-10 bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white px-5 py-4 flex items-center justify-between gap-3 border-b border-slate-800">
+                    <div className="flex items-center gap-2.5">
+                      <span className="p-2 rounded-xl bg-white/10 border border-white/15 text-amber-300">
+                        <SlidersHorizontal className="w-4 h-4" />
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-black uppercase tracking-wider text-white">
+                            Study Zone Command Hub
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950">
+                            Accordion Menu
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-sky-100/90 mt-0.5">
+                          Expand any section below to sort questions, calibrate difficulty, or launch study tools
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowStudyZoneMenu(false)}
+                      className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-extrabold transition-colors cursor-pointer shrink-0"
+                    >
+                      Close ✕
+                    </button>
+                  </div>
+
+                  {/* Accordion Sections Container */}
+                  <div className="p-4 sm:p-5 space-y-3">
+                    {/* ACCORDION SECTION 1: Quick-Sort & Question Queue Filters */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => toggleStudyZoneSection('sort')}
+                        className="w-full px-4 py-3 bg-white hover:bg-slate-50 flex items-center justify-between gap-2 text-left cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-blue-50 text-[#0078D4] flex items-center justify-center font-black text-xs">
+                            1
+                          </span>
+                          <div>
+                            <div className="text-xs font-extrabold text-slate-900">
+                              Question Quick-Sort &amp; Active Filters
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              Re-order questions dynamically by Newest, Hardest, or Module Progression
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-[#0078D4] uppercase">
+                            {questionSortOrder === 'newest-first'
+                              ? 'Newest First'
+                              : questionSortOrder === 'hardest-first'
+                              ? 'Hardest First'
+                              : questionSortOrder === 'module-progression'
+                              ? 'Module Order'
+                              : questionSortOrder === 'easiest-first'
+                              ? 'Easiest First'
+                              : 'Adaptive Order'}
+                          </span>
+                          <ChevronDown
+                            className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                              openStudyZoneSections.sort ? 'rotate-180 text-[#0078D4]' : ''
+                            }`}
+                          />
+                        </div>
+                      </button>
+
+                      {openStudyZoneSections.sort && (
+                        <div className="p-3.5 pt-2 border-t border-slate-200/80 space-y-3 bg-slate-50/70">
+                          {onChangeSortOrder && (
+                            <div className="space-y-1.5">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                Quick-Sort Question Order
+                              </span>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                                {(
+                                  [
+                                    {
+                                      id: 'newest-first',
+                                      label: 'Newest First',
+                                      desc: 'Latest & AI scenarios first',
+                                    },
+                                    {
+                                      id: 'hardest-first',
+                                      label: 'Hardest First',
+                                      desc: 'Advanced → Fundamental',
+                                    },
+                                    {
+                                      id: 'module-progression',
+                                      label: 'Module Progression',
+                                      desc: 'Path 1 → 3 sequential',
+                                    },
+                                    {
+                                      id: 'easiest-first',
+                                      label: 'Easiest First',
+                                      desc: 'Fundamental → Advanced',
+                                    },
+                                    {
+                                      id: 'default',
+                                      label: 'Adaptive Default',
+                                      desc: 'Smart rolling calibration',
+                                    },
+                                  ] as const
+                                ).map((opt) => {
+                                  const isSelected = questionSortOrder === opt.id;
+                                  return (
+                                    <button
+                                      key={opt.id}
+                                      type="button"
+                                      onClick={() => onChangeSortOrder(opt.id)}
+                                      className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                                        isSelected
+                                          ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-2xs'
+                                          : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-200'
+                                      }`}
+                                    >
+                                      <div className="text-xs font-extrabold flex items-center justify-between gap-1">
+                                        <span>{opt.label}</span>
+                                        {isSelected && <Check className="w-3.5 h-3.5 text-amber-300 shrink-0" />}
+                                      </div>
+                                      <div
+                                        className={`text-[10px] mt-0.5 ${
+                                          isSelected ? 'text-sky-100' : 'text-slate-500'
+                                        }`}
+                                      >
+                                        {opt.desc}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {onSelectQuickFilter && (
+                            <div className="space-y-1.5 pt-2 border-t border-slate-200/70">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                Filter Question Pool
+                              </span>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {quickSwitcherOptions.map((item) => {
+                                  const isActive = activeQuickFilter === item.id;
+                                  return (
+                                    <button
+                                      key={item.id}
+                                      type="button"
+                                      onClick={() => onSelectQuickFilter(item.id)}
+                                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                        isActive
+                                          ? 'bg-slate-900 text-amber-300 border-slate-900'
+                                          : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                                      }`}
+                                    >
+                                      <span>{item.label}</span>
+                                      {typeof item.count === 'number' && (
+                                        <span
+                                          className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                                            isActive
+                                              ? 'bg-amber-400 text-slate-950'
+                                              : 'bg-slate-100 text-slate-600'
+                                          }`}
+                                        >
+                                          {item.count}
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ACCORDION SECTION 2: Quiz Mode & Difficulty Calibration */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => toggleStudyZoneSection('mode')}
+                        className="w-full px-4 py-3 bg-white hover:bg-slate-50 flex items-center justify-between gap-2 text-left cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center font-black text-xs">
+                            2
+                          </span>
+                          <div>
+                            <div className="text-xs font-extrabold text-slate-900">
+                              Mode &amp; Difficulty Calibration
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              Switch Study vs. Exam Mode, filter by tier, or lock adaptive difficulty
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 uppercase">
+                            {isExamMode ? 'Exam Sim' : 'Study Mode'}
+                          </span>
+                          <ChevronDown
+                            className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                              openStudyZoneSections.mode ? 'rotate-180 text-[#0078D4]' : ''
+                            }`}
+                          />
+                        </div>
+                      </button>
+
+                      {openStudyZoneSections.mode && (
+                        <div className="p-3.5 pt-2 border-t border-slate-200/80 space-y-2.5 bg-slate-50/70">
+                          {/* Study Mode vs Exam Simulation */}
+                          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-200/70 border border-slate-200">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleQuizCardMode('study')}
+                              className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                !isExamMode
+                                  ? 'bg-[#0078D4] text-white shadow-2xs'
+                                  : 'text-slate-700 hover:text-slate-900'
+                              }`}
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              <span>Study Mode (Guided)</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleQuizCardMode('exam')}
+                              className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                isExamMode
+                                  ? 'bg-slate-900 text-amber-300 shadow-2xs'
+                                  : 'text-slate-700 hover:text-slate-900'
+                              }`}
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Exam Sim (45m Timer)</span>
+                            </button>
+                          </div>
+
+                          {/* Question Difficulty Filter */}
+                          {onSelectDifficultyFilter && (
+                            <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-200">
+                              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                <Filter className="w-3.5 h-3.5 text-[#0078D4]" />
+                                <span>Difficulty Filter:</span>
+                              </span>
+                              <div className="inline-flex items-center gap-1">
+                                {(['all', 'Fundamental', 'Intermediate', 'Advanced'] as const).map(
+                                  (level) => {
+                                    const isFiltered = selectedDifficultyFilter === level;
+                                    const label =
+                                      level === 'all'
+                                        ? 'All'
+                                        : level === 'Fundamental'
+                                        ? 'Fundamental'
+                                        : level === 'Intermediate'
+                                        ? 'Intermediate'
+                                        : 'Advanced';
+                                    return (
+                                      <button
+                                        key={level}
+                                        type="button"
+                                        onClick={() => onSelectDifficultyFilter(level)}
+                                        className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer ${
+                                          isFiltered
+                                            ? 'bg-[#0078D4] text-white shadow-2xs'
+                                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                        }`}
+                                      >
+                                        {label}
+                                      </button>
+                                    );
+                                  }
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Adaptive Difficulty & Lock Selector */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-200">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (activeLockedDifficulty !== null) {
+                                  handleSetLockedDifficulty(null);
+                                } else if (onToggleDynamicDifficulty) {
+                                  onToggleDynamicDifficulty();
+                                }
+                              }}
+                              className="text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer hover:text-[#0078D4]"
+                            >
+                              {activeLockedDifficulty !== null ? (
+                                <Lock className="w-3.5 h-3.5 text-amber-600" />
+                              ) : (
+                                <Unlock className="w-3.5 h-3.5 text-[#0078D4]" />
+                              )}
+                              <span>
+                                {activeLockedDifficulty
+                                  ? `Locked: ${activeLockedDifficulty}`
+                                  : `Adaptive Engine (${
+                                      rollingAverageAccuracy !== null
+                                        ? `Avg ${rollingAverageAccuracy}%`
+                                        : 'Auto'
+                                    })`}
+                              </span>
+                            </button>
+
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleSetLockedDifficulty(null)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border cursor-pointer ${
+                                  activeLockedDifficulty === null
+                                    ? 'bg-sky-600 text-white border-sky-600'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                                }`}
+                              >
+                                Auto
+                              </button>
+                              {(['Fundamental', 'Intermediate', 'Advanced'] as const).map((mode) => {
+                                const isLocked = activeLockedDifficulty === mode;
+                                const shortMode =
+                                  mode === 'Fundamental' ? 'F' : mode === 'Intermediate' ? 'I' : 'A';
+                                return (
+                                  <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() =>
+                                      handleSetLockedDifficulty(isLocked ? null : mode)
+                                    }
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border cursor-pointer ${
+                                      isLocked
+                                        ? 'bg-amber-600 text-white border-amber-600'
+                                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                    title={`Lock difficulty to ${mode}`}
+                                  >
+                                    🔒{shortMode}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ACCORDION SECTION 3: Learning Aids & Concept Simplifiers */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => toggleStudyZoneSection('aids')}
+                        className="w-full px-4 py-3 bg-white hover:bg-slate-50 flex items-center justify-between gap-2 text-left cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-black text-xs">
+                            3
+                          </span>
+                          <div>
+                            <div className="text-xs font-extrabold text-slate-900">
+                              Learning Aids, Audio &amp; Notes
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              ELI5 analogies, Key Terms overlay, Read Aloud speech, and Study Notes
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {(showEli5Analogy || showQuickStudy || isSpeaking || hasNote) && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
+                              Active
+                            </span>
+                          )}
+                          <ChevronDown
+                            className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                              openStudyZoneSections.aids ? 'rotate-180 text-[#0078D4]' : ''
+                            }`}
+                          />
+                        </div>
+                      </button>
+
+                      {openStudyZoneSections.aids && (
+                        <div className="p-3.5 pt-2 border-t border-slate-200/80 bg-slate-50/70">
+                          <div className="grid grid-cols-2 gap-2">
+                            {/* ELI5 Analogy Toggle */}
+                            {!isExamMode && (
+                              <button
+                                type="button"
+                                onClick={handleToggleEli5}
+                                className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                                  showEli5Analogy
+                                    ? 'bg-amber-50 text-amber-950 border-amber-300 ring-1 ring-amber-400/30'
+                                    : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                                  <span>ELI5 Analogy</span>
+                                </span>
+                                <span className="text-[10px] font-black uppercase">
+                                  {showEli5Analogy ? 'ON' : 'OFF'}
+                                </span>
+                              </button>
+                            )}
+
+                            {/* Quick Study Key Terms */}
+                            {!isExamMode && (
+                              <button
+                                type="button"
+                                onClick={() => setShowQuickStudy(!showQuickStudy)}
+                                className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                                  showQuickStudy
+                                    ? 'bg-orange-50 text-orange-950 border-orange-300 ring-1 ring-orange-400/30'
+                                    : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <Zap className="w-3.5 h-3.5 text-amber-500" />
+                                  <span>Key Terms</span>
+                                </span>
+                                <span className="text-[10px] font-black uppercase">
+                                  {showQuickStudy ? 'ON' : 'OFF'}
+                                </span>
+                              </button>
+                            )}
+
+                            {/* Read Aloud (SpeechSynthesis) */}
+                            <button
+                              type="button"
+                              onClick={handleToggleReadQuestion}
+                              className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                                isSpeaking
+                                  ? 'bg-emerald-600 text-white border-emerald-700'
+                                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              <span className="flex items-center gap-1.5">
+                                {isSpeaking ? (
+                                  <Square className="w-3.5 h-3.5 fill-current" />
+                                ) : (
+                                  <Volume2 className="w-3.5 h-3.5 text-[#0078D4]" />
+                                )}
+                                <span>{isSpeaking ? 'Stop Audio' : 'Read Aloud'}</span>
+                              </span>
+                            </button>
+
+                            {/* Study Notes Drawer */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowQuickNotes(true);
+                                setShowStudyZoneMenu(false);
+                              }}
+                              className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                                hasNote
+                                  ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <FileText className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Study Notes</span>
+                              </span>
+                              {hasNote && <span className="w-2 h-2 rounded-full bg-amber-500" />}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ACCORDION SECTION 4: Grouped Practice Tools, Simulators & Study Navigation */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => toggleStudyZoneSection('tools')}
+                        className="w-full px-4 py-3 bg-white hover:bg-slate-50 flex items-center justify-between gap-2 text-left cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center font-black text-xs">
+                            4
+                          </span>
+                          <div>
+                            <div className="text-xs font-extrabold text-slate-900">
+                              Practice Tools, Simulators &amp; Study Shortcuts
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              Mock Exam, AI Scenarios, Spaced Review, Timers, Study Room &amp; Guides
+                            </div>
+                          </div>
+                        </div>
+                        <ChevronDown
+                          className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                            openStudyZoneSections.tools ? 'rotate-180 text-[#0078D4]' : ''
+                          }`}
+                        />
+                      </button>
+
+                      {openStudyZoneSections.tools && (
+                        <div className="p-3.5 pt-2 border-t border-slate-200/80 space-y-3 bg-slate-50/70">
+                          {/* Primary Practice Tools Grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {onOpenMockExam && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onOpenMockExam();
+                                  setShowStudyZoneMenu(false);
+                                }}
+                                className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/60 text-slate-800 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                              >
+                                <Clock className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+                                <span>45m Mock Exam</span>
+                              </button>
+                            )}
+
+                            {onOpenAiGenerator && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onOpenAiGenerator();
+                                  setShowStudyZoneMenu(false);
+                                }}
+                                className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-amber-50/70 text-slate-800 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                              >
+                                <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                <span>Create AI Scenario</span>
+                              </button>
+                            )}
+
+                            {onOpenPersonalizedReview && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onOpenPersonalizedReview();
+                                  setShowStudyZoneMenu(false);
+                                }}
+                                className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-rose-50/60 text-slate-800 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                <span>Mistake Review ({unresolvedMistakesCount})</span>
+                              </button>
+                            )}
+
+                            {onFinishSession && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onFinishSession();
+                                  setShowStudyZoneMenu(false);
+                                }}
+                                className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-emerald-50/60 text-slate-800 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>Session Summary ({sessionAnsweredCount})</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={handleToggleDeepWork}
+                              className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                                isDeepWorkEnabled
+                                  ? 'bg-blue-50 text-[#0078D4] border-blue-300'
+                                  : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                              }`}
+                            >
+                              <Timer className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+                              <span>Deep Work Timer</span>
+                            </button>
+
+                            {onOpenStudyRoom && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onOpenStudyRoom();
+                                  setShowStudyZoneMenu(false);
+                                }}
+                                className="p-2.5 rounded-xl border border-sky-200 bg-sky-50/70 hover:bg-sky-100 text-[#0078D4] text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                              >
+                                <Users className="w-3.5 h-3.5 shrink-0" />
+                                <span>Peer Study Room</span>
+                              </button>
+                            )}
+
+                            {onToggleFocusMode && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onToggleFocusMode();
+                                  setShowStudyZoneMenu(false);
+                                }}
+                                className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                                  isFocusMode
+                                    ? 'bg-[#0078D4] text-white border-[#0078D4]'
+                                    : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                                }`}
+                              >
+                                {isFocusMode ? (
+                                  <Minimize2 className="w-3.5 h-3.5 shrink-0" />
+                                ) : (
+                                  <Maximize2 className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+                                )}
+                                <span>{isFocusMode ? 'Exit Focus UI' : 'Focus Mode UI'}</span>
+                              </button>
+                            )}
+
+                            {onToggleWorkspacePanels && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onToggleWorkspacePanels();
+                                  setShowStudyZoneMenu(false);
+                                }}
+                                className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                                  showWorkspacePanels
+                                    ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                    : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                                }`}
+                              >
+                                <Layers className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span>
+                                  {showWorkspacePanels ? 'Hide Maps & Explorer' : 'Show Maps & Explorer'}
+                                </span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Quick Jump Links to Study Guide, Cheat Sheets, Flashcards & AI Tutor */}
+                          {onNavigateTab && (
+                            <div className="pt-2 border-t border-slate-200/70 space-y-1.5">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                Quick Jump to Study Resources
+                              </span>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {(
+                                  [
+                                    { id: 'study-decks', label: 'Study Mode & Cheat Sheets' },
+                                    { id: 'flashcards', label: 'Flashcards Deck' },
+                                    { id: 'adaptive', label: 'Adaptive Lab' },
+                                    { id: 'assistant', label: 'Knowledge Assistant' },
+                                    { id: 'history', label: 'Review History' },
+                                  ] as const
+                                ).map((nav) => (
+                                  <button
+                                    key={nav.id}
+                                    type="button"
+                                    onClick={() => {
+                                      onNavigateTab(nav.id);
+                                      setShowStudyZoneMenu(false);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-sky-50 text-slate-700 hover:text-[#0078D4] border border-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                                  >
+                                    <span>{nav.label}</span>
+                                    <ArrowRight className="w-3 h-3" />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Path Mistake Retry & Deep-Link Sharing Footer */}
+                          <div className="pt-2 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2">
+                            {onToggleRetryIncorrectInPath && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleRetryIncorrectClick();
+                                  setShowStudyZoneMenu(false);
+                                }}
+                                className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
+                                  isRetryingIncorrectInPath
+                                    ? 'bg-rose-600 text-white border-rose-700'
+                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200'
+                                }`}
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>
+                                  {isRetryingIncorrectInPath
+                                    ? 'Exit Retry Incorrect'
+                                    : `Retry Incorrect (${incorrectCountInCurrentPath} • P${question.learningPathId})`}
+                                </span>
+                              </button>
+                            )}
+
+                            <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden ml-auto">
+                              <button
+                                type="button"
+                                onClick={handleShareDeepLinkCopy}
+                                className={`px-2.5 py-1.5 text-xs font-bold flex items-center gap-1 cursor-pointer ${
+                                  shareCopiedToast
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'hover:bg-slate-100 text-slate-700'
+                                }`}
+                              >
+                                {shareCopiedToast ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Share2 className="w-3.5 h-3.5 text-[#0078D4]" />
+                                    <span>Share Link</span>
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowShareModal(true);
+                                  setShowStudyZoneMenu(false);
+                                }}
+                                className="px-2 py-1.5 border-l border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-[#0078D4] cursor-pointer"
+                                title="Open QR Code Modal"
+                              >
+                                <QrCode className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bookmark Button */}
           <button
             onClick={() => onBookmark(question.id)}
-            className={`p-1.5 rounded-lg border transition-all ${
+            className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
               isBookmarked
                 ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
                 : 'bg-white text-slate-400 hover:text-amber-600 border-slate-200'
@@ -1375,34 +2185,66 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   </div>
                 </div>
 
-                {/* Knowledge Check Toggle Switch (Hidden in Exam Simulation Mode) */}
+                {/* ELI5 Analogy & Knowledge Check Toggle Switches (Hidden in Exam Simulation Mode) */}
                 {!isExamMode ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowKnowledgeCheck(!showKnowledgeCheck)}
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shadow-2xs shrink-0 self-start ${
-                      showKnowledgeCheck
-                        ? 'bg-gradient-to-r from-blue-50 to-sky-50 text-[#0078D4] border-sky-300 ring-2 ring-sky-400/20'
-                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                    title="Toggle concise Key Concept Definition side-panel for core Azure terminology in this scenario"
-                  >
-                    <BookOpen className={`w-3.5 h-3.5 ${showKnowledgeCheck ? 'text-[#0078D4]' : 'text-slate-400'}`} />
-                    <span>Knowledge Check</span>
-
-                    {/* Toggle Pill Slider */}
-                    <div
-                      className={`w-7 h-4 rounded-full transition-colors flex items-center p-0.5 ${
-                        showKnowledgeCheck ? 'bg-[#0078D4]' : 'bg-slate-300'
+                  <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
+                    {/* ELI5 Toggle Button */}
+                    <button
+                      type="button"
+                      onClick={handleToggleEli5}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer border shadow-2xs ${
+                        showEli5Analogy
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-600 ring-2 ring-amber-400/30'
+                          : 'bg-white hover:bg-amber-50 text-amber-900 border-amber-200'
                       }`}
+                      title="ELI5 (Explain Like I'm 5): Simplify this question's Azure concept into child-friendly, non-technical language"
                     >
-                      <div
-                        className={`w-3 h-3 rounded-full bg-white shadow-xs transition-transform duration-200 ${
-                          showKnowledgeCheck ? 'translate-x-3' : 'translate-x-0'
+                      <Sparkles
+                        className={`w-3.5 h-3.5 ${
+                          showEli5Analogy ? 'text-yellow-200' : 'text-amber-500'
                         }`}
                       />
-                    </div>
-                  </button>
+                      <span>ELI5</span>
+                      <div
+                        className={`w-6 h-3.5 rounded-full transition-colors flex items-center p-0.5 ${
+                          showEli5Analogy ? 'bg-amber-900/40' : 'bg-slate-300'
+                        }`}
+                      >
+                        <div
+                          className={`w-2.5 h-2.5 rounded-full bg-white shadow-xs transition-transform duration-200 ${
+                            showEli5Analogy ? 'translate-x-2.5' : 'translate-x-0'
+                          }`}
+                        />
+                      </div>
+                    </button>
+
+                    {/* Knowledge Check Toggle Switch */}
+                    <button
+                      type="button"
+                      onClick={() => setShowKnowledgeCheck(!showKnowledgeCheck)}
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shadow-2xs ${
+                        showKnowledgeCheck
+                          ? 'bg-gradient-to-r from-blue-50 to-sky-50 text-[#0078D4] border-sky-300 ring-2 ring-sky-400/20'
+                          : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                      }`}
+                      title="Toggle concise Key Concept Definition side-panel for core Azure terminology in this scenario"
+                    >
+                      <BookOpen className={`w-3.5 h-3.5 ${showKnowledgeCheck ? 'text-[#0078D4]' : 'text-slate-400'}`} />
+                      <span>Knowledge Check</span>
+
+                      <div
+                        className={`w-7 h-4 rounded-full transition-colors flex items-center p-0.5 ${
+                          showKnowledgeCheck ? 'bg-[#0078D4]' : 'bg-slate-300'
+                        }`}
+                      >
+                        <div
+                          className={`w-3 h-3 rounded-full bg-white shadow-xs transition-transform duration-200 ${
+                            showKnowledgeCheck ? 'translate-x-3' : 'translate-x-0'
+                          }`}
+                        />
+                      </div>
+                    </button>
+                  </div>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-amber-300 border border-slate-700 shrink-0 self-start">
                     <ShieldCheck className="w-3.5 h-3.5" />
@@ -1410,6 +2252,36 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   </span>
                 )}
               </div>
+
+              {/* ELI5 Child-Friendly Analogy Card (When ELI5 Toggle is Active) */}
+              {showEli5Analogy && !isExamMode && (
+                <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 via-yellow-50/70 to-orange-50/60 border border-amber-300/90 space-y-2 shadow-2xs animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-900">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500 text-white text-[10px]">
+                        ELI5 Analogy
+                      </span>
+                      <span>{eli5Content.title}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleToggleEli5}
+                      className="text-[11px] font-bold text-amber-800 hover:underline cursor-pointer"
+                    >
+                      Hide ELI5
+                    </button>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-800 leading-relaxed">
+                    {eli5Content.analogy}
+                  </p>
+                  <div className="pt-1.5 border-t border-amber-200/80 text-xs text-amber-950 font-semibold flex items-center gap-1.5">
+                    <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>
+                      <strong>Simple Rule:</strong> {eli5Content.takeaway}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
         {/* Actual Exam Question + Hands-Free Voice Option Answering Control */}
