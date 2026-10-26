@@ -35,6 +35,7 @@ import { DomainConfidenceRadar } from './DomainConfidenceRadar';
 import { TopMissedServicesTable } from './TopMissedServicesTable';
 import { StudyPrepMotivationToolkit } from './StudyPrepMotivationToolkit';
 import { DailyAccuracyTrajectoryChart } from './DailyAccuracyTrajectoryChart';
+import { DomainAccuracyHeatmapD3 } from './DomainAccuracyHeatmapD3';
 
 interface DomainConfidenceProps {
   stats: UserStats;
@@ -46,7 +47,7 @@ interface DomainConfidenceProps {
   onResetModuleConfidence?: (moduleId: number) => void;
 }
 
-type RadarWindowTab = 'radar' | 'modules' | 'confidence' | 'actions';
+type RadarWindowTab = 'radar' | 'heatmap' | 'modules' | 'confidence' | 'actions';
 type AnalyticsSectionFilter = 'all' | 'charts' | 'gaps' | 'toolkit';
 
 export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
@@ -289,9 +290,9 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
 
           {/* Right: 3 Interactive Menu Tabs + 7D/30D Switcher + Compact/Expand Toggle */}
           <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap ml-auto">
-            {/* 3 Functional Menu Tabs inside Radar Window */}
+            {/* Functional Menu Tabs inside Radar Window */}
             <div
-              className="flex items-center bg-slate-950/45 p-0.5 rounded-xl border border-white/15 text-[11px] font-bold"
+              className="flex flex-wrap items-center bg-slate-950/45 p-0.5 rounded-xl border border-white/15 text-[11px] font-bold gap-0.5"
               role="tablist"
               aria-label="Domain Confidence Radar Window Modes"
             >
@@ -316,6 +317,24 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
               <button
                 type="button"
                 role="tab"
+                aria-selected={activeWindowTab === 'heatmap'}
+                onClick={() => {
+                  setActiveWindowTab('heatmap');
+                  if (!isWindowExpanded) setIsWindowExpanded(true);
+                }}
+                className={`px-2 sm:px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  activeWindowTab === 'heatmap' && isWindowExpanded
+                    ? 'bg-[#0078D4] text-white shadow-2xs font-extrabold'
+                    : 'text-sky-100/80 hover:text-white'
+                }`}
+              >
+                <Target className="w-3 h-3 shrink-0 text-amber-300" />
+                <span>D3 Heatmap</span>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
                 aria-selected={activeWindowTab === 'modules'}
                 onClick={() => {
                   setActiveWindowTab('modules');
@@ -328,10 +347,7 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
                 }`}
               >
                 <Layers className="w-3 h-3 shrink-0" />
-                <span>Domains</span>
-                <span className="hidden xs:inline text-[9px] px-1 rounded bg-white/15">
-                  12
-                </span>
+                <span>Domains (12)</span>
               </button>
 
               <button
@@ -349,10 +365,7 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
                 }`}
               >
                 <Award className="w-3 h-3 shrink-0 text-amber-300" />
-                <span>Confidence</span>
-                <span className="hidden xs:inline text-[9px] px-1 rounded bg-amber-400 text-slate-950 font-black">
-                  1-5
-                </span>
+                <span>Confidence (1-5)</span>
               </button>
 
               <button
@@ -408,7 +421,7 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
             <button
               type="button"
               onClick={() => setIsWindowExpanded((prev) => !prev)}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/15 text-[11px] font-bold transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/15 text-[11px] font-bold transition-colors cursor-pointer"
               aria-expanded={isWindowExpanded}
               title={
                 isWindowExpanded
@@ -419,12 +432,12 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
               {isWindowExpanded ? (
                 <>
                   <Minimize2 className="w-3 h-3 text-sky-200" />
-                  <span className="hidden sm:inline">Compact</span>
+                  <span>Compact</span>
                 </>
               ) : (
                 <>
                   <Maximize2 className="w-3 h-3 text-sky-200" />
-                  <span className="hidden sm:inline">Expand</span>
+                  <span>Expand</span>
                 </>
               )}
             </button>
@@ -649,6 +662,19 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* ===============================================================
+                WINDOW TAB 1B: D3.JS DOMAIN ACCURACY HEATMAP
+               =============================================================== */}
+            {activeWindowTab === 'heatmap' && (
+              <DomainAccuracyHeatmapD3
+                stats={stats}
+                onSelectModule={(modId) => onSelectModule(modId)}
+                onLaunchMicroDrill={onLaunchMicroDrill}
+                onDrillWeakAreas={onDrillWeakAreas}
+                compact
+              />
             )}
 
             {/* ===============================================================
@@ -1144,6 +1170,18 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
           </div>
         )}
       </section>
+
+      {/* =====================================================================
+          D3.JS DOMAIN ACCURACY HEATMAP (Always Prominent in Analytics & Gaps)
+         ===================================================================== */}
+      {(sectionFilter === 'all' || sectionFilter === 'gaps' || sectionFilter === 'charts') && (
+        <DomainAccuracyHeatmapD3
+          stats={stats}
+          onSelectModule={(modId) => onSelectModule(modId)}
+          onLaunchMicroDrill={onLaunchMicroDrill}
+          onDrillWeakAreas={onDrillWeakAreas}
+        />
+      )}
 
       {/* =====================================================================
           SUPPORTING ANALYTICS PANELS (Filtered by Section Filter)

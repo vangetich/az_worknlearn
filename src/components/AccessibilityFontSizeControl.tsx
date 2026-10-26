@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Type, Minus, Plus, RotateCcw, Check, Sparkles } from 'lucide-react';
+import { Type, Minus, Plus, RotateCcw, Check, Sparkles, Contrast, Eye } from 'lucide-react';
 import {
   getStoredFontScalePercent,
   applyFontScalePercent,
@@ -10,6 +10,10 @@ import {
   FONT_SCALE_STEP,
   FONT_SCALE_PRESETS,
 } from '../utils/fontSize';
+import {
+  getStoredHighContrast,
+  applyHighContrast,
+} from '../utils/highContrast';
 
 interface AccessibilityFontSizeControlProps {
   variant?: 'panel' | 'inline-bar' | 'header-button';
@@ -21,6 +25,9 @@ export const AccessibilityFontSizeControl: React.FC<
 > = ({ variant = 'panel', className = '' }) => {
   const [scalePercent, setScalePercent] = useState<number>(
     getStoredFontScalePercent
+  );
+  const [isHighContrast, setIsHighContrast] = useState<boolean>(
+    getStoredHighContrast
   );
   const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -39,9 +46,21 @@ export const AccessibilityFontSizeControl: React.FC<
       }
     };
 
+    const handleHighContrastSync = (e: Event) => {
+      const customEvent = e as CustomEvent<{ enabled?: boolean }>;
+      if (typeof customEvent.detail?.enabled === 'boolean') {
+        setIsHighContrast(customEvent.detail.enabled);
+      } else {
+        setIsHighContrast(getStoredHighContrast());
+      }
+    };
+
     window.addEventListener('az900-font-size-changed', handleSync);
-    return () =>
+    window.addEventListener('az900-high-contrast-changed', handleHighContrastSync);
+    return () => {
       window.removeEventListener('az900-font-size-changed', handleSync);
+      window.removeEventListener('az900-high-contrast-changed', handleHighContrastSync);
+    };
   }, []);
 
   useEffect(() => {
@@ -77,6 +96,11 @@ export const AccessibilityFontSizeControl: React.FC<
 
   const handleStep = (delta: number) => {
     handleAdjust(scalePercent + delta);
+  };
+
+  const handleToggleHighContrast = (enabled: boolean) => {
+    applyHighContrast(enabled);
+    setIsHighContrast(enabled);
   };
 
   const deltaFromBase = scalePercent - 100;
@@ -149,6 +173,21 @@ export const AccessibilityFontSizeControl: React.FC<
             </button>
           ))}
         </div>
+
+        {/* High-Contrast Focus Mode Quick Button */}
+        <button
+          type="button"
+          onClick={() => handleToggleHighContrast(!isHighContrast)}
+          className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all cursor-pointer flex items-center gap-1 ml-1 border ${
+            isHighContrast
+              ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
+              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+          }`}
+          title="High-Contrast Focus Mode: increases font weights and sharpens borders"
+        >
+          <Contrast className="w-3 h-3 text-[#0078D4]" />
+          <span>High Contrast: {isHighContrast ? 'ON' : 'OFF'}</span>
+        </button>
       </div>
     );
   }
@@ -161,16 +200,25 @@ export const AccessibilityFontSizeControl: React.FC<
           type="button"
           onClick={() => setIsPopoverOpen((prev) => !prev)}
           className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
-            scalePercent !== 100
+            isHighContrast
+              ? 'bg-amber-100 text-amber-950 border-amber-400 ring-2 ring-amber-400/50'
+              : scalePercent !== 100
               ? 'bg-blue-50 text-[#0078D4] border-blue-300 ring-1 ring-blue-400/30'
               : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/90'
           } ${className}`}
-          title={`Accessibility Font Size Adjustment (${scalePercent}%) • Click to increase or decrease app-wide font size beyond +15%`}
+          title={`Accessibility Panel (Font Scale: ${scalePercent}%, High-Contrast Focus: ${isHighContrast ? 'Active' : 'Off'}) • Click to adjust typography weight & contrast`}
           aria-expanded={isPopoverOpen}
-          aria-label={`Accessibility font size: ${scalePercent}%`}
+          aria-label={`Accessibility panel: ${scalePercent}% font size, high contrast focus ${isHighContrast ? 'active' : 'inactive'}`}
         >
-          <Type className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+          {isHighContrast ? (
+            <Contrast className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          ) : (
+            <Type className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+          )}
           <span className="tabular-nums">{scalePercent}%</span>
+          {isHighContrast && (
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+          )}
         </button>
 
         {isPopoverOpen &&
@@ -186,7 +234,7 @@ export const AccessibilityFontSizeControl: React.FC<
                   left: `${popoverCoords.left}px`,
                 }}
                 onClick={(e) => e.stopPropagation()}
-                className="fixed w-[min(21rem,94vw)] max-h-[85vh] overflow-y-auto overscroll-contain rounded-2xl bg-white border border-sky-200 shadow-2xl p-4 space-y-3 animate-in fade-in zoom-in-95 duration-150"
+                className="fixed w-[min(22rem,94vw)] max-h-[85vh] overflow-y-auto overscroll-contain rounded-2xl bg-white border border-sky-200 shadow-2xl p-4 space-y-3.5 animate-in fade-in zoom-in-95 duration-150"
               >
                 <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
                   <div className="flex items-center gap-2">
@@ -195,10 +243,10 @@ export const AccessibilityFontSizeControl: React.FC<
                     </div>
                     <div>
                       <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                        Accessibility Font Scale
+                        Accessibility &amp; Focus Panel
                       </h4>
                       <p className="text-[10px] text-slate-500">
-                        Adjust app-wide text size (85% – 150%, beyond +15%)
+                        Visual comfort &amp; high-contrast study assistance
                       </p>
                     </div>
                   </div>
@@ -280,14 +328,68 @@ export const AccessibilityFontSizeControl: React.FC<
                   })}
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                {/* Dedicated High-Contrast Focus Mode Toggle Section */}
+                <div className="pt-2 border-t border-slate-100">
+                  <div className={`p-2.5 rounded-xl border transition-all ${
+                    isHighContrast
+                      ? 'bg-amber-50/90 border-amber-300 ring-1 ring-amber-400/40'
+                      : 'bg-slate-50 border-slate-200/90'
+                  }`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`p-1.5 rounded-lg shrink-0 ${
+                          isHighContrast ? 'bg-amber-400 text-slate-950 font-black' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          <Contrast className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h5 className="text-xs font-black text-slate-900 leading-tight">
+                              High-Contrast Focus Mode
+                            </h5>
+                            {isHighContrast && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-400 text-slate-950 uppercase tracking-wider">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-500 leading-snug mt-0.5">
+                            Heavier font weights &amp; high-contrast borders for visual clarity
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={isHighContrast}
+                        onClick={() => handleToggleHighContrast(!isHighContrast)}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          isHighContrast ? 'bg-[#0078D4]' : 'bg-slate-300'
+                        }`}
+                        title={isHighContrast ? 'Turn off High-Contrast Focus Mode' : 'Turn on High-Contrast Focus Mode (Assists visual impairments)'}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            isHighContrast ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-100">
                   <button
                     type="button"
-                    onClick={() => handleAdjust(DEFAULT_FONT_SCALE_PERCENT)}
+                    onClick={() => {
+                      handleAdjust(DEFAULT_FONT_SCALE_PERCENT);
+                      if (isHighContrast) handleToggleHighContrast(false);
+                    }}
                     className="text-[11px] font-bold text-slate-600 hover:text-[#0078D4] flex items-center gap-1 cursor-pointer"
                   >
                     <RotateCcw className="w-3 h-3" />
-                    <span>Reset to 100%</span>
+                    <span>Reset All</span>
                   </button>
 
                   <button
@@ -309,9 +411,9 @@ export const AccessibilityFontSizeControl: React.FC<
   // Default: Full Settings Panel Card (used in User Settings / Tools & Goal / Profile / Daily Goal Modal)
   return (
     <div
-      className={`p-4 rounded-2xl bg-gradient-to-br from-sky-50/80 via-white to-indigo-50/40 border border-sky-200/90 shadow-2xs space-y-3 ${className}`}
+      className={`p-4 rounded-2xl bg-gradient-to-br from-sky-50/80 via-white to-indigo-50/40 border border-sky-200/90 shadow-2xs space-y-3.5 ${className}`}
       role="region"
-      aria-label="Application-wide Font Size Accessibility Settings"
+      aria-label="Application-wide Font Size and High-Contrast Accessibility Settings"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
@@ -425,6 +527,57 @@ export const AccessibilityFontSizeControl: React.FC<
             </button>
           );
         })}
+      </div>
+
+      {/* Full Panel: High-Contrast Focus Mode Section */}
+      <div className="pt-3 border-t border-sky-100">
+        <div className={`p-3 rounded-xl border transition-all ${
+          isHighContrast
+            ? 'bg-amber-50/90 border-amber-300 ring-2 ring-amber-400/30'
+            : 'bg-white border-slate-200/90'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-xl shrink-0 ${
+                isHighContrast ? 'bg-amber-400 text-slate-950 font-black shadow-xs' : 'bg-slate-100 text-slate-700'
+              }`}>
+                <Contrast className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h5 className="text-sm font-black text-slate-900">
+                    High-Contrast Focus Mode
+                  </h5>
+                  {isHighContrast && (
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-400 text-slate-950 uppercase tracking-wider">
+                      Enabled
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Increases typography font-weights across questions and headers, and replaces subtle greys with sharp high-contrast outlines for visual clarity during intense study sessions.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isHighContrast}
+              onClick={() => handleToggleHighContrast(!isHighContrast)}
+              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out self-end sm:self-center focus:outline-none ${
+                isHighContrast ? 'bg-[#0078D4]' : 'bg-slate-300'
+              }`}
+              title={isHighContrast ? 'Deactivate High-Contrast Focus Mode' : 'Activate High-Contrast Focus Mode'}
+            >
+              <span
+                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  isHighContrast ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

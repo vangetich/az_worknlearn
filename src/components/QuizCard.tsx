@@ -51,6 +51,7 @@ import { QuickStudyOverlay } from './QuickStudyOverlay';
 import { DeepWorkTimerWidget } from './DeepWorkTimerWidget';
 import { SessionCountdownTimer } from './SessionCountdownTimer';
 import { QuizTtsBar } from './QuizTtsBar';
+import { HoverInfoFeedback } from './HoverInfoFeedback';
 
 interface QuizCardProps {
   question: Question;
@@ -84,11 +85,12 @@ interface QuizCardProps {
   isAudioMuted?: boolean;
   rollingAverageAccuracy?: number | null;
   rollingWindowCount?: number;
-  activeQuickFilter?: 'all' | 'bookmarks' | 'ai' | 'mistakes' | 'retry-queue';
+  activeQuickFilter?: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue';
   onSelectQuickFilter?: (
-    nextFilter: 'all' | 'bookmarks' | 'ai' | 'mistakes' | 'retry-queue'
+    nextFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue'
   ) => void;
   bookmarksCount?: number;
+  savedNotesCount?: number;
   aiScenariosCount?: number;
   retryQueueCount?: number;
   retryQueueSecondsLeft?: number;
@@ -445,6 +447,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   activeQuickFilter = 'all',
   onSelectQuickFilter,
   bookmarksCount = 0,
+  savedNotesCount = 0,
   aiScenariosCount = 0,
   retryQueueCount = 0,
   retryQueueSecondsLeft = 0,
@@ -535,15 +538,53 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
   const quickSwitcherOptions = React.useMemo(() => {
     const items: Array<{
-      id: 'all' | 'bookmarks' | 'ai' | 'mistakes' | 'retry-queue';
+      id: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue';
       label: string;
       shortLabel: string;
       count?: number;
+      description: string;
+      tip?: string;
     }> = [
-      { id: 'all', label: 'All Questions', shortLabel: 'All Qs', count: totalQuestions },
-      { id: 'bookmarks', label: 'Bookmarks', shortLabel: 'Saved', count: bookmarksCount },
-      { id: 'ai', label: 'AI Scenarios', shortLabel: 'AI Set', count: aiScenariosCount },
-      { id: 'mistakes', label: 'Unresolved Mistakes', shortLabel: 'Mistakes', count: unresolvedMistakesCount },
+      {
+        id: 'all',
+        label: 'All Questions',
+        shortLabel: 'All Qs',
+        count: totalQuestions,
+        description: 'Complete AZ-900 question bank covering Cloud Concepts, Architecture, and Governance.',
+        tip: 'Default progressive study queue',
+      },
+      {
+        id: 'bookmarks',
+        label: 'Bookmarks',
+        shortLabel: 'Saved',
+        count: bookmarksCount,
+        description: 'Questions you marked with the bookmark icon for targeted review.',
+        tip: 'Click bookmark icon on any question to add',
+      },
+      {
+        id: 'notes',
+        label: 'Saved Notes',
+        shortLabel: 'Notes',
+        count: savedNotesCount,
+        description: 'Adaptive queue containing questions where you recorded personal notes and exam cues.',
+        tip: 'Click Notes on any card to record memory anchors',
+      },
+      {
+        id: 'ai',
+        label: 'AI Scenarios',
+        shortLabel: 'AI Set',
+        count: aiScenariosCount,
+        description: 'Synthetic exam scenarios generated dynamically via Google GenAI.',
+        tip: 'Generate more in the AI Builder tab',
+      },
+      {
+        id: 'mistakes',
+        label: 'Unresolved Mistakes',
+        shortLabel: 'Mistakes',
+        count: unresolvedMistakesCount,
+        description: 'Questions missed during previous drills that need mastery before the real exam.',
+        tip: 'High-impact remediation queue',
+      },
     ];
     if (retryQueueCount > 0 && retryQueueSecondsLeft > 0) {
       items.unshift({
@@ -553,12 +594,15 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         }${retryQueueSecondsLeft % 60})`,
         shortLabel: '5m Retry Queue',
         count: retryQueueCount,
+        description: 'Temporary 5-minute drill session launched from post-session weak area review.',
+        tip: 'Auto-expires when the countdown finishes',
       });
     }
     return items;
   }, [
     totalQuestions,
     bookmarksCount,
+    savedNotesCount,
     aiScenariosCount,
     unresolvedMistakesCount,
     retryQueueCount,
@@ -1324,12 +1368,12 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     <div
       onTouchStart={handleCardTouchStart}
       onTouchEnd={handleCardTouchEnd}
-      className="w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden transition-all"
+      className="w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden transition-all animate-quiz-card-fade-in-up"
     >
       {/* Mobile-Responsive 'Quick Switcher' Swipe Gesture Bar (Toggle Active Filtered Lists Without Opening Menu) */}
       {onSelectQuickFilter && (
         <div className="px-3 sm:px-5 py-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border-b border-slate-700/80 flex flex-wrap items-center justify-between gap-2 rounded-t-xl min-w-0 w-full">
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 min-w-0 max-w-full">
+          <div className="flex flex-wrap items-center gap-1.5 py-0.5 min-w-0 max-w-full">
             <span className="text-[10px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1 shrink-0 mr-1">
               <Layers className="w-3 h-3 text-amber-400" />
               <span>Quick Switcher:</span>
@@ -1337,31 +1381,53 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
             {quickSwitcherOptions.map((item) => {
               const isActive = activeQuickFilter === item.id;
+              const badgeColor =
+                item.id === 'bookmarks'
+                  ? 'amber'
+                  : item.id === 'notes'
+                  ? 'blue'
+                  : item.id === 'ai'
+                  ? 'purple'
+                  : item.id === 'mistakes'
+                  ? 'rose'
+                  : item.id === 'retry-queue'
+                  ? 'amber'
+                  : 'slate';
+
               return (
-                <button
+                <HoverInfoFeedback
                   key={item.id}
-                  type="button"
-                  onClick={() => onSelectQuickFilter(item.id)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
-                    isActive
-                      ? item.id === 'retry-queue'
-                        ? 'bg-amber-400 text-slate-950 font-black shadow-2xs'
-                        : 'bg-[#0078D4] text-white font-extrabold shadow-2xs'
-                      : 'bg-white/10 hover:bg-white/20 text-slate-200'
-                  }`}
-                  title={`Switch active question list to ${item.label} (or swipe horizontally on the card)`}
+                  title={item.label}
+                  badge={item.count !== undefined ? `${item.count} Qs` : undefined}
+                  badgeColor={badgeColor}
+                  description={item.description}
+                  tip={item.tip}
+                  side="bottom"
+                  align="center"
                 >
-                  <span>{item.shortLabel}</span>
-                  {item.count !== undefined && (
-                    <span
-                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                        isActive ? 'bg-black/20 text-current' : 'bg-white/15 text-slate-300'
-                      }`}
-                    >
-                      {item.count}
-                    </span>
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectQuickFilter(item.id)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                      isActive
+                        ? item.id === 'retry-queue'
+                          ? 'bg-amber-400 text-slate-950 font-black shadow-2xs'
+                          : 'bg-[#0078D4] text-white font-extrabold shadow-2xs'
+                        : 'bg-white/10 hover:bg-white/20 text-slate-200'
+                    }`}
+                  >
+                    <span>{item.shortLabel}</span>
+                    {item.count !== undefined && (
+                      <span
+                        className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                          isActive ? 'bg-black/20 text-current' : 'bg-white/15 text-slate-300'
+                        }`}
+                      >
+                        {item.count}
+                      </span>
+                    )}
+                  </button>
+                </HoverInfoFeedback>
               );
             })}
           </div>
@@ -2039,25 +2105,36 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                               </span>
                             </button>
 
-                            {/* Study Notes Drawer */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowQuickNotes(true);
-                                setShowStudyZoneMenu(false);
-                              }}
-                              className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
-                                hasNote
-                                  ? 'bg-amber-50 text-amber-900 border-amber-300'
-                                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                              }`}
+                            {/* Study Notes Drawer with Hover Feedback */}
+                            <HoverInfoFeedback
+                              title="Adaptive Study Notes"
+                              badge={hasNote ? 'Note Attached' : 'Empty'}
+                              badgeColor={hasNote ? 'amber' : 'slate'}
+                              description="Write down your personal takeaways, memory mnemonics, or tricky traps for this Azure service."
+                              tip="Notes dynamically feed the Adaptive Notes Bookmark filter"
+                              className="w-full"
+                              align="center"
+                              side="bottom"
                             >
-                              <span className="flex items-center gap-1.5">
-                                <FileText className="w-3.5 h-3.5 text-amber-600" />
-                                <span>Study Notes</span>
-                              </span>
-                              {hasNote && <span className="w-2 h-2 rounded-full bg-amber-500" />}
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowQuickNotes(true);
+                                  setShowStudyZoneMenu(false);
+                                }}
+                                className={`w-full p-2.5 rounded-xl border text-left text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                                  hasNote
+                                    ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                    : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <FileText className="w-3.5 h-3.5 text-amber-600" />
+                                  <span>Study Notes</span>
+                                </span>
+                                {hasNote && <span className="w-2 h-2 rounded-full bg-amber-500" />}
+                              </button>
+                            </HoverInfoFeedback>
                           </div>
                         </div>
                       )}
@@ -2351,18 +2428,33 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             )}
           </div>
 
-          {/* Bookmark Button */}
-          <button
-            onClick={() => onBookmark(question.id)}
-            className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+          {/* Bookmark Button with Hover State Information Feedback */}
+          <HoverInfoFeedback
+            title={isBookmarked ? 'Bookmarked for Revision' : 'Bookmark Question'}
+            badge={isBookmarked ? 'Saved' : 'Revision'}
+            badgeColor={isBookmarked ? 'amber' : 'slate'}
+            description={
               isBookmarked
-                ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
-                : 'bg-white text-slate-400 hover:text-amber-600 border-slate-200'
-            }`}
-            title={isBookmarked ? 'Remove bookmark' : 'Bookmark for revision'}
+                ? 'This question is currently in your high-yield bookmarks list. Click to remove.'
+                : 'Bookmark this scenario to quickly review and drill on it prior to exam day.'
+            }
+            tip="Accessible across all devices via the Quick Filters & Switcher"
+            side="bottom"
+            align="right"
           >
-            <Bookmark className="w-4 h-4 fill-current" />
-          </button>
+            <button
+              type="button"
+              onClick={() => onBookmark(question.id)}
+              className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                isBookmarked
+                  ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                  : 'bg-white text-slate-400 hover:text-amber-600 border-slate-200'
+              }`}
+              aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark for revision'}
+            >
+              <Bookmark className="w-4 h-4 fill-current" />
+            </button>
+          </HoverInfoFeedback>
         </div>
       </div>
 
@@ -2425,7 +2517,12 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           />
         )}
 
-        <div className={`grid gap-6 min-w-0 w-full ${showKnowledgeCheck ? 'grid-cols-1 lg:grid-cols-12 items-start' : 'grid-cols-1'}`}>
+        <div
+          key={`quiz-card-body-${question.id}`}
+          className={`grid gap-6 min-w-0 w-full animate-quiz-card-fade-in-up ${
+            showKnowledgeCheck ? 'grid-cols-1 lg:grid-cols-12 items-start' : 'grid-cols-1'
+          }`}
+        >
           {/* Main Question & Answering Column */}
           <div className={`space-y-6 min-w-0 ${showKnowledgeCheck ? 'lg:col-span-8' : 'w-full'}`}>
             {/* Hands-Free Text-to-Speech (TTS) Audio Reader Toolbar */}
@@ -2777,9 +2874,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           </div>
         )}
 
-        {/* 4 Choices (A, B, C, D) */}
+        {/* 4 Choices (A, B, C, D) with subtle staggered fade-in-up entrance animation */}
         <div className="space-y-3">
-          {question.options.map((option) => {
+          {question.options.map((option, optIdx) => {
             const isSelected = selectedOption === option.letter;
             const isCorrectOption = option.letter === question.correctAnswer;
 
@@ -2808,10 +2905,11 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
             return (
               <button
-                key={option.letter}
+                key={`${question.id}-${option.letter}`}
                 onClick={() => handleSelect(option.letter)}
                 disabled={hasSubmitted}
-                className={`w-full text-left p-4 rounded-xl border transition-all duration-150 flex items-start gap-3.5 group ${cardStyles}`}
+                style={{ animationDelay: `${optIdx * 45}ms` }}
+                className={`w-full text-left p-3.5 sm:p-4 rounded-xl border transition-all duration-150 flex items-start gap-3 sm:gap-3.5 group cursor-pointer animate-quiz-option-fade-in-up ${cardStyles}`}
               >
                 <span
                   className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 border transition-colors ${badgeStyles}`}
@@ -3167,31 +3265,41 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                     </button>
                   )}
 
-                  {/* Concept Summary Toggle Button */}
-                  <button
-                    type="button"
-                    onClick={handleToggleConceptSummary}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
-                      showConceptSummaryOnly
-                        ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-2xs'
-                        : 'bg-white hover:bg-blue-50 text-[#0078D4] border-sky-200 shadow-2xs'
-                    }`}
-                    title="Toggle between Analyze Distractors (Architectural Misconceptions) and 1-Sentence Concept Summary"
+                  {/* Concept Summary Toggle Button with Hover State Information */}
+                  <HoverInfoFeedback
+                    title="Concept Summary vs. Distractors"
+                    badge={showConceptSummaryOnly ? 'Concept View' : 'Distractor View'}
+                    badgeColor="blue"
+                    description="Switch between an architectural misconception breakdown for each wrong choice, or a concise 1-sentence foundational rule."
+                    tip="High-yield synthesis for rapid revision"
+                    side="top"
+                    align="right"
                   >
-                    <Sparkles className={`w-3.5 h-3.5 ${showConceptSummaryOnly ? 'text-amber-300' : 'text-[#0078D4]'}`} />
-                    <span>{showConceptSummaryOnly ? 'Showing Summary' : 'Concept Summary'}</span>
-                    <div
-                      className={`w-6 h-3.5 rounded-full transition-colors flex items-center p-0.5 ${
-                        showConceptSummaryOnly ? 'bg-amber-400' : 'bg-slate-300'
+                    <button
+                      type="button"
+                      onClick={handleToggleConceptSummary}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                        showConceptSummaryOnly
+                          ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-2xs'
+                          : 'bg-white hover:bg-blue-50 text-[#0078D4] border-sky-200 shadow-2xs'
                       }`}
+                      aria-label="Toggle between Analyze Distractors and 1-Sentence Concept Summary"
                     >
+                      <Sparkles className={`w-3.5 h-3.5 ${showConceptSummaryOnly ? 'text-amber-300' : 'text-[#0078D4]'}`} />
+                      <span>{showConceptSummaryOnly ? 'Showing Summary' : 'Concept Summary'}</span>
                       <div
-                        className={`w-2.5 h-2.5 rounded-full bg-white shadow-xs transition-transform duration-200 ${
-                          showConceptSummaryOnly ? 'translate-x-2.5' : 'translate-x-0'
+                        className={`w-6 h-3.5 rounded-full transition-colors flex items-center p-0.5 ${
+                          showConceptSummaryOnly ? 'bg-amber-400' : 'bg-slate-300'
                         }`}
-                      />
-                    </div>
-                  </button>
+                      >
+                        <div
+                          className={`w-2.5 h-2.5 rounded-full bg-white shadow-xs transition-transform duration-200 ${
+                            showConceptSummaryOnly ? 'translate-x-2.5' : 'translate-x-0'
+                          }`}
+                        />
+                      </div>
+                    </button>
+                  </HoverInfoFeedback>
                 </div>
               </div>
 

@@ -31,6 +31,7 @@ import {
   TrendingUp,
   TrendingDown,
   ShieldCheck,
+  StickyNote,
 } from 'lucide-react';
 import * as d3 from 'd3';
 import { Header, AppTab } from './components/Header';
@@ -71,6 +72,8 @@ import { BackendCloudModal, HubSection } from './components/BackendCloudModal';
 import { ApiDocumentationModal } from './components/ApiDocumentationModal';
 import { CurriculumReadinessModal } from './components/CurriculumReadinessModal';
 import { AdminBackOfficeModal } from './components/AdminBackOfficeModal';
+import { DomainAccuracyHeatmapD3 } from './components/DomainAccuracyHeatmapD3';
+import { CohortPerformanceView } from './components/CohortPerformanceView';
 import { ExitStudySessionModal } from './components/ExitStudySessionModal';
 import { ProtectedRoute, AuthenticatedSupabaseUser } from './components/ProtectedRoute';
 import { usePostgresDatabase } from './hooks/usePostgresDatabase';
@@ -107,7 +110,9 @@ import {
   getPastQuizSessions,
   saveHarambeeDrillCompletion,
   mergeCloudProgressIntoLocalStats,
+  getAllQuestionNotes,
 } from './utils/storage';
+import { HoverInfoFeedback } from './components/HoverInfoFeedback';
 import { generateDomainConfidencePdf } from './utils/pdfGenerator';
 import { fireModuleCompletionConfetti } from './utils/confetti';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -273,6 +278,8 @@ export default function App() {
     triggerMotifShimmer();
   };
   const [onlyBookmarks, setOnlyBookmarks] = useState<boolean>(false);
+  const [onlySavedNotes, setOnlySavedNotes] = useState<boolean>(false);
+  const [savedNotesMap, setSavedNotesMap] = useState<Record<string, string>>(() => getAllQuestionNotes());
   const [onlyAiGenerated, setOnlyAiGenerated] = useState<boolean>(false);
   const [onlyUnresolvedMistakes, setOnlyUnresolvedMistakes] = useState<boolean>(false);
   const [retryQueueQuestionIds, setRetryQueueQuestionIds] = useState<string[]>([]);
@@ -287,6 +294,24 @@ export default function App() {
   const [backendModalSection, setBackendModalSection] = useState<HubSection>('auth-progress');
   const [showApiDocumentationModal, setShowApiDocumentationModal] = useState<boolean>(false);
   const initialDeepLinkHandledRef = React.useRef<boolean>(false);
+
+  // Sync saved notes map when notes are created, modified or deleted in any component
+  useEffect(() => {
+    const handleNotesUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ notes: Record<string, string> }>;
+      if (customEvent.detail?.notes) {
+        setSavedNotesMap(customEvent.detail.notes);
+      } else {
+        setSavedNotesMap(getAllQuestionNotes());
+      }
+    };
+    window.addEventListener('az900-notes-updated', handleNotesUpdated);
+    return () => window.removeEventListener('az900-notes-updated', handleNotesUpdated);
+  }, []);
+
+  const savedNotesCount = useMemo(() => {
+    return Object.keys(savedNotesMap).filter((id) => Boolean(savedNotesMap[id]?.trim())).length;
+  }, [savedNotesMap]);
 
   // Tick down temporary 5-minute 'Retry Queue' filter every second and auto-expire after 5 minutes
   useEffect(() => {
@@ -327,6 +352,7 @@ export default function App() {
     setRetryQueueSecondsLeft(300);
     setOnlyRetryQueue(true);
     setOnlyBookmarks(false);
+    setOnlySavedNotes(false);
     setOnlyAiGenerated(false);
     setOnlyUnresolvedMistakes(false);
     setRetryIncorrectPathId(null);
@@ -341,11 +367,13 @@ export default function App() {
   };
 
   // Active Quick Switcher filter state & handler for mobile horizontal swipe or pill tap
-  const activeQuickFilter: 'all' | 'bookmarks' | 'ai' | 'mistakes' | 'retry-queue' =
+  const activeQuickFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' =
     onlyRetryQueue && retryQueueSecondsLeft > 0
       ? 'retry-queue'
       : onlyBookmarks
       ? 'bookmarks'
+      : onlySavedNotes
+      ? 'notes'
       : onlyAiGenerated
       ? 'ai'
       : onlyUnresolvedMistakes
@@ -353,11 +381,12 @@ export default function App() {
       : 'all';
 
   const handleSelectQuickFilter = (
-    nextFilter: 'all' | 'bookmarks' | 'ai' | 'mistakes' | 'retry-queue'
+    nextFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue'
   ) => {
     setRetryIncorrectPathId(null);
     setRetryIncorrectSnapshotIds([]);
     setOnlyBookmarks(nextFilter === 'bookmarks');
+    setOnlySavedNotes(nextFilter === 'notes');
     setOnlyAiGenerated(nextFilter === 'ai');
     setOnlyUnresolvedMistakes(nextFilter === 'mistakes');
     setOnlyRetryQueue(nextFilter === 'retry-queue' && retryQueueSecondsLeft > 0);
@@ -378,9 +407,31 @@ export default function App() {
 
   // Toggle for secondary Practice workspace panels (keeps Practice view clean & uncluttered)
   const [showWorkspacePanels, setShowWorkspacePanels] = useState<boolean>(false);
+  const [showPracticeHeatmap, setShowPracticeHeatmap] = useState<boolean>(false);
 
   // Trigger to open the centered Study Zone accordion modal from the Practice toolbar
   const [externalStudyZoneOpenTrigger, setExternalStudyZoneOpenTrigger] = useState<number>(0);
+
+  // Compact setting for Quick-Sort & Study Tools toolbar (conserves vertical screen real estate on mobile/tablet)
+  const [isQuickSortCompact, setIsQuickSortCompact] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('az900_quicksort_toolbar_compact');
+      if (saved !== null) return saved === 'true';
+      return typeof window !== 'undefined' && window.innerWidth < 1024;
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleQuickSortCompact = () => {
+    setIsQuickSortCompact((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('az900_quicksort_toolbar_compact', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const handleChangeSortOrder = (
     nextSort: 'default' | 'newest-first' | 'hardest-first' | 'module-progression' | 'easiest-first'
@@ -653,6 +704,9 @@ export default function App() {
       if (onlyBookmarks && !stats.bookmarks.includes(q.id)) {
         return false;
       }
+      if (onlySavedNotes && (!savedNotesMap[q.id] || !savedNotesMap[q.id].trim())) {
+        return false;
+      }
       if (onlyAiGenerated && !q.isAiGenerated) {
         return false;
       }
@@ -761,6 +815,8 @@ export default function App() {
     selectedModuleId,
     selectedDifficultyFilter,
     onlyBookmarks,
+    onlySavedNotes,
+    savedNotesMap,
     onlyAiGenerated,
     onlyUnresolvedMistakes,
     searchQuery,
@@ -1081,7 +1137,7 @@ export default function App() {
 
   return (
     <ProtectedRoute onUserChange={setAuthenticatedUser}>
-      <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F8F9FA] text-[#1E293B] relative flex flex-col font-sans">
+      <div className="min-h-screen w-[100vw] max-w-[100vw] overflow-x-hidden bg-[#F8F9FA] text-[#1E293B] relative flex flex-col font-sans">
         {/* Subtle African Kitenge Watermark Background */}
         <AfricanWatermarkPattern opacity={0.04} />
 
@@ -1190,14 +1246,14 @@ export default function App() {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full min-w-0 overflow-x-hidden mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 relative z-10">
+      <main className="flex-1 max-w-7xl w-[100vw] max-w-[100vw] min-w-0 overflow-x-hidden mx-auto px-2.5 sm:px-6 lg:px-8 py-4 sm:py-8 relative z-10">
         {/* TAB 1: PRACTICE MODULES */}
         {activeTab === 'quiz' && (
           <div className="space-y-4 sm:space-y-5 w-full min-w-0">
             {/* Compact Responsive Hero Section + Glassy Study Hub Dropdown (Hidden in Focus Mode) */}
             {!isFocusMode && (
               <div className="text-center py-1 sm:py-2 space-y-2.5 max-w-5xl mx-auto relative z-20">
-                {/* Top Row: AZ-900 Badge + Glassy Study Hub Dropdown */}
+                {/* Top Row: AZ-900 Badge + Glassy Study Hub Dropdown + Student Cohort Links */}
                 <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-blue-500/10 via-sky-500/20 to-blue-500/10 text-[#0078D4] border border-sky-300/60 shadow-2xs backdrop-blur-xs">
                     <MaasaiMedallion size={14} />
@@ -1230,35 +1286,12 @@ export default function App() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setBackendModalSection('auth-progress');
-                      setShowBackendCloudModal(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer"
-                    title="Open Cloud Account, Protected Curriculum API & M-Pesa / Stripe Unlocks"
+                    onClick={() => setActiveTab('cohort')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-700 hover:to-blue-800 text-white shadow-xs transition-all cursor-pointer"
+                    title="Open Cohort Performance: Compare your domain mastery against the Global Harambee Azure Cohort"
                   >
-                    <Cloud className="w-3.5 h-3.5" />
-                    <span>Cloud Sync & M-Pesa Unlocks</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowCurriculumReadinessModal(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-gradient-to-r from-[#006600] to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white border border-emerald-400/50 shadow-xs transition-all cursor-pointer"
-                    title="Run Preparation Readiness Techniques Check & Sync Live AZ-900 Curriculum Updates"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
-                    <span>Readiness & Curriculum Check</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowAdminBackOfficeModal(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 shadow-xs transition-all cursor-pointer"
-                    title="Dedicated Single-User Admin Back-Office (vangetich@gmail.com): Relocated Admin DB, API Docs, SQL & Security"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Admin Back-Office</span>
+                    <Users className="w-3.5 h-3.5 text-sky-200" />
+                    <span>Cohort Performance</span>
                   </button>
 
                   <button
@@ -1373,253 +1406,464 @@ export default function App() {
                   isFetchingState ? 'is-fetching' : ''
                 } ${
                   isAllTimeHighReached ? 'is-all-time-high' : ''
-                } group relative overflow-hidden w-full max-w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 hover:border-[#006600]/40 card-elevation p-3.5 sm:px-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 transition-all duration-300 ease-out hover:animate-pulse hover:animate-kenyan-pulse hover:shadow-md`}
+                } group relative overflow-hidden w-full max-w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 hover:border-[#006600]/40 card-elevation transition-all duration-300 ease-out hover:animate-pulse hover:animate-kenyan-pulse hover:shadow-md ${
+                  isQuickSortCompact ? 'p-2 sm:px-3.5 sm:py-2.5' : 'p-3.5 sm:px-5'
+                }`}
               >
                 {/* Random & Partially Animated Kenyan Motifs in Kenyan Flag Colours (Black, Red #BB0000, Green #006600, White) */}
                 <KenyanFlagQuickSortMotifs isFetching={isFetchingState} />
 
-                {/* Left: Quick-Sort Toggle Buttons & Persistent Difficulty Level Dropdown Selector */}
-                <div className="relative z-10 flex flex-wrap items-center gap-1.5">
-                  <span
-                    className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5 mr-1 px-2.5 py-1 rounded-xl bg-white/90 border border-slate-200/80 shadow-2xs backdrop-blur-xs"
-                    title="Kenyan Heritage Quick-Sort Dashboard (Black • Red • Green • White)"
-                  >
-                    <KenyanFlagMiniEmblem size={16} />
-                    <ArrowUpDown className="w-3.5 h-3.5 text-[#BB0000]" />
-                    <span>Quick-Sort:</span>
-                  </span>
+                {isQuickSortCompact ? (
+                  /* =====================================================================
+                     COMPACT SETTING: Maximizes Viewport Real Estate on Mobile & Tablets
+                     ===================================================================== */
+                  <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 w-full">
+                    {/* Left: Compact Quick-Sort & Difficulty Selectors */}
+                    <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                      <div className="inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-white/95 border border-slate-300 shadow-2xs backdrop-blur-xs">
+                        <KenyanFlagMiniEmblem size={14} />
+                        <ArrowUpDown className="w-3 h-3 text-[#BB0000] shrink-0" />
+                        <label htmlFor="compact-quick-sort-selector" className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                          Sort:
+                        </label>
+                        <select
+                          id="compact-quick-sort-selector"
+                          value={questionSortOrder}
+                          onChange={(e) => {
+                            handleChangeSortOrder(e.target.value as any);
+                            triggerMotifShimmer();
+                          }}
+                          className="text-xs font-black text-slate-900 bg-transparent focus:outline-none cursor-pointer pr-1"
+                          aria-label="Quick-Sort question order"
+                        >
+                          <option value="default">Adaptive Default</option>
+                          <option value="newest-first">Newest First</option>
+                          <option value="hardest-first">Hardest First</option>
+                          <option value="module-progression">Module Progression</option>
+                          <option value="easiest-first">Easiest First</option>
+                        </select>
+                      </div>
 
-                  {(
-                    [
-                      { id: 'newest-first', label: 'Newest First' },
-                      { id: 'hardest-first', label: 'Hardest First' },
-                      { id: 'module-progression', label: 'Module Progression' },
-                      { id: 'easiest-first', label: 'Easiest First' },
-                      { id: 'default', label: 'Adaptive Default' },
-                    ] as const
-                  ).map((sortOpt) => {
-                    const isActive = questionSortOrder === sortOpt.id;
-                    return (
+                      <div className="inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-white/95 border border-slate-300 shadow-2xs backdrop-blur-xs">
+                        <Filter className="w-3 h-3 text-[#0078D4] shrink-0" />
+                        <label htmlFor="compact-difficulty-selector" className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                          Diff:
+                        </label>
+                        <select
+                          id="compact-difficulty-selector"
+                          value={selectedDifficultyFilter}
+                          onChange={(e) => {
+                            const val = e.target.value as
+                              | 'all'
+                              | 'Fundamental'
+                              | 'Intermediate'
+                              | 'Advanced';
+                            setSelectedDifficultyFilter(val);
+                            handleChangeLockedDifficulty(val === 'all' ? null : val);
+                            setCurrentQuestionIndex(0);
+                          }}
+                          className="text-xs font-black text-slate-900 bg-transparent focus:outline-none cursor-pointer pr-1"
+                          aria-label="Filter difficulty"
+                        >
+                          <option value="all">All Levels (Adaptive Auto)</option>
+                          <option value="Fundamental">Fundamental (Override)</option>
+                          <option value="Intermediate">Intermediate (Override)</option>
+                          <option value="Advanced">Advanced (Override)</option>
+                        </select>
+                        {selectedDifficultyFilter !== 'all' && (
+                          <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-900 text-[8px] font-black uppercase">
+                            Locked
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: Compact Tools, Trend Indicator & Expand/Compact Toggle */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {/* Compact Trend Indicator with 180° Flip & Sparkline */}
+                      <div
+                        onClick={() => {
+                          setTrendScoreFlipParity((prev) => !prev);
+                          const pathLabel =
+                            selectedPathId === 'all' ? 'All Paths' : `Path ${selectedPathId}`;
+                          const nextHigh = Math.max(currentPerf, storedPathHigh);
+                          setAllTimeHighToast(`All-Time High! ${pathLabel}: ${nextHigh}%`);
+                        }}
+                        className={`px-2 py-1 rounded-xl border text-[11px] font-black flex items-center gap-1.5 backdrop-blur-xs shadow-2xs transition-all cursor-pointer select-none ${
+                          isImproved
+                            ? 'bg-emerald-50/95 text-[#006600] border-emerald-300'
+                            : 'bg-red-50/95 text-[#BB0000] border-red-300'
+                        }`}
+                        title={`Trend: ${isImproved ? `+${trendDelta}%` : `${trendDelta}%`} (Click to highlight all-time high)`}
+                      >
+                        <span className={`trend-arrow-indicator ${shouldFlipTrendArrow ? 'rotate-180 is-flipped' : ''}`}>
+                          <TrendingUp className={`w-3 h-3 ${isImproved ? 'text-[#006600]' : 'text-[#BB0000]'}`} />
+                        </span>
+                        <span>{isImproved ? `+${trendDelta}%` : `${trendDelta}%`}</span>
+                        <svg
+                          width={44}
+                          height={16}
+                          viewBox={`0 0 ${sparkW} ${sparkH}`}
+                          className="hidden sm:inline overflow-visible shrink-0 rounded bg-white/70 px-0.5"
+                          aria-hidden="true"
+                        >
+                          <path d={sparklineAreaD} fill={isImproved ? 'rgba(0, 102, 0, 0.14)' : 'rgba(187, 0, 0, 0.14)'} />
+                          <path d={sparklinePathD} fill="none" stroke={isImproved ? '#006600' : '#BB0000'} strokeWidth={1.6} />
+                        </svg>
+                      </div>
+
+                      {/* Download Report Button (Compact) */}
                       <button
-                        key={sortOpt.id}
                         type="button"
                         onClick={() => {
-                          handleChangeSortOrder(sortOpt.id);
-                          triggerMotifShimmer();
-                        }}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer flex items-center gap-1.5 backdrop-blur-xs ${
-                          isActive
-                            ? 'bg-gradient-to-r from-[#0F172A] via-[#BB0000] to-[#006600] text-white border-white/40 shadow-xs ring-2 ring-[#006600]/25'
-                            : 'bg-white/90 hover:bg-slate-50 text-slate-800 border-slate-200/90 shadow-2xs'
-                        }`}
-                      >
-                        {isActive && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        )}
-                        <span>{sortOpt.label}</span>
-                      </button>
-                    );
-                  })}
-
-                  {/* Persistent Difficulty Level Dropdown Selector (Overrides Dynamic Difficulty Adjustment) */}
-                  <div className="inline-flex items-center gap-1.5 ml-0.5 px-2.5 py-1 rounded-xl bg-white/95 border border-slate-300 shadow-2xs backdrop-blur-xs">
-                    <Filter className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
-                    <label
-                      htmlFor="persistent-difficulty-selector"
-                      className="text-[11px] font-black uppercase tracking-wider text-slate-700 whitespace-nowrap"
-                    >
-                      Difficulty:
-                    </label>
-                    <select
-                      id="persistent-difficulty-selector"
-                      aria-label="Persistent difficulty level filter"
-                      value={selectedDifficultyFilter}
-                      onChange={(e) => {
-                        const val = e.target.value as
-                          | 'all'
-                          | 'Fundamental'
-                          | 'Intermediate'
-                          | 'Advanced';
-                        setSelectedDifficultyFilter(val);
-                        handleChangeLockedDifficulty(val === 'all' ? null : val);
-                        setCurrentQuestionIndex(0);
-                      }}
-                      className="text-xs font-extrabold text-slate-900 bg-transparent focus:outline-none cursor-pointer pr-1"
-                      title="Manually filter question bank by difficulty (Fundamental, Intermediate, Advanced), overriding automatic dynamic difficulty adjustment"
-                    >
-                      <option value="all">All Levels (Adaptive Auto)</option>
-                      <option value="Fundamental">Fundamental (Override)</option>
-                      <option value="Intermediate">Intermediate (Override)</option>
-                      <option value="Advanced">Advanced (Override)</option>
-                    </select>
-                    {selectedDifficultyFilter !== 'all' && (
-                      <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black uppercase tracking-wider">
-                        Override
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right: Dynamic Session Performance Trend Indicator (D3 Sparkline + 180° Arrow Flip + Achievement Toast), Download Report PDF Button & Study Zone Controls */}
-                <div className="relative z-10 flex flex-wrap items-center gap-2">
-                  {/* Dynamic Trend Indicator with Smooth 180-Degree CSS Transform Flip Transition & D3 5-Session Sparkline */}
-                  <div
-                    onClick={() => {
-                      setTrendScoreFlipParity((prev) => !prev);
-                      const pathLabel =
-                        selectedPathId === 'all' ? 'All Paths' : `Path ${selectedPathId}`;
-                      const nextHigh = Math.max(currentPerf, storedPathHigh);
-                      setAllTimeHighToast(`All-Time High! ${pathLabel}: ${nextHigh}%`);
-                    }}
-                    className={`px-2.5 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-2 backdrop-blur-xs shadow-2xs transition-all cursor-pointer select-none ${
-                      isImproved
-                        ? 'bg-emerald-50/95 text-[#006600] border-emerald-300'
-                        : 'bg-red-50/95 text-[#BB0000] border-red-300'
-                    }`}
-                    title={`Performance Trend: Current ${currentPerf}% vs Last Session ${referenceScore}% (${
-                      isImproved ? `+${trendDelta}% Improved` : `${trendDelta}% Declined`
-                    }) • Last 5 Sessions (D3 Sparkline): ${sparklineSessionScores.join('% → ')}% • Click to flip trend & highlight all-time high`}
-                  >
-                    <span
-                      className={`trend-arrow-indicator ${
-                        shouldFlipTrendArrow ? 'rotate-180 is-flipped' : ''
-                      }`}
-                    >
-                      <TrendingUp
-                        className={`w-3.5 h-3.5 shrink-0 ${
-                          isImproved ? 'text-[#006600]' : 'text-[#BB0000]'
-                        }`}
-                      />
-                    </span>
-                    <span
-                      className={`trend-arrow-indicator font-black ${
-                        shouldFlipTrendArrow ? 'rotate-180 is-flipped' : ''
-                      }`}
-                      aria-hidden="true"
-                    >
-                      ▲
-                    </span>
-                    <span>
-                      {isImproved ? `+${trendDelta}%` : `${trendDelta}%`}{' '}
-                      <span className="hidden xl:inline font-bold opacity-85">
-                        ({isImproved ? 'Improved' : 'Declined'})
-                      </span>
-                    </span>
-
-                    {/* D3 Tiny Sparkline Trend Chart (Last 5 Quiz Sessions) */}
-                    <svg
-                      width={sparkW}
-                      height={sparkH}
-                      viewBox={`0 0 ${sparkW} ${sparkH}`}
-                      className="overflow-visible shrink-0 rounded bg-white/70 border border-slate-200/70 px-0.5"
-                      aria-label={`Last 5 quiz sessions sparkline: ${sparklineSessionScores.join('%, ')}%`}
-                    >
-                      <path
-                        d={sparklineAreaD}
-                        fill={isImproved ? 'rgba(0, 102, 0, 0.14)' : 'rgba(187, 0, 0, 0.14)'}
-                      />
-                      <path
-                        d={sparklinePathD}
-                        fill="none"
-                        stroke={isImproved ? '#006600' : '#BB0000'}
-                        strokeWidth={1.6}
-                        strokeLinecap="round"
-                      />
-                      {sparklineSessionScores.map((val, idx) => (
-                        <circle
-                          key={idx}
-                          cx={xScale(idx)}
-                          cy={yScale(val)}
-                          r={idx === sparklineSessionScores.length - 1 ? 2.3 : 1.4}
-                          fill={
-                            idx === sparklineSessionScores.length - 1
-                              ? '#D97706'
-                              : isImproved
-                              ? '#006600'
-                              : '#BB0000'
+                          try {
+                            generateDomainConfidencePdf(stats);
+                          } catch (err) {
+                            console.error('PDF export fallback triggered:', err);
+                            setShowExportModal(true);
                           }
-                        />
-                      ))}
-                    </svg>
-                  </div>
+                        }}
+                        className="px-2 py-1 rounded-xl bg-white/95 hover:bg-emerald-50 text-slate-900 hover:text-[#006600] border border-slate-300 text-xs font-extrabold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                        title="Download PDF Progress & Domain Confidence Report"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#BB0000]" />
+                        <span className="hidden sm:inline text-[11px]">Report</span>
+                      </button>
 
-                  {/* Subtle 'Achievement' Toast / Highlight when Trend Flip Marks a New All-Time High Score */}
-                  {isAllTimeHighReached && (
-                    <div
-                      className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-100 via-yellow-50 to-emerald-100 text-amber-950 border border-amber-400 text-[11px] font-black flex items-center gap-1.5 shadow-2xs animate-in fade-in zoom-in-95 duration-200"
-                      title="Achievement Unlocked: New All-Time High Score for this Learning Path!"
-                    >
-                      <Award className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      <span>
-                        {allTimeHighToast ||
-                          `🏆 All-Time High (${
-                            selectedPathId === 'all' ? 'All Paths' : `Path ${selectedPathId}`
-                          }: ${Math.max(currentPerf, storedPathHigh)}%)`}
-                      </span>
+                      {/* Readiness Check Button (Compact) */}
+                      <button
+                        type="button"
+                        onClick={() => setShowCurriculumReadinessModal(true)}
+                        className="px-2 py-1 rounded-xl bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                        title="Check Preparation Readiness Techniques & Sync Live AZ-900 Updates"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[#006600]" />
+                        <span className="hidden sm:inline text-[11px]">Readiness</span>
+                      </button>
+
+                      {/* Domain Heatmap Toggle (Compact) */}
+                      <button
+                        type="button"
+                        onClick={() => setShowPracticeHeatmap((prev) => !prev)}
+                        className={`px-2 py-1 rounded-xl border text-xs font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
+                          showPracticeHeatmap
+                            ? 'bg-[#0078D4] text-white border-[#005A9E] shadow-2xs'
+                            : 'bg-white/95 hover:bg-sky-50 text-slate-800 hover:text-[#0078D4] border-slate-300 shadow-2xs'
+                        }`}
+                        title="Toggle Domain Accuracy Heatmap"
+                      >
+                        <Target className={`w-3.5 h-3.5 ${showPracticeHeatmap ? 'text-amber-300' : 'text-[#0078D4]'}`} />
+                        <span className="text-[11px]">{showPracticeHeatmap ? 'Hide' : 'Heatmap'}</span>
+                      </button>
+
+                      {/* Maps & Readiness Toggle (Compact) */}
+                      <button
+                        type="button"
+                        onClick={() => setShowWorkspacePanels((prev) => !prev)}
+                        className={`px-2 py-1 rounded-xl border text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                          showWorkspacePanels
+                            ? 'bg-amber-50/95 text-amber-900 border-amber-300 shadow-2xs'
+                            : 'bg-white/90 hover:bg-slate-50 text-slate-700 border-slate-200/90 shadow-2xs'
+                        }`}
+                        title="Toggle Maps & Readiness workspace panels"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-[#006600]" />
+                        <span className="hidden xs:inline text-[11px]">Maps</span>
+                      </button>
+
+                      {/* Study Zone Menu Button (Compact) */}
+                      <button
+                        type="button"
+                        onClick={() => setExternalStudyZoneOpenTrigger((prev) => prev + 1)}
+                        className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] hover:opacity-95 text-white text-xs font-extrabold flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                        title="Open Centered Study Zone Accordion Menu"
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-amber-300" />
+                        <span className="text-[11px]">Study Zone</span>
+                      </button>
+
+                      {/* Expand Button: Toggles to Full Multi-Button View */}
+                      <button
+                        type="button"
+                        onClick={handleToggleQuickSortCompact}
+                        className="px-2.5 py-1 rounded-xl bg-sky-50 hover:bg-sky-100 text-[#0078D4] border border-sky-300 text-xs font-black flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                        title="Expand toolbar to view full individual sort buttons"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                        <span className="hidden xs:inline text-[11px]">Expand</span>
+                      </button>
                     </div>
-                  )}
+                  </div>
+                ) : (
+                  /* =====================================================================
+                     EXPANDED SETTING: Full Multi-Button Bar with Compact Toggle
+                     ===================================================================== */
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 w-full">
+                    {/* Left: Quick-Sort Toggle Buttons & Persistent Difficulty Level Dropdown Selector */}
+                    <div className="relative z-10 flex flex-wrap items-center gap-1.5">
+                      <span
+                        className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5 mr-1 px-2.5 py-1 rounded-xl bg-white/90 border border-slate-200/80 shadow-2xs backdrop-blur-xs"
+                        title="Kenyan Heritage Quick-Sort Dashboard (Black • Red • Green • White)"
+                      >
+                        <KenyanFlagMiniEmblem size={16} />
+                        <ArrowUpDown className="w-3.5 h-3.5 text-[#BB0000]" />
+                        <span>Quick-Sort:</span>
+                      </span>
 
-                  {/* Download Report Button (Invokes PDF Export Utility for Current Dashboard Progress Data) */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        generateDomainConfidencePdf(stats);
-                      } catch (err) {
-                        console.error('PDF export fallback triggered:', err);
-                        setShowExportModal(true);
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-white/95 hover:bg-emerald-50 text-slate-900 hover:text-[#006600] border border-slate-300 hover:border-[#006600] text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer backdrop-blur-xs"
-                    title="Download PDF Progress & Domain Confidence Report for current dashboard data"
-                  >
-                    <Download className="w-3.5 h-3.5 text-[#BB0000]" />
-                    <span>Download Report</span>
-                  </button>
+                      {(
+                        [
+                          { id: 'newest-first', label: 'Newest First' },
+                          { id: 'hardest-first', label: 'Hardest First' },
+                          { id: 'module-progression', label: 'Module Progression' },
+                          { id: 'easiest-first', label: 'Easiest First' },
+                          { id: 'default', label: 'Adaptive Default' },
+                        ] as const
+                      ).map((sortOpt) => {
+                        const isActive = questionSortOrder === sortOpt.id;
+                        return (
+                          <button
+                            key={sortOpt.id}
+                            type="button"
+                            onClick={() => {
+                              handleChangeSortOrder(sortOpt.id);
+                              triggerMotifShimmer();
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer flex items-center gap-1.5 backdrop-blur-xs ${
+                              isActive
+                                ? 'bg-gradient-to-r from-[#0F172A] via-[#BB0000] to-[#006600] text-white border-white/40 shadow-xs ring-2 ring-[#006600]/25'
+                                : 'bg-white/90 hover:bg-slate-50 text-slate-800 border-slate-200/90 shadow-2xs'
+                            }`}
+                          >
+                            {isActive && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            )}
+                            <span>{sortOpt.label}</span>
+                          </button>
+                        );
+                      })}
 
-                  <button
-                    type="button"
-                    onClick={() => setShowCurriculumReadinessModal(true)}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer backdrop-blur-xs"
-                    title="Check Preparation Readiness Techniques & Sync AZ-900 Curriculum Updates"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 text-[#006600]" />
-                    <span>Readiness Check</span>
-                  </button>
+                      {/* Persistent Difficulty Level Dropdown Selector */}
+                      <div className="inline-flex items-center gap-1.5 ml-0.5 px-2.5 py-1 rounded-xl bg-white/95 border border-slate-300 shadow-2xs backdrop-blur-xs">
+                        <Filter className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+                        <label
+                          htmlFor="persistent-difficulty-selector"
+                          className="text-[11px] font-black uppercase tracking-wider text-slate-700 whitespace-nowrap"
+                        >
+                          Difficulty:
+                        </label>
+                        <select
+                          id="persistent-difficulty-selector"
+                          aria-label="Persistent difficulty level filter"
+                          value={selectedDifficultyFilter}
+                          onChange={(e) => {
+                            const val = e.target.value as
+                              | 'all'
+                              | 'Fundamental'
+                              | 'Intermediate'
+                              | 'Advanced';
+                            setSelectedDifficultyFilter(val);
+                            handleChangeLockedDifficulty(val === 'all' ? null : val);
+                            setCurrentQuestionIndex(0);
+                          }}
+                          className="text-xs font-extrabold text-slate-900 bg-transparent focus:outline-none cursor-pointer pr-1"
+                          title="Manually filter question bank by difficulty (Fundamental, Intermediate, Advanced)"
+                        >
+                          <option value="all">All Levels (Adaptive Auto)</option>
+                          <option value="Fundamental">Fundamental (Override)</option>
+                          <option value="Intermediate">Intermediate (Override)</option>
+                          <option value="Advanced">Advanced (Override)</option>
+                        </select>
+                        {selectedDifficultyFilter !== 'all' && (
+                          <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black uppercase tracking-wider">
+                            Override
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setShowWorkspacePanels((prev) => !prev)}
-                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs ${
-                      showWorkspacePanels
-                        ? 'bg-amber-50/95 text-amber-900 border-amber-300 shadow-2xs'
-                        : 'bg-white/90 hover:bg-slate-50 text-slate-700 border-slate-200/90 shadow-2xs'
-                    }`}
-                    title="Toggle Cloud Explorer, Progress Map & Weekly Readiness panels"
-                  >
-                    <Layers className="w-3.5 h-3.5 text-[#006600]" />
-                    <span>{showWorkspacePanels ? 'Hide Maps & Explorer' : 'Maps & Readiness'}</span>
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                        showWorkspacePanels ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
+                    {/* Right: Trend Indicator, Actions, and Compact Toggle */}
+                    <div className="relative z-10 flex flex-wrap items-center gap-2">
+                      <div
+                        onClick={() => {
+                          setTrendScoreFlipParity((prev) => !prev);
+                          const pathLabel =
+                            selectedPathId === 'all' ? 'All Paths' : `Path ${selectedPathId}`;
+                          const nextHigh = Math.max(currentPerf, storedPathHigh);
+                          setAllTimeHighToast(`All-Time High! ${pathLabel}: ${nextHigh}%`);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-2 backdrop-blur-xs shadow-2xs transition-all cursor-pointer select-none ${
+                          isImproved
+                            ? 'bg-emerald-50/95 text-[#006600] border-emerald-300'
+                            : 'bg-red-50/95 text-[#BB0000] border-red-300'
+                        }`}
+                        title={`Performance Trend: Current ${currentPerf}% vs Last Session ${referenceScore}%`}
+                      >
+                        <span
+                          className={`trend-arrow-indicator ${
+                            shouldFlipTrendArrow ? 'rotate-180 is-flipped' : ''
+                          }`}
+                        >
+                          <TrendingUp
+                            className={`w-3.5 h-3.5 shrink-0 ${
+                              isImproved ? 'text-[#006600]' : 'text-[#BB0000]'
+                            }`}
+                          />
+                        </span>
+                        <span>
+                          {isImproved ? `+${trendDelta}%` : `${trendDelta}%`}{' '}
+                          <span className="hidden xl:inline font-bold opacity-85">
+                            ({isImproved ? 'Improved' : 'Declined'})
+                          </span>
+                        </span>
 
-                  <button
-                    type="button"
-                    onClick={() => setExternalStudyZoneOpenTrigger((prev) => prev + 1)}
-                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] hover:opacity-95 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
-                    title="Open Centered Study Zone Accordion Menu"
-                  >
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Study Zone Menu</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-amber-300" />
-                  </button>
-                </div>
+                        <svg
+                          width={sparkW}
+                          height={sparkH}
+                          viewBox={`0 0 ${sparkW} ${sparkH}`}
+                          className="overflow-visible shrink-0 rounded bg-white/70 border border-slate-200/70 px-0.5"
+                          aria-label={`Last 5 quiz sessions sparkline: ${sparklineSessionScores.join('%, ')}%`}
+                        >
+                          <path
+                            d={sparklineAreaD}
+                            fill={isImproved ? 'rgba(0, 102, 0, 0.14)' : 'rgba(187, 0, 0, 0.14)'}
+                          />
+                          <path
+                            d={sparklinePathD}
+                            fill="none"
+                            stroke={isImproved ? '#006600' : '#BB0000'}
+                            strokeWidth={1.6}
+                            strokeLinecap="round"
+                          />
+                          {sparklineSessionScores.map((val, idx) => (
+                            <circle
+                              key={idx}
+                              cx={xScale(idx)}
+                              cy={yScale(val)}
+                              r={idx === sparklineSessionScores.length - 1 ? 2.3 : 1.4}
+                              fill={
+                                idx === sparklineSessionScores.length - 1
+                                  ? '#D97706'
+                                  : isImproved
+                                  ? '#006600'
+                                  : '#BB0000'
+                              }
+                            />
+                          ))}
+                        </svg>
+                      </div>
+
+                      {/* Download Report Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            generateDomainConfidencePdf(stats);
+                          } catch (err) {
+                            console.error('PDF export fallback triggered:', err);
+                            setShowExportModal(true);
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-white/95 hover:bg-emerald-50 text-slate-900 hover:text-[#006600] border border-slate-300 hover:border-[#006600] text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer backdrop-blur-xs"
+                        title="Download PDF Progress & Domain Confidence Report for current dashboard data"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#BB0000]" />
+                        <span>Download Report</span>
+                      </button>
+
+                      {/* Readiness Check Button */}
+                      <button
+                        type="button"
+                        onClick={() => setShowCurriculumReadinessModal(true)}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer backdrop-blur-xs"
+                        title="Check Preparation Readiness Techniques & Sync AZ-900 Curriculum Updates"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[#006600]" />
+                        <span>Readiness Check</span>
+                      </button>
+
+                      {/* Domain Accuracy Heatmap Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => setShowPracticeHeatmap((prev) => !prev)}
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs ${
+                          showPracticeHeatmap
+                            ? 'bg-[#0078D4] text-white border-[#005A9E] shadow-2xs'
+                            : 'bg-white/95 hover:bg-sky-50 text-slate-800 hover:text-[#0078D4] border-slate-300 shadow-2xs'
+                        }`}
+                        title="Toggle D3.js Domain Accuracy Heatmap across all 3 AZ-900 knowledge domains & 12 modules"
+                      >
+                        <Target className={`w-3.5 h-3.5 ${showPracticeHeatmap ? 'text-amber-300' : 'text-[#0078D4]'}`} />
+                        <span>{showPracticeHeatmap ? 'Hide Domain Heatmap' : 'Domain Accuracy Heatmap'}</span>
+                      </button>
+
+                      {/* Maps & Readiness Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => setShowWorkspacePanels((prev) => !prev)}
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs ${
+                          showWorkspacePanels
+                            ? 'bg-amber-50/95 text-amber-900 border-amber-300 shadow-2xs'
+                            : 'bg-white/90 hover:bg-slate-50 text-slate-700 border-slate-200/90 shadow-2xs'
+                        }`}
+                        title="Toggle Cloud Explorer, Progress Map & Weekly Readiness panels"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-[#006600]" />
+                        <span>{showWorkspacePanels ? 'Hide Maps & Explorer' : 'Maps & Readiness'}</span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                            showWorkspacePanels ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+
+                      {/* Study Zone Menu Button */}
+                      <button
+                        type="button"
+                        onClick={() => setExternalStudyZoneOpenTrigger((prev) => prev + 1)}
+                        className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] hover:opacity-95 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                        title="Open Centered Study Zone Accordion Menu"
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Study Zone Menu</span>
+                        <ChevronDown className="w-3.5 h-3.5 text-amber-300" />
+                      </button>
+
+                      {/* Compact View Button: Toggles to Space-Saving Compact Footprint */}
+                      <button
+                        type="button"
+                        onClick={handleToggleQuickSortCompact}
+                        className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs font-black flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                        title="Switch to Compact View: Conserve vertical page space on tablets and phones"
+                      >
+                        <Minimize2 className="w-3.5 h-3.5 text-[#0078D4]" />
+                        <span>Compact View</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               );
             })()}
+
+            {/* Interactive D3.js Domain Accuracy Heatmap (Toggled directly in Practice Workspace or inside Workspace Panels) */}
+            {!isFocusMode && (showPracticeHeatmap || showWorkspacePanels) && (
+              <div className="animate-quiz-card-fade-in-up">
+                <DomainAccuracyHeatmapD3
+                  stats={stats}
+                  onSelectModule={(modId, pathId) => {
+                    if (pathId !== undefined) setSelectedPathId(pathId);
+                    setSelectedModuleId(modId);
+                    setCurrentQuestionIndex(0);
+                    setShowPostSessionReview(false);
+                  }}
+                  onLaunchMicroDrill={(modId) => {
+                    setMicroDrillTargetModuleId(modId);
+                    setShowMicroDrill(modId);
+                  }}
+                  onDrillWeakAreas={handleDrillWeakAreas}
+                />
+              </div>
+            )}
 
             {/* Collapsible Practice Workspace Panels (Grouped to keep Practice view clean and uncluttered) */}
             {!isFocusMode && showWorkspacePanels && (
@@ -1778,39 +2022,85 @@ export default function App() {
                     totalAnswered={stats.totalAnswered || 0}
                   />
 
-                  {/* Quick Filters */}
-                  <div className="bg-white rounded-xl border border-slate-200 p-2.5 card-elevation flex items-center justify-between gap-1.5">
-                    <button
-                      onClick={() => {
-                        setOnlyBookmarks(!onlyBookmarks);
-                        setOnlyAiGenerated(false);
-                        setCurrentQuestionIndex(0);
-                      }}
-                      className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
-                        onlyBookmarks
-                          ? 'bg-amber-500 text-white shadow-2xs'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
+                  {/* Quick Filters with Adaptive Saved Notes Bookmark & Hover State Information Feedback */}
+                  <div className="bg-white rounded-xl border border-slate-200 p-2 card-elevation flex items-center justify-between gap-1.5">
+                    <HoverInfoFeedback
+                      title="Revision Bookmarks"
+                      badge={`${stats.bookmarks.length} Saved`}
+                      badgeColor="amber"
+                      description="Filters question bank to your bookmarked questions for targeted review and consolidation."
+                      tip="Click to isolate bookmarked questions"
+                      className="flex-1 min-w-0"
                     >
-                      <Bookmark className="w-3 h-3 fill-current shrink-0" />
-                      <span className="truncate">Bookmarked ({stats.bookmarks.length})</span>
-                    </button>
+                      <button
+                        onClick={() => {
+                          setOnlyBookmarks(!onlyBookmarks);
+                          setOnlySavedNotes(false);
+                          setOnlyAiGenerated(false);
+                          setCurrentQuestionIndex(0);
+                        }}
+                        className={`w-full py-1.5 px-1.5 sm:px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
+                          onlyBookmarks
+                            ? 'bg-amber-500 text-white shadow-2xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        <Bookmark className="w-3 h-3 fill-current shrink-0" />
+                        <span className="truncate">Bookmarked ({stats.bookmarks.length})</span>
+                      </button>
+                    </HoverInfoFeedback>
 
-                    <button
-                      onClick={() => {
-                        setOnlyAiGenerated(!onlyAiGenerated);
-                        setOnlyBookmarks(false);
-                        setCurrentQuestionIndex(0);
-                      }}
-                      className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
-                        onlyAiGenerated
-                          ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-2xs'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
+                    <HoverInfoFeedback
+                      title="Adaptive Notes Bookmark"
+                      badge={`${savedNotesCount} Notes`}
+                      badgeColor="blue"
+                      description="Adaptive filter dynamically showing only questions where you have saved personal study notes, reminders, or memory cues."
+                      tip="Click to isolate questions with personal study notes"
+                      className="flex-1 min-w-0"
                     >
-                      <Sparkles className="w-3 h-3 shrink-0" />
-                      <span className="truncate">AI ({questions.filter((q) => q.isAiGenerated).length})</span>
-                    </button>
+                      <button
+                        onClick={() => {
+                          setOnlySavedNotes(!onlySavedNotes);
+                          setOnlyBookmarks(false);
+                          setOnlyAiGenerated(false);
+                          setCurrentQuestionIndex(0);
+                        }}
+                        className={`w-full py-1.5 px-1.5 sm:px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
+                          onlySavedNotes
+                            ? 'bg-[#0078D4] text-white shadow-2xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        <StickyNote className="w-3 h-3 shrink-0 text-amber-500 fill-amber-500/20" />
+                        <span className="truncate">Notes ({savedNotesCount})</span>
+                      </button>
+                    </HoverInfoFeedback>
+
+                    <HoverInfoFeedback
+                      title="AI-Synthesized Scenarios"
+                      badge={`${questions.filter((q) => q.isAiGenerated).length} Scenarios`}
+                      badgeColor="purple"
+                      description="Filters to custom scenario-based questions generated dynamically using Google GenAI."
+                      tip="Generate new scenarios in the AI Builder tab"
+                      className="flex-1 min-w-0"
+                    >
+                      <button
+                        onClick={() => {
+                          setOnlyAiGenerated(!onlyAiGenerated);
+                          setOnlyBookmarks(false);
+                          setOnlySavedNotes(false);
+                          setCurrentQuestionIndex(0);
+                        }}
+                        className={`w-full py-1.5 px-1.5 sm:px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
+                          onlyAiGenerated
+                            ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-2xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        <Sparkles className="w-3 h-3 shrink-0" />
+                        <span className="truncate">AI ({questions.filter((q) => q.isAiGenerated).length})</span>
+                      </button>
+                    </HoverInfoFeedback>
                   </div>
 
                   {/* Module Browser (Can be collapsed on laptop/desktop so Harambee Success Companion fills 100% of left space) */}
@@ -2137,11 +2427,12 @@ export default function App() {
                 )}
 
                 <div
-                  key={`filtered-results-${searchQuery}`}
-                  className="animate-search-fade-in transition-opacity duration-300 ease-out"
+                  key={`filtered-results-${searchQuery}-${currentQ?.id || currentQuestionIndex}`}
+                  className="animate-quiz-card-fade-in-up"
                 >
                 {filteredQuestions.length > 0 && currentQ ? (
                   <QuizCard
+                    key={currentQ.id}
                     question={currentQ}
                     questionIndex={currentQuestionIndex}
                     totalQuestions={filteredQuestions.length}
@@ -2192,6 +2483,7 @@ export default function App() {
                     activeQuickFilter={activeQuickFilter}
                     onSelectQuickFilter={handleSelectQuickFilter}
                     bookmarksCount={stats.bookmarks.length}
+                    savedNotesCount={savedNotesCount}
                     aiScenariosCount={questions.filter((q) => q.isAiGenerated).length}
                     retryQueueCount={retryQueueQuestionIds.length}
                     retryQueueSecondsLeft={retryQueueSecondsLeft}
@@ -2223,6 +2515,8 @@ export default function App() {
                         ? `No previously missed questions remain in Learning Path ${retryIncorrectPathId}.`
                         : onlyBookmarks
                         ? "You haven't bookmarked any questions yet. Click the bookmark icon on any question to review it here."
+                        : onlySavedNotes
+                        ? "No questions with saved study notes yet. Click the 'Notes' icon or drawer on any question to add your personal study cues and memory anchors."
                         : onlyAiGenerated
                         ? 'No custom AI scenarios generated yet. Click "Create AI Scenario" to generate dynamic questions.'
                         : 'Try selecting a different Learning Path or clear the current module filter.'}
@@ -2235,11 +2529,12 @@ export default function App() {
                         setRetryIncorrectPathId(null);
                         setRetryIncorrectSnapshotIds([]);
                         setOnlyBookmarks(false);
+                        setOnlySavedNotes(false);
                         setOnlyAiGenerated(false);
                         setSearchQuery('');
                         setCurrentQuestionIndex(0);
                       }}
-                      className="px-4 py-2 rounded-lg bg-[#0078D4] text-white font-semibold text-xs inline-flex items-center gap-1.5"
+                      className="px-4 py-2 rounded-lg bg-[#0078D4] text-white font-semibold text-xs inline-flex items-center gap-1.5 cursor-pointer"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       <span>Reset All Filters</span>
@@ -2271,63 +2566,71 @@ export default function App() {
 
         {/* TAB: ADAPTIVE QUIZ MODE (DYNAMIC DIFFICULTY BALANCER) */}
         {activeTab === 'adaptive' && (
-          <AdaptiveQuizView
-            questions={questions}
-            stats={stats}
-            onUpdateStats={setStats}
-            onNavigateToHistory={() => setActiveTab('history')}
-            onNavigateToPractice={() => setActiveTab('quiz')}
-            onOpenPersonalizedReview={() => setShowReviewSession(true)}
-            onSelectModuleForPractice={handleSelectModuleFromTracker}
-          />
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+            <AdaptiveQuizView
+              questions={questions}
+              stats={stats}
+              onUpdateStats={setStats}
+              onNavigateToHistory={() => setActiveTab('history')}
+              onNavigateToPractice={() => setActiveTab('quiz')}
+              onOpenPersonalizedReview={() => setShowReviewSession(true)}
+              onSelectModuleForPractice={handleSelectModuleFromTracker}
+            />
+          </div>
         )}
 
         {/* TAB: REVIEW HISTORY & LEARNING TRAJECTORY */}
         {activeTab === 'history' && (
-          <ReviewHistoryView
-            stats={stats}
-            onStartAdaptiveQuiz={() => setActiveTab('adaptive')}
-            onRetryQuestion={(qId) => {
-              const targetIndex = filteredQuestions.findIndex((q) => q.id === qId);
-              if (targetIndex !== -1) {
-                setCurrentQuestionIndex(targetIndex);
-              }
-              setActiveTab('quiz');
-            }}
-            onSelectPathForPractice={(pathId) => {
-              setSelectedPathId(pathId);
-              setSelectedModuleId('all');
-              setCurrentQuestionIndex(0);
-              setActiveTab('quiz');
-            }}
-          />
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+            <ReviewHistoryView
+              stats={stats}
+              onStartAdaptiveQuiz={() => setActiveTab('adaptive')}
+              onRetryQuestion={(qId) => {
+                const targetIndex = filteredQuestions.findIndex((q) => q.id === qId);
+                if (targetIndex !== -1) {
+                  setCurrentQuestionIndex(targetIndex);
+                }
+                setActiveTab('quiz');
+              }}
+              onSelectPathForPractice={(pathId) => {
+                setSelectedPathId(pathId);
+                setSelectedModuleId('all');
+                setCurrentQuestionIndex(0);
+                setActiveTab('quiz');
+              }}
+            />
+          </div>
         )}
 
         {/* TAB: FLASHCARDS (FRONT/BACK SYSTEM FOCUSED ON MISSED CONCEPTS) */}
         {activeTab === 'flashcards' && (
-          <FlashcardsView
-            stats={stats}
-            onPracticeModule={handleSelectModuleFromTracker}
-          />
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+            <FlashcardsView
+              stats={stats}
+              onPracticeModule={handleSelectModuleFromTracker}
+            />
+          </div>
         )}
 
         {/* TAB: GLOBAL PEER LEADERBOARD (GLOBAL HARAMBEE AZURE COHORT) */}
         {activeTab === 'leaderboard' && (
-          <GlobalLeaderboard
-            stats={stats}
-            onPracticeClick={() => setActiveTab('quiz')}
-            onLaunchCompetitiveDrill={(modId) => {
-              setMicroDrillTargetModuleId(modId);
-              setShowMicroDrill(modId);
-            }}
-            onFetchingChange={setIsMotifShimmering}
-          />
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+            <GlobalLeaderboard
+              stats={stats}
+              onPracticeClick={() => setActiveTab('quiz')}
+              onLaunchCompetitiveDrill={(modId) => {
+                setMicroDrillTargetModuleId(modId);
+                setShowMicroDrill(modId);
+              }}
+              onFetchingChange={setIsMotifShimmering}
+            />
+          </div>
         )}
 
         {/* TAB: TIMED MOCK EXAM */}
         {activeTab === 'mock' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl border border-slate-200 card-elevation p-8 max-w-3xl mx-auto text-center space-y-6">
+          <div className="responsive-tab-page-shell max-w-5xl mx-auto space-y-6">
+            <div className="bg-white rounded-xl border border-slate-200 card-elevation p-5 sm:p-8 max-w-3xl mx-auto text-center space-y-6">
               <div className="w-16 h-16 rounded-2xl bg-blue-50 text-[#0078D4] flex items-center justify-center mx-auto shadow-xs">
                 <Award className="w-8 h-8 text-amber-500" />
               </div>
@@ -2359,20 +2662,22 @@ export default function App() {
                 </div>
               </div>
 
-              <button
-                onClick={() => setShowMockExam(true)}
-                className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-[#0078D4] to-[#005A9E] hover:from-[#005A9E] hover:to-[#004578] text-white font-bold text-sm shadow-md hover:shadow-lg transition-all inline-flex items-center gap-2"
-              >
-                <Award className="w-5 h-5 text-amber-300" />
-                <span>Begin Timed Mock Exam Now</span>
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  onClick={() => setShowMockExam(true)}
+                  className="px-6 sm:px-8 py-3.5 rounded-xl bg-gradient-to-r from-[#0078D4] to-[#005A9E] hover:from-[#005A9E] hover:to-[#004578] text-white font-bold text-sm shadow-md hover:shadow-lg transition-all inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <Award className="w-5 h-5 text-amber-300 shrink-0" />
+                  <span>Begin Timed Mock Exam Now</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
 
         {/* TAB: AI SCENARIO GENERATOR */}
         {activeTab === 'ai-builder' && (
-          <div className="max-w-4xl mx-auto">
+          <div className="responsive-tab-page-shell max-w-5xl mx-auto">
             <AiScenarioGenerator
               onQuestionGenerated={handleQuestionGenerated}
             />
@@ -2381,7 +2686,7 @@ export default function App() {
 
         {/* TAB: KNOWLEDGE ASSISTANT & TUTOR */}
         {activeTab === 'assistant' && (
-          <div className="max-w-5xl mx-auto">
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
             <KnowledgeAssistant
               initialQuestionContext={tutorQuestionContext}
               onClearContext={() => setTutorQuestionContext(null)}
@@ -2391,14 +2696,14 @@ export default function App() {
 
         {/* TAB: STUDY DECKS & MATRIX */}
         {activeTab === 'study-decks' && (
-          <div className="max-w-5xl mx-auto">
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
             <StudyDeck onPracticeModule={handleSelectModuleFromTracker} />
           </div>
         )}
 
         {/* TAB: HARAMBEE EXAM WISDOM SLIDES & VITAL CUES */}
         {activeTab === 'wisdom' && (
-          <div className="max-w-5xl mx-auto">
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
             <HarambeeWisdomDeck
               onQuizTopic={(modId) => {
                 setMicroDrillTargetModuleId(modId);
@@ -2410,7 +2715,7 @@ export default function App() {
 
         {/* TAB: DOMAIN CONFIDENCE */}
         {activeTab === 'analytics' && (
-          <div className="max-w-5xl mx-auto">
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
             <DomainConfidenceTracker
               stats={stats}
               onDrillWeakAreas={handleDrillWeakAreas}
@@ -2426,63 +2731,89 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB: COHORT PERFORMANCE VISUALIZATION (D3.js GLOBAL HARAMBEE AZURE COHORT BENCHMARKS) */}
+        {activeTab === 'cohort' && (
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+            <CohortPerformanceView
+              stats={stats}
+              onSelectPathForPractice={(pathId) => {
+                setSelectedPathId(pathId);
+                setSelectedModuleId('all');
+                setCurrentQuestionIndex(0);
+                setActiveTab('quiz');
+              }}
+              onSelectModuleForPractice={(moduleId, pathId) => {
+                if (pathId !== undefined) setSelectedPathId(pathId);
+                setSelectedModuleId(moduleId);
+                setCurrentQuestionIndex(0);
+                setActiveTab('quiz');
+              }}
+              onNavigateToPractice={() => setActiveTab('quiz')}
+            />
+          </div>
+        )}
+
         {/* TAB: CANDIDATE PROFILE & BADGES */}
         {activeTab === 'profile' && (
-          <ProfileView
-            stats={stats}
-            onUpdateStats={setStats}
-            onNavigateToPractice={() => setActiveTab('quiz')}
-            onNavigateToMock={() => setShowMockExam(true)}
-            onOpenManageGoal={() => {
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            onSelectPath={(pathId) => {
-              setSelectedPathId(pathId);
-              setSelectedModuleId('all');
-              setCurrentQuestionIndex(0);
-              setShowPostSessionReview(false);
-            }}
-            onSelectModule={(modId, pathId) => {
-              if (pathId !== undefined) setSelectedPathId(pathId);
-              setSelectedModuleId(modId);
-              setCurrentQuestionIndex(0);
-              setShowPostSessionReview(false);
-            }}
-            onToggleModuleComplete={handleToggleModuleComplete}
-            onSearchService={(term) => {
-              setSearchQuery(term);
-              setCurrentQuestionIndex(0);
-            }}
-            onOpenPersonalizedReview={() => setShowReviewSession(true)}
-            onOpenWeakAreasReview={() => setShowWeakAreasReview(true)}
-            setActiveTab={setActiveTab}
-            unresolvedMistakesCount={unresolvedMistakesCount}
-            questionCountByModule={questionCountByModule}
-            onOpenUserGuide={() => setShowUserGuideModal(true)}
-          />
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+            <ProfileView
+              stats={stats}
+              onUpdateStats={setStats}
+              onNavigateToPractice={() => setActiveTab('quiz')}
+              onNavigateToMock={() => setShowMockExam(true)}
+              onOpenManageGoal={() => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              onSelectPath={(pathId) => {
+                setSelectedPathId(pathId);
+                setSelectedModuleId('all');
+                setCurrentQuestionIndex(0);
+                setShowPostSessionReview(false);
+              }}
+              onSelectModule={(modId, pathId) => {
+                if (pathId !== undefined) setSelectedPathId(pathId);
+                setSelectedModuleId(modId);
+                setCurrentQuestionIndex(0);
+                setShowPostSessionReview(false);
+              }}
+              onToggleModuleComplete={handleToggleModuleComplete}
+              onSearchService={(term) => {
+                setSearchQuery(term);
+                setCurrentQuestionIndex(0);
+              }}
+              onOpenPersonalizedReview={() => setShowReviewSession(true)}
+              onOpenWeakAreasReview={() => setShowWeakAreasReview(true)}
+              setActiveTab={setActiveTab}
+              unresolvedMistakesCount={unresolvedMistakesCount}
+              questionCountByModule={questionCountByModule}
+              onOpenUserGuide={() => setShowUserGuideModal(true)}
+            />
+          </div>
         )}
 
         {/* TAB: AZURE GLOSSARY & DICTIONARY (PLACED AFTER PROFILE) */}
         {activeTab === 'glossary' && (
-          <AzureGlossaryView
-            onDrillTermInPractice={(term) => {
-              setSearchQuery(term);
-              setCurrentQuestionIndex(0);
-              setActiveTab('quiz');
-            }}
-            onSelectModule={(modId, pathId) => {
-              setSelectedPathId(pathId);
-              setSelectedModuleId(modId);
-              setCurrentQuestionIndex(0);
-              setShowPostSessionReview(false);
-              setActiveTab('quiz');
-            }}
-            onOpenStudyMode={(modId, pathId) => {
-              setSelectedPathId(pathId);
-              setSelectedModuleId(modId);
-              setActiveTab('study-decks');
-            }}
-          />
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+            <AzureGlossaryView
+              onDrillTermInPractice={(term) => {
+                setSearchQuery(term);
+                setCurrentQuestionIndex(0);
+                setActiveTab('quiz');
+              }}
+              onSelectModule={(modId, pathId) => {
+                setSelectedPathId(pathId);
+                setSelectedModuleId(modId);
+                setCurrentQuestionIndex(0);
+                setShowPostSessionReview(false);
+                setActiveTab('quiz');
+              }}
+              onOpenStudyMode={(modId, pathId) => {
+                setSelectedPathId(pathId);
+                setSelectedModuleId(modId);
+                setActiveTab('study-decks');
+              }}
+            />
+          </div>
         )}
       </main>
 

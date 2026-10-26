@@ -773,9 +773,9 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="w-full max-w-6xl mx-auto min-w-0 space-y-6">
       {/* Real-time Adaptive Engine Radar Bar */}
-      <div className="bg-gradient-to-r from-blue-900 via-[#0078D4] to-sky-700 text-white rounded-2xl p-5 sm:p-6 shadow-md border border-blue-400/30 space-y-3">
+      <div className="bg-gradient-to-r from-blue-900 via-[#0078D4] to-sky-700 text-white rounded-2xl p-4 sm:p-6 shadow-md border border-blue-400/30 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-white/20 backdrop-blur-xs text-amber-300">
@@ -921,8 +921,11 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
         )}
       </div>
 
-      {/* Main Adaptive Quiz Card */}
-      <div className="bg-white rounded-2xl border border-slate-200 card-elevation overflow-hidden p-6 sm:p-8 space-y-6">
+      {/* Main Adaptive Quiz Card with subtle fade-in-up entrance animation */}
+      <div
+        key={`adaptive-card-${currentQuestion.id}`}
+        className="bg-white rounded-2xl border border-slate-200 card-elevation overflow-hidden p-4 sm:p-6 lg:p-8 space-y-6 animate-quiz-card-fade-in-up"
+      >
         {/* Module Header Tag */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
           <div className="flex flex-wrap items-center gap-2">

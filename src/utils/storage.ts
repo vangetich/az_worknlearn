@@ -573,6 +573,9 @@ export function saveQuestionNote(questionId: string, text: string): Record<strin
       delete notes[questionId];
     }
     localStorage.setItem(QUESTION_NOTES_STORAGE_KEY, JSON.stringify(notes));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('az900-notes-updated', { detail: { notes } }));
+    }
     return notes;
   } catch (e) {
     console.error('Failed to save question note', e);

@@ -84,8 +84,8 @@
 html,
 body,
 #root {
-  width: 100%;
-  max-width: 100%;
+  width: 100vw;
+  max-width: 100vw;
   overflow-x: hidden;
   overflow-x: clip;
   margin: 0;
@@ -759,4 +759,182 @@ html[data-font-scale] .text-\[11\.5px\] {
 html[data-font-scale] .text-\[12\.65px\] {
   font-size: calc(12.65px * var(--app-font-scale, 1));
 }
+
+/* =====================================================================
+   SUBTLE CSS ENTRANCE ANIMATIONS FOR QUIZCARD & TAB PAGES (fade-in-up)
+   ===================================================================== */
+@keyframes quizCardFadeInUp {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.994);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes quizOptionFadeInUp {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-quiz-card-fade-in-up {
+  animation: quizCardFadeInUp 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity, transform;
+}
+
+.animate-quiz-option-fade-in-up {
+  animation: quizOptionFadeInUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-quiz-card-fade-in-up,
+  .animate-quiz-option-fade-in-up {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* =====================================================================
+   RESPONSIVE TAB PAGE SHELL (Computer, Laptop, Tablet & Mobile)
+   ===================================================================== */
+.responsive-tab-page-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+  animation: quizCardFadeInUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* =====================================================================
+   HIGH-CONTRAST FOCUS MODE (Visual Accessibility, Heavy Font Weights & Sharp Borders)
+   ===================================================================== */
+html[data-high-contrast="true"],
+.high-contrast-focus-mode {
+  --theme-text-muted: #0f172a;
+  --theme-border: #0f172a;
+  --theme-border-strong: #000000;
+  --theme-card-shadow: 0 0 0 1.5px #0f172a;
+}
+
+/* 1. Heavy Font Weights Throughout Application */
+html[data-high-contrast="true"] body,
+html[data-high-contrast="true"] p,
+html[data-high-contrast="true"] span,
+html[data-high-contrast="true"] div,
+html[data-high-contrast="true"] button,
+html[data-high-contrast="true"] label,
+html[data-high-contrast="true"] input,
+html[data-high-contrast="true"] select,
+html[data-high-contrast="true"] textarea,
+.high-contrast-focus-mode body,
+.high-contrast-focus-mode p,
+.high-contrast-focus-mode span,
+.high-contrast-focus-mode button {
+  font-weight: 600 !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+html[data-high-contrast="true"] h1,
+html[data-high-contrast="true"] h2,
+html[data-high-contrast="true"] h3,
+html[data-high-contrast="true"] h4,
+html[data-high-contrast="true"] h5,
+html[data-high-contrast="true"] h6,
+html[data-high-contrast="true"] .font-bold,
+html[data-high-contrast="true"] .font-extrabold,
+html[data-high-contrast="true"] .font-black,
+.high-contrast-focus-mode h1,
+.high-contrast-focus-mode h2,
+.high-contrast-focus-mode h3,
+.high-contrast-focus-mode .font-bold {
+  font-weight: 850 !important;
+  letter-spacing: -0.01em;
+}
+
+/* 2. Replaces Subtle Greys with High-Contrast Crisp Borders (Light Theme) */
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .border-slate-100,
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .border-slate-200,
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) [class*="border-slate-200"],
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .border-slate-300,
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) [class*="border-slate-300"],
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .border-slate-400,
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .border-sky-200,
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) [class*="border-sky-200"],
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .border-sky-300,
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) [class*="border-sky-300"],
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .border-emerald-200,
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .border-amber-200 {
+  border-color: #0f172a !important;
+  border-width: 1.5px !important;
+}
+
+/* Card elevation containers get sharp high-contrast border definition */
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .card-elevation,
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) [class*="card-elevation"] {
+  border-color: #0f172a !important;
+  border-width: 1.5px !important;
+}
+
+/* Replace low-contrast text greys with high-contrast slate-900 */
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .text-slate-400,
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .text-slate-500,
+html[data-high-contrast="true"]:not(.dark):not([data-theme="midnight-azure"]) .text-slate-600 {
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+/* 3. Dark Theme / Midnight Azure High-Contrast Overrides */
+html[data-high-contrast="true"].dark,
+html[data-high-contrast="true"][data-theme="midnight-azure"] {
+  --theme-text-muted: #f8fafc;
+  --theme-border: #38bdf8;
+  --theme-border-strong: #ffffff;
+}
+
+html[data-high-contrast="true"].dark .border-slate-200,
+html[data-high-contrast="true"].dark .border-slate-300,
+html[data-high-contrast="true"].dark .border-slate-700,
+html[data-high-contrast="true"].dark .border-slate-800,
+html[data-high-contrast="true"][data-theme="midnight-azure"] .border-slate-200,
+html[data-high-contrast="true"][data-theme="midnight-azure"] .border-slate-300,
+html[data-high-contrast="true"][data-theme="midnight-azure"] .border-slate-700,
+html[data-high-contrast="true"][data-theme="midnight-azure"] .border-slate-800,
+html[data-high-contrast="true"][data-theme="midnight-azure"] [class*="border-sky-"],
+html[data-high-contrast="true"][data-theme="midnight-azure"] .card-elevation {
+  border-color: #38bdf8 !important;
+  border-width: 1.5px !important;
+}
+
+html[data-high-contrast="true"].dark .text-slate-400,
+html[data-high-contrast="true"].dark .text-slate-500,
+html[data-high-contrast="true"].dark .text-slate-600,
+html[data-high-contrast="true"][data-theme="midnight-azure"] .text-slate-400,
+html[data-high-contrast="true"][data-theme="midnight-azure"] .text-slate-500,
+html[data-high-contrast="true"][data-theme="midnight-azure"] .text-slate-600 {
+  color: #f8fafc !important;
+  font-weight: 600 !important;
+}
+
+/* High-Contrast Interactive Keyboard Focus Ring */
+html[data-high-contrast="true"] button:focus-visible,
+html[data-high-contrast="true"] select:focus-visible,
+html[data-high-contrast="true"] input:focus-visible {
+  outline: 3px solid #0078d4 !important;
+  outline-offset: 2px !important;
+}
+
+
+
 

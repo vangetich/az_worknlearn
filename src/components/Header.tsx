@@ -136,6 +136,7 @@ export type AppTab =
   | 'assistant'
   | 'study-decks'
   | 'analytics'
+  | 'cohort'
   | 'leaderboard'
   | 'wisdom'
   | 'profile'
@@ -451,16 +452,14 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Controls on Mobile & Tablet */}
           <div className="flex items-center justify-end gap-1 sm:gap-1.5 shrink-0 min-w-0">
-            {/* Subtle Supabase Real-Time Connection Status Indicator Icon (Mobile/Tablet) */}
-            <button
-              type="button"
-              onClick={onOpenCloudBackend}
-              className={`flex items-center gap-1 px-2 py-1.5 rounded-xl text-[11px] font-bold transition-all shadow-2xs cursor-pointer border ${
+            {/* Subtle Supabase Real-Time Connection Status Indicator (Mobile/Tablet) */}
+            <div
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-xl text-[11px] font-bold border select-none ${
                 realtimeStatus === 'connected'
-                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200/90'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200/90'
                   : realtimeStatus === 'syncing'
-                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200/90'
-                  : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200/90'
+                  ? 'bg-amber-50 text-amber-800 border-amber-200/90'
+                  : 'bg-rose-50 text-rose-800 border-rose-200/90'
               }`}
               title={
                 realtimeStatus === 'connected'
@@ -468,7 +467,7 @@ export const Header: React.FC<HeaderProps> = ({
                       lastSyncedAt
                         ? ` • Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
                         : ''
-                    } (Click to inspect Cloud DB)`
+                    }`
                   : realtimeStatus === 'syncing'
                   ? 'Syncing progress to Supabase / Postgres backend...'
                   : 'Supabase / Postgres Offline — Progress queued locally'
@@ -491,7 +490,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <WifiOff className="w-3.5 h-3.5 text-rose-600" />
               )}
               <span className="hidden md:inline capitalize">{realtimeStatus}</span>
-            </button>
+            </div>
 
             <div className="hidden md:block">
               <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
@@ -500,16 +499,16 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={toggleMenuBar}
-              className={`flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer border ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
                 isMenuBarHidden
-                  ? 'bg-blue-50 text-[#0078D4] border-blue-200 hover:bg-blue-100'
+                  ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
                   : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80'
               }`}
               title={isMenuBarHidden ? 'Show sliding navigation tabs' : 'Hide sliding navigation tabs'}
               aria-expanded={!isMenuBarHidden}
             >
-              <Layers className="w-3.5 h-3.5 text-[#0078D4]" />
-              <span className="hidden md:inline">{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
+              <Layers className={`w-3.5 h-3.5 ${isMenuBarHidden ? 'text-white' : 'text-[#0078D4]'}`} />
+              <span>{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
             </button>
 
             <DailyStudyGoalRing
@@ -610,16 +609,14 @@ export const Header: React.FC<HeaderProps> = ({
               />
             )}
 
-            {/* Subtle Supabase Real-Time Connection Status Indicator Icon (Desktop) */}
-            <button
-              type="button"
-              onClick={onOpenCloudBackend}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer border shrink-0 ${
+            {/* Subtle Supabase Real-Time Connection Status Indicator (Desktop) */}
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border select-none shrink-0 ${
                 realtimeStatus === 'connected'
-                  ? 'bg-emerald-50/90 hover:bg-emerald-100 text-emerald-800 border-emerald-200/90'
+                  ? 'bg-emerald-50/90 text-emerald-800 border-emerald-200/90'
                   : realtimeStatus === 'syncing'
-                  ? 'bg-amber-50/90 hover:bg-amber-100 text-amber-800 border-amber-200/90'
-                  : 'bg-rose-50/90 hover:bg-rose-100 text-rose-800 border-rose-200/90'
+                  ? 'bg-amber-50/90 text-amber-800 border-amber-200/90'
+                  : 'bg-rose-50/90 text-rose-800 border-rose-200/90'
               }`}
               title={
                 realtimeStatus === 'connected'
@@ -627,7 +624,7 @@ export const Header: React.FC<HeaderProps> = ({
                       lastSyncedAt
                         ? ` • Last synced at ${new Date(lastSyncedAt).toLocaleTimeString()}`
                         : ''
-                    } (Click to open Postgres Backend Console)`
+                    }`
                   : realtimeStatus === 'syncing'
                   ? 'Supabase / Postgres Real-Time Status: Syncing progress to relational backend...'
                   : 'Supabase / Postgres Real-Time Status: Offline (Progress buffered locally)'
@@ -656,7 +653,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="hidden xl:inline">PG Offline</span>
                 </>
               )}
-            </button>
+            </div>
 
             {onSelectPath && (
               <div className="flex items-center p-0.5 bg-slate-100 rounded-xl border border-slate-200/80 text-xs font-bold shrink-0">
@@ -777,24 +774,12 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Review Session: quickly review and re-test your last 10 incorrectly answered questions"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-rose-600 group-hover:-rotate-45 transition-transform" />
-                <span className="hidden xl:inline">Review</span>
+                <span>Review</span>
                 {missedCount > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-2xs">
                     {missedCount}
                   </span>
                 )}
-              </button>
-            )}
-
-            {onOpenCurriculumReadiness && (
-              <button
-                type="button"
-                onClick={onOpenCurriculumReadiness}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300/90 text-xs font-extrabold transition-all shadow-2xs cursor-pointer group shrink-0"
-                title="Curriculum Update & Preparation Readiness Techniques Check"
-              >
-                <Target className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
-                <span className="hidden xl:inline">Readiness Check</span>
               </button>
             )}
 
@@ -806,19 +791,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title="AZ-900 Studio User Guide, README & Build History: Comprehensive features breakdown and printable PDF"
               >
                 <BookOpen className="w-3.5 h-3.5 text-[#0078D4] group-hover:scale-110 transition-transform" />
-                <span className="hidden 2xl:inline">Guide</span>
-              </button>
-            )}
-
-            {onOpenAdminBackOffice && (
-              <button
-                type="button"
-                onClick={onOpenAdminBackOffice}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 text-xs font-extrabold transition-all shadow-2xs cursor-pointer shrink-0"
-                title="Admin Back-Office (Single-User Restricted: vangetich@gmail.com)"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="hidden xl:inline">Admin Office</span>
+                <span>Guide</span>
               </button>
             )}
 
@@ -1024,17 +997,17 @@ export const Header: React.FC<HeaderProps> = ({
           );
         })()}
 
-        {/* Permanent Slim Navigation Bar in Full-Size Window View: Fitted Width Around Contents */}
+        {/* Permanent Slim Navigation Bar in Full-Size Window View: Wraps Cleanly Across Computer, Laptop, Tablet & Mobile */}
         <nav
           aria-label="Primary Studio Navigation"
           className={`relative w-full lg:w-fit lg:max-w-full lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-xl lg:mb-1 shadow-xs backdrop-blur-md ${
             isMenuBarHidden
               ? 'max-h-0 opacity-0 pointer-events-none py-0 border-transparent lg:mb-0'
-              : 'max-h-20 opacity-100 py-1 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
+              : 'max-h-64 opacity-100 py-1.5 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
           }`}
         >
           <WavyAzureFabricMotif className="opacity-50" />
-          <div className="relative z-10 flex items-center justify-start lg:justify-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none px-2 py-0.5 max-w-full">
+          <div className="relative z-10 flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 px-2 py-0.5 max-w-full">
             {/* Left Kenyan Moran Warrior Shield Motif */}
             <div className="hidden xl:flex items-center shrink-0 px-1 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
               <MoranShieldMotif size={18} animate={true} />
@@ -1127,6 +1100,20 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Analytics</span>
             </button>
 
+            {/* New Cohort Performance Visualization Tab (D3.js Global Harambee Azure Cohort Benchmark) */}
+            <button
+              onClick={() => setActiveTab('cohort')}
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                activeTab === 'cohort'
+                  ? 'bg-gradient-to-r from-blue-700 to-indigo-700 text-white shadow-sm ring-1 ring-amber-300 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
+              }`}
+              title="Cohort Performance: Compare your module mastery against the anonymized Global Harambee Azure Cohort benchmark via D3.js"
+            >
+              {activeTab === 'cohort' ? <WarriorSpearBadge size={12} /> : <Users className="w-3 h-3 text-[#0078D4] dark:text-amber-300" />}
+              <span>Cohort Performance</span>
+            </button>
+
             <button
               onClick={() => setActiveTab('assistant')}
               className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
@@ -1148,7 +1135,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
               title="Global Peer Leaderboard: Top performers from the Global Harambee Azure Cohort ranked by total questions solved"
             >
-              {activeTab === 'leaderboard' ? <WarriorSpearBadge size={12} /> : <Users className="w-3 h-3 text-amber-700 dark:text-amber-400" />}
+              {activeTab === 'leaderboard' ? <WarriorSpearBadge size={12} /> : <Award className="w-3 h-3 text-amber-700 dark:text-amber-400" />}
               <span>Global Peer Leaderboard</span>
             </button>
 
@@ -1176,18 +1163,6 @@ export const Header: React.FC<HeaderProps> = ({
               {activeTab === 'glossary' ? <WarriorSpearBadge size={12} /> : <BookOpen className="w-3 h-3 text-emerald-700 dark:text-emerald-300" />}
               <span>Glossary</span>
             </button>
-
-            {onOpenCurriculumReadiness && (
-              <button
-                type="button"
-                onClick={onOpenCurriculumReadiness}
-                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs ring-1 ring-emerald-300/60"
-                title="Run Curriculum Update & Preparation Readiness Techniques Check"
-              >
-                <Target className="w-3 h-3 text-amber-200" />
-                <span>Readiness Check</span>
-              </button>
-            )}
 
             {/* Right Kenyan Moran Warrior Shield Motif */}
             <div className="hidden xl:flex items-center shrink-0 px-1 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
