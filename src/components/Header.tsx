@@ -23,6 +23,7 @@ import {
   WifiOff,
   LogOut,
   LogOut as ArrowLeftOnRectangle,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   MaasaiMedallion,
@@ -162,6 +163,8 @@ interface HeaderProps {
   realtimeStatus?: SupabaseRealtimeStatus;
   lastSyncedAt?: number | null;
   onOpenCloudBackend?: () => void;
+  onOpenCurriculumReadiness?: () => void;
+  onOpenAdminBackOffice?: () => void;
   userEmail?: string | null;
   onLogout?: () => void;
 }
@@ -212,6 +215,8 @@ export const Header: React.FC<HeaderProps> = ({
   realtimeStatus = 'connected',
   lastSyncedAt = null,
   onOpenCloudBackend,
+  onOpenCurriculumReadiness,
+  onOpenAdminBackOffice,
   userEmail = null,
   onLogout,
 }) => {
@@ -781,6 +786,18 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {onOpenCurriculumReadiness && (
+              <button
+                type="button"
+                onClick={onOpenCurriculumReadiness}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300/90 text-xs font-extrabold transition-all shadow-2xs cursor-pointer group shrink-0"
+                title="Curriculum Update & Preparation Readiness Techniques Check"
+              >
+                <Target className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                <span className="hidden xl:inline">Readiness Check</span>
+              </button>
+            )}
+
             {onOpenUserGuide && (
               <button
                 type="button"
@@ -789,7 +806,19 @@ export const Header: React.FC<HeaderProps> = ({
                 title="AZ-900 Studio User Guide, README & Build History: Comprehensive features breakdown and printable PDF"
               >
                 <BookOpen className="w-3.5 h-3.5 text-[#0078D4] group-hover:scale-110 transition-transform" />
-                <span className="hidden xl:inline">Guide &amp; README</span>
+                <span className="hidden 2xl:inline">Guide</span>
+              </button>
+            )}
+
+            {onOpenAdminBackOffice && (
+              <button
+                type="button"
+                onClick={onOpenAdminBackOffice}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 text-xs font-extrabold transition-all shadow-2xs cursor-pointer shrink-0"
+                title="Admin Back-Office (Single-User Restricted: vangetich@gmail.com)"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="hidden xl:inline">Admin Office</span>
               </button>
             )}
 
@@ -815,20 +844,20 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={toggleMenuBar}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer border shrink-0 ${
+              className={`-mt-0.5 flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
                 isMenuBarHidden
-                  ? 'bg-blue-50 text-[#0078D4] border-blue-200 hover:bg-blue-100'
+                  ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
                   : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80'
               }`}
               title={isMenuBarHidden ? 'Show sliding navigation tabs' : 'Hide sliding navigation tabs'}
               aria-expanded={!isMenuBarHidden}
             >
-              <Layers className="w-3.5 h-3.5 text-[#0078D4]" />
-              <span className="hidden 2xl:inline">{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
+              <Layers className={`w-3.5 h-3.5 ${isMenuBarHidden ? 'text-white' : 'text-[#0078D4]'}`} />
+              <span>{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
               {isMenuBarHidden ? (
-                <ChevronDown className="w-3.5 h-3.5 text-[#0078D4]" />
+                <ChevronDown className="w-3.5 h-3.5 text-white" />
               ) : (
-                <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
               )}
             </button>
           </div>
@@ -1148,6 +1177,18 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Glossary</span>
             </button>
 
+            {onOpenCurriculumReadiness && (
+              <button
+                type="button"
+                onClick={onOpenCurriculumReadiness}
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs ring-1 ring-emerald-300/60"
+                title="Run Curriculum Update & Preparation Readiness Techniques Check"
+              >
+                <Target className="w-3 h-3 text-amber-200" />
+                <span>Readiness Check</span>
+              </button>
+            )}
+
             {/* Right Kenyan Moran Warrior Shield Motif */}
             <div className="hidden xl:flex items-center shrink-0 px-1 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
               <MoranShieldMotif size={18} animate={true} />
@@ -1155,18 +1196,18 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </nav>
 
-        {/* Minimalist Floating Expand Handle (visible when menu bar is hidden) */}
+        {/* Minimalist Floating Expand Handle (Moved up so it is 100% visible when menu bar is hidden) */}
         {isMenuBarHidden && (
-          <div className="flex justify-center -mb-2.5 pb-1">
+          <div className="flex justify-center -mt-0.5 mb-1.5 py-1 relative z-20">
             <button
               type="button"
               onClick={toggleMenuBar}
-              className="inline-flex items-center gap-1.5 px-3.5 py-0.5 rounded-full bg-gradient-to-r from-[#003865] to-[#005a9e] hover:from-[#004578] hover:to-[#0078d4] text-white text-[10px] font-extrabold shadow-sm border border-sky-400/40 cursor-pointer transition-all hover:scale-105"
+              className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full bg-gradient-to-r from-[#003865] to-[#005a9e] hover:from-[#004578] hover:to-[#0078d4] text-white text-[11px] font-extrabold shadow-md border border-sky-400/50 cursor-pointer transition-all hover:scale-105"
               title="Expand navigation menu tabs"
             >
               <MoranShieldMotif size={14} animate={false} />
               <span>Show Tabs ({activeTab.toUpperCase()})</span>
-              <ChevronDown className="w-3 h-3 text-sky-200" />
+              <ChevronDown className="w-3.5 h-3.5 text-sky-200" />
             </button>
           </div>
         )}

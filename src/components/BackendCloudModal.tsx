@@ -40,6 +40,7 @@ interface BackendCloudModalProps {
   onClose: () => void;
   stats: UserStats;
   onOpenApiDocs?: () => void;
+  onOpenAdminBackOffice?: () => void;
   onQuestionSaved?: (newOrUpdatedQuestion: Question) => void;
   initialSection?: HubSection;
 }
@@ -56,6 +57,7 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
   onClose,
   stats,
   onOpenApiDocs,
+  onOpenAdminBackOffice,
   onQuestionSaved,
   initialSection,
 }) => {
@@ -397,21 +399,20 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (onOpenApiDocs) {
-                  onOpenApiDocs();
-                } else {
-                  setShowInternalApiDocs(true);
-                }
-              }}
-              className="px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-100 font-extrabold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Open Backend API Documentation & Payload Reference"
-            >
-              <FileCode className="w-4 h-4 text-sky-300" />
-              <span>API Documentation</span>
-            </button>
+            {onOpenAdminBackOffice && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenAdminBackOffice();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-200 font-extrabold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Open Dedicated Single-User Admin Back-Office (vangetich@gmail.com)"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-300" />
+                <span>Admin Back-Office</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -464,31 +465,20 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
             <span>3. Premium Unlock (M-Pesa STK Push)</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveSection('supabase-migrations')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
-              activeSection === 'supabase-migrations'
-                ? 'bg-white text-indigo-700 border-indigo-600 shadow-2xs'
-                : 'text-slate-600 border-transparent hover:text-slate-900'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            <span>4. Supabase Migrations</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveSection('admin-dashboard')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
-              activeSection === 'admin-dashboard'
-                ? 'bg-white text-amber-800 border-amber-600 shadow-2xs'
-                : 'text-slate-600 border-transparent hover:text-slate-900'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>5. Admin Question Manager</span>
-          </button>
+          {onOpenAdminBackOffice && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenAdminBackOffice();
+              }}
+              className="ml-auto mb-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+              title="Admin Question DB, SQL Migrations & API Docs are relocated to the Single-User Admin Back-Office (vangetich@gmail.com)"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span>Relocated to Admin Back-Office (vangetich@gmail.com)</span>
+            </button>
+          )}
         </div>
 
         {/* Live Payment Polling Indicator Banner when STK Push is Pending */}

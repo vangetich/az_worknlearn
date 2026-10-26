@@ -30,6 +30,7 @@ import {
   Download,
   TrendingUp,
   TrendingDown,
+  ShieldCheck,
 } from 'lucide-react';
 import * as d3 from 'd3';
 import { Header, AppTab } from './components/Header';
@@ -68,6 +69,8 @@ import { WeeklyExamReadiness } from './components/WeeklyExamReadiness';
 import { UserGuideModal } from './components/UserGuideModal';
 import { BackendCloudModal, HubSection } from './components/BackendCloudModal';
 import { ApiDocumentationModal } from './components/ApiDocumentationModal';
+import { CurriculumReadinessModal } from './components/CurriculumReadinessModal';
+import { AdminBackOfficeModal } from './components/AdminBackOfficeModal';
 import { ExitStudySessionModal } from './components/ExitStudySessionModal';
 import { ProtectedRoute, AuthenticatedSupabaseUser } from './components/ProtectedRoute';
 import { usePostgresDatabase } from './hooks/usePostgresDatabase';
@@ -238,6 +241,8 @@ export default function App() {
     return { all: 82, '1': 84, '2': 80, '3': 81 };
   });
   const [allTimeHighToast, setAllTimeHighToast] = useState<string | null>(null);
+  const [showCurriculumReadinessModal, setShowCurriculumReadinessModal] = useState<boolean>(false);
+  const [showAdminBackOfficeModal, setShowAdminBackOfficeModal] = useState<boolean>(false);
 
   const handleToggleHarambeeExpanded = () => {
     setIsHarambeeExpanded((prev) => {
@@ -1134,6 +1139,8 @@ export default function App() {
             retryIncorrectPathId={retryIncorrectPathId}
             onOpenStudyBreak={() => setShowStudyBreak(true)}
             onOpenUserGuide={() => setShowUserGuideModal(true)}
+            onOpenCurriculumReadiness={() => setShowCurriculumReadinessModal(true)}
+            onOpenAdminBackOffice={() => setShowAdminBackOfficeModal(true)}
             realtimeStatus={realtimeStatus}
             lastSyncedAt={lastSyncedAt}
             onOpenCloudBackend={() => setShowBackendCloudModal(true)}
@@ -1236,23 +1243,32 @@ export default function App() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setBackendModalSection('admin-dashboard');
-                      setShowBackendCloudModal(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition-all cursor-pointer"
-                    title="Open Supabase Admin Dashboard: Module Stats & Add/Edit Postgres Questions"
+                    onClick={() => setShowCurriculumReadinessModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-gradient-to-r from-[#006600] to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white border border-emerald-400/50 shadow-xs transition-all cursor-pointer"
+                    title="Run Preparation Readiness Techniques Check & Sync Live AZ-900 Curriculum Updates"
                   >
-                    <span>Admin Question DB</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>Readiness & Curriculum Check</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setShowApiDocumentationModal(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-slate-900 hover:bg-slate-800 text-sky-200 border border-slate-700 shadow-xs transition-all cursor-pointer"
-                    title="Open Backend REST API Documentation, /api/quiz/submit Payloads & Response Schemas"
+                    onClick={() => setShowAdminBackOfficeModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 shadow-xs transition-all cursor-pointer"
+                    title="Dedicated Single-User Admin Back-Office (vangetich@gmail.com): Relocated Admin DB, API Docs, SQL & Security"
                   >
-                    <span>API Docs</span>
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Admin Back-Office</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('leaderboard')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 shadow-xs transition-all cursor-pointer"
+                    title="Open Global Peer Leaderboard: Top performers from the Global Harambee Azure Cohort"
+                  >
+                    <Award className="w-3.5 h-3.5 text-slate-950" />
+                    <span>Global Peer Leaderboard</span>
                   </button>
                 </div>
 
@@ -1559,6 +1575,16 @@ export default function App() {
                   >
                     <Download className="w-3.5 h-3.5 text-[#BB0000]" />
                     <span>Download Report</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCurriculumReadinessModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer backdrop-blur-xs"
+                    title="Check Preparation Readiness Techniques & Sync AZ-900 Curriculum Updates"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#006600]" />
+                    <span>Readiness Check</span>
                   </button>
 
                   <button
@@ -2285,11 +2311,16 @@ export default function App() {
           />
         )}
 
-        {/* TAB: GLOBAL LEARNING LEADERBOARD */}
+        {/* TAB: GLOBAL PEER LEADERBOARD (GLOBAL HARAMBEE AZURE COHORT) */}
         {activeTab === 'leaderboard' && (
           <GlobalLeaderboard
             stats={stats}
             onPracticeClick={() => setActiveTab('quiz')}
+            onLaunchCompetitiveDrill={(modId) => {
+              setMicroDrillTargetModuleId(modId);
+              setShowMicroDrill(modId);
+            }}
+            onFetchingChange={setIsMotifShimmering}
           />
         )}
 
@@ -2625,7 +2656,60 @@ export default function App() {
         onClose={() => setShowBackendCloudModal(false)}
         stats={stats}
         onOpenApiDocs={() => setShowApiDocumentationModal(true)}
+        onOpenAdminBackOffice={() => setShowAdminBackOfficeModal(true)}
         initialSection={backendModalSection}
+        onQuestionSaved={(savedQ) => {
+          setQuestions((prev) => {
+            const exists = prev.some((q) => q.id === savedQ.id);
+            if (exists) {
+              return prev.map((q) => (q.id === savedQ.id ? savedQ : q));
+            }
+            return [savedQ, ...prev];
+          });
+        }}
+      />
+
+      <CurriculumReadinessModal
+        isOpen={showCurriculumReadinessModal}
+        onClose={() => setShowCurriculumReadinessModal(false)}
+        stats={stats}
+        questions={questions}
+        onSyncCurriculumQuestions={(syncedQuestions) => {
+          setQuestions((prev) => {
+            const byId = new Map<string, Question>(prev.map((q) => [q.id, q]));
+            for (const sq of syncedQuestions) {
+              if (sq && sq.id) {
+                byId.set(sq.id, { ...(byId.get(sq.id) || {}), ...sq });
+              }
+            }
+            return Array.from(byId.values());
+          });
+        }}
+        onSelectModuleForPractice={(moduleId, pathId) => {
+          setSelectedPathId(pathId);
+          setSelectedModuleId(moduleId);
+          setActiveTab('quiz');
+          setCurrentQuestionIndex(0);
+        }}
+        onOpenStudyMode={() => {
+          setActiveTab('study-decks');
+        }}
+        onOpenAdaptiveQuiz={() => {
+          setIsDynamicDifficultyEnabled(true);
+          setActiveTab('adaptive');
+        }}
+        onOpenMockExam={() => setShowMockExam(true)}
+        onOpenWeakAreasReview={() => setShowWeakAreasReview(true)}
+        onLaunchMicroDrill={(moduleId) => {
+          setMicroDrillTargetModuleId(moduleId);
+          setShowMicroDrill(moduleId);
+        }}
+      />
+
+      <AdminBackOfficeModal
+        isOpen={showAdminBackOfficeModal}
+        onClose={() => setShowAdminBackOfficeModal(false)}
+        userEmail={authenticatedUser?.email || null}
         onQuestionSaved={(savedQ) => {
           setQuestions((prev) => {
             const exists = prev.some((q) => q.id === savedQ.id);

@@ -95,6 +95,25 @@ export interface DbPaymentTransaction {
 // RELATIONAL STORE ENGINE (Seeded from Official AZ-900 Curriculum & Question Bank)
 // ============================================================================
 
+export interface DbCohortLeaderboardEntry {
+  id: string;
+  user_id?: string;
+  name: string;
+  avatar: string;
+  location: string;
+  region: 'East Africa' | 'West Africa' | 'Southern Africa' | 'North & Horn' | 'Global Diaspora';
+  cohort: string;
+  chapter: string;
+  totalAnswered: number;
+  streakDays: number;
+  accuracy: number;
+  masteredModules: number;
+  kudosCount: number;
+  specialBadge: string;
+  recentActivity: string;
+  updated_at: string;
+}
+
 class Az900BackendDatabase {
   public users = new Map<string, DbUser>();
   public usersByEmail = new Map<string, string>(); // email -> user.id
@@ -108,10 +127,12 @@ class Az900BackendDatabase {
   public userProgress = new Map<string, DbUserProgress>();
   public quizSessions: DbQuizSession[] = [];
   public paymentTransactions = new Map<string, DbPaymentTransaction>();
+  public cohortLeaderboard = new Map<string, DbCohortLeaderboardEntry>();
 
   constructor() {
     this.seedCurriculumAndQuestions();
     this.seedDefaultDemoUser();
+    this.seedGlobalHarambeeCohortLeaderboard();
   }
 
   private seedCurriculumAndQuestions() {
@@ -639,6 +660,358 @@ class Az900BackendDatabase {
 
     this.questions.set(questionId, dbQuestion);
     return dbQuestion;
+  }
+
+  private seedGlobalHarambeeCohortLeaderboard() {
+    const nowIso = new Date().toISOString();
+    const initialPeers: DbCohortLeaderboardEntry[] = [
+      {
+        id: 'peer-1',
+        name: 'Amina Kimani',
+        avatar: '🇰🇪',
+        location: 'Nairobi, Kenya',
+        region: 'East Africa',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'Nairobi Savannah Hub',
+        totalAnswered: 142,
+        streakDays: 14,
+        accuracy: 94,
+        masteredModules: 12,
+        kudosCount: 48,
+        specialBadge: 'Azure Architect',
+        recentActivity: 'Mastered Module 11: Monitoring & Advisor (96%)',
+        updated_at: nowIso,
+      },
+      {
+        id: 'peer-2',
+        name: 'Chidi Okonkwo',
+        avatar: '🇳🇬',
+        location: 'Lagos, Nigeria',
+        region: 'West Africa',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'Yaba Cloud Explorers',
+        totalAnswered: 128,
+        streakDays: 12,
+        accuracy: 91,
+        masteredModules: 11,
+        kudosCount: 39,
+        specialBadge: 'Centurion',
+        recentActivity: 'Completed 45-Min Timed Mock Exam (885/1000)',
+        updated_at: nowIso,
+      },
+      {
+        id: 'peer-3',
+        name: 'Thabo Mokoena',
+        avatar: '🇿🇦',
+        location: 'Johannesburg, South Africa',
+        region: 'Southern Africa',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'Mzansi Azure Guild',
+        totalAnswered: 115,
+        streakDays: 9,
+        accuracy: 88,
+        masteredModules: 10,
+        kudosCount: 34,
+        specialBadge: 'Sharpshooter',
+        recentActivity: 'Solved 15 Adaptive Quiz scenarios in a row',
+        updated_at: nowIso,
+      },
+      {
+        id: 'peer-4',
+        name: 'Abeba Haile',
+        avatar: '🇪🇹',
+        location: 'Addis Ababa, Ethiopia',
+        region: 'North & Horn',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'Highland Cloud Chapter',
+        totalAnswered: 96,
+        streakDays: 8,
+        accuracy: 89,
+        masteredModules: 9,
+        kudosCount: 29,
+        specialBadge: 'Master of Modules',
+        recentActivity: 'Mastered Module 7: Azure Storage Redundancy',
+        updated_at: nowIso,
+      },
+      {
+        id: 'peer-5',
+        name: 'Kofi Mensah',
+        avatar: '🇬🇭',
+        location: 'Accra, Ghana',
+        region: 'West Africa',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'Black Star Tech Hub',
+        totalAnswered: 84,
+        streakDays: 7,
+        accuracy: 86,
+        masteredModules: 8,
+        kudosCount: 25,
+        specialBadge: 'Consistency Master',
+        recentActivity: 'Completed Daily 5-Question Harambee Micro-Drill',
+        updated_at: nowIso,
+      },
+      {
+        id: 'peer-6',
+        name: 'Claudine Uwase',
+        avatar: '🇷🇼',
+        location: 'Kigali, Rwanda',
+        region: 'East Africa',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'Kigali Innovation Hub',
+        totalAnswered: 72,
+        streakDays: 6,
+        accuracy: 92,
+        masteredModules: 8,
+        kudosCount: 31,
+        specialBadge: 'Concepts Sentinel',
+        recentActivity: 'Scored 95% on Path 2: Azure Architecture',
+        updated_at: nowIso,
+      },
+      {
+        id: 'peer-7',
+        name: 'Marcus Vance',
+        avatar: '🇬🇧',
+        location: 'London, UK',
+        region: 'Global Diaspora',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'London Diaspora Cloud Circle',
+        totalAnswered: 65,
+        streakDays: 5,
+        accuracy: 84,
+        masteredModules: 7,
+        kudosCount: 19,
+        specialBadge: 'Azure Explorer',
+        recentActivity: 'Reviewed Zero Trust & Entra ID Conditional Access',
+        updated_at: nowIso,
+      },
+      {
+        id: 'peer-8',
+        name: 'Fatima Al-Mansoor',
+        avatar: '🇪🇬',
+        location: 'Cairo, Egypt',
+        region: 'North & Horn',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'Nile Valley Azure League',
+        totalAnswered: 58,
+        streakDays: 5,
+        accuracy: 85,
+        masteredModules: 6,
+        kudosCount: 22,
+        specialBadge: 'Cloud Explorer',
+        recentActivity: 'Mastered Module 9: Cost Management & TCO',
+        updated_at: nowIso,
+      },
+      {
+        id: 'peer-9',
+        name: 'Wanjiku Njoroge',
+        avatar: '🇰🇪',
+        location: 'Mombasa, Kenya',
+        region: 'East Africa',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'Swahili Coast Cloud Hub',
+        totalAnswered: 51,
+        streakDays: 5,
+        accuracy: 87,
+        masteredModules: 6,
+        kudosCount: 20,
+        specialBadge: 'Governance Pro',
+        recentActivity: 'Completed Azure Policy vs RBAC Scenario Drill',
+        updated_at: nowIso,
+      },
+      {
+        id: 'peer-10',
+        name: 'David Ochieng',
+        avatar: '🇰🇪',
+        location: 'Kisumu, Kenya',
+        region: 'East Africa',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'Lake Victoria Tech Network',
+        totalAnswered: 44,
+        streakDays: 4,
+        accuracy: 82,
+        masteredModules: 5,
+        kudosCount: 17,
+        specialBadge: 'Rookie Builder',
+        recentActivity: 'Practicing Module 6: VNets & ExpressRoute',
+        updated_at: nowIso,
+      },
+      {
+        id: 'peer-11',
+        name: 'Elena Rostova',
+        avatar: '🇨🇦',
+        location: 'Toronto, Canada',
+        region: 'Global Diaspora',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'North Star Azure Group',
+        totalAnswered: 36,
+        streakDays: 3,
+        accuracy: 80,
+        masteredModules: 4,
+        kudosCount: 14,
+        specialBadge: 'Cloud Rookie',
+        recentActivity: 'Finished Path 1: Cloud Concepts Fundamentals',
+        updated_at: nowIso,
+      },
+      {
+        id: 'peer-12',
+        name: 'Baraka Mwakasege',
+        avatar: '🇹🇿',
+        location: 'Dar es Salaam, Tanzania',
+        region: 'East Africa',
+        cohort: 'Global Harambee Azure Cohort',
+        chapter: 'Kilimanjaro Cloud Guild',
+        totalAnswered: 29,
+        streakDays: 3,
+        accuracy: 83,
+        masteredModules: 3,
+        kudosCount: 15,
+        specialBadge: 'Rising Star',
+        recentActivity: 'Started Module 4: Core Architectural Components',
+        updated_at: nowIso,
+      },
+    ];
+
+    initialPeers.forEach((peer) => {
+      this.cohortLeaderboard.set(peer.id, peer);
+    });
+  }
+
+  public getCohortLeaderboard(params?: {
+    cohort?: string;
+    region?: string;
+    sortBy?: 'answered' | 'streak' | 'accuracy' | 'mastered';
+  }) {
+    const requestedCohort = params?.cohort || 'Global Harambee Azure Cohort';
+    const requestedRegion = params?.region || 'all';
+    const sortBy = params?.sortBy || 'answered';
+
+    let entries = Array.from(this.cohortLeaderboard.values()).filter(
+      (entry) =>
+        !requestedCohort ||
+        entry.cohort.toLowerCase().includes(requestedCohort.toLowerCase())
+    );
+
+    if (requestedRegion && requestedRegion !== 'all') {
+      entries = entries.filter(
+        (e) => e.region.toLowerCase() === requestedRegion.toLowerCase()
+      );
+    }
+
+    entries.sort((a, b) => {
+      if (sortBy === 'streak') {
+        if (b.streakDays !== a.streakDays) return b.streakDays - a.streakDays;
+        return b.totalAnswered - a.totalAnswered;
+      }
+      if (sortBy === 'accuracy') {
+        if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy;
+        return b.totalAnswered - a.totalAnswered;
+      }
+      if (sortBy === 'mastered') {
+        if (b.masteredModules !== a.masteredModules) {
+          return b.masteredModules - a.masteredModules;
+        }
+        return b.totalAnswered - a.totalAnswered;
+      }
+      // default: answered
+      if (b.totalAnswered !== a.totalAnswered) return b.totalAnswered - a.totalAnswered;
+      return b.accuracy - a.accuracy;
+    });
+
+    const allCohortMembers = Array.from(this.cohortLeaderboard.values());
+    const totalCohortQuestions = allCohortMembers.reduce(
+      (sum, item) => sum + item.totalAnswered,
+      0
+    );
+    const avgCohortAccuracy =
+      allCohortMembers.length > 0
+        ? Math.round(
+            allCohortMembers.reduce((sum, item) => sum + item.accuracy, 0) /
+              allCohortMembers.length
+          )
+        : 86;
+
+    return {
+      cohort: 'Global Harambee Azure Cohort',
+      fetched_at: new Date().toISOString(),
+      total_performers: allCohortMembers.length,
+      total_cohort_questions_solved: totalCohortQuestions,
+      average_cohort_accuracy: avgCohortAccuracy,
+      performers: entries,
+    };
+  }
+
+  public upsertCohortLeaderboardEntry(input: {
+    id?: string;
+    user_id?: string;
+    name: string;
+    avatar?: string;
+    location?: string;
+    region?: 'East Africa' | 'West Africa' | 'Southern Africa' | 'North & Horn' | 'Global Diaspora';
+    chapter?: string;
+    totalAnswered: number;
+    streakDays: number;
+    accuracy: number;
+    masteredModules?: number;
+    recentActivity?: string;
+  }): DbCohortLeaderboardEntry {
+    const entryId = input.id || (input.user_id ? `learner-${input.user_id}` : 'current-user');
+    const existing = this.cohortLeaderboard.get(entryId);
+    const totalAnswered = Math.max(0, Number(input.totalAnswered) || 0);
+    const accuracy = Math.max(0, Math.min(100, Number(input.accuracy) || 0));
+    const streakDays = Math.max(1, Number(input.streakDays) || 1);
+    const masteredModules = Math.max(
+      0,
+      Math.min(12, Number(input.masteredModules ?? existing?.masteredModules ?? 0))
+    );
+
+    const specialBadge =
+      accuracy >= 88 && totalAnswered >= 80
+        ? 'Azure Architect'
+        : totalAnswered >= 100
+        ? 'Centurion'
+        : masteredModules >= 8
+        ? 'Master of Modules'
+        : streakDays >= 7
+        ? 'Consistency Master'
+        : totalAnswered >= 20
+        ? 'Azure Explorer'
+        : 'Cloud Rookie';
+
+    const updated: DbCohortLeaderboardEntry = {
+      id: entryId,
+      user_id: input.user_id || existing?.user_id,
+      name: (input.name || existing?.name || 'You (Current Aspirant)').trim().slice(0, 80),
+      avatar: input.avatar || existing?.avatar || '🌟',
+      location: (input.location || existing?.location || 'Nairobi, Kenya').trim().slice(0, 80),
+      region: input.region || existing?.region || 'East Africa',
+      cohort: 'Global Harambee Azure Cohort',
+      chapter: (input.chapter || existing?.chapter || 'Harambee Active Aspirant Hub')
+        .trim()
+        .slice(0, 80),
+      totalAnswered,
+      streakDays,
+      accuracy,
+      masteredModules,
+      kudosCount: existing?.kudosCount ?? 18,
+      specialBadge,
+      recentActivity:
+        input.recentActivity ||
+        existing?.recentActivity ||
+        `Solved ${totalAnswered} AZ-900 practice scenarios (${accuracy}% accuracy)`,
+      updated_at: new Date().toISOString(),
+    };
+
+    this.cohortLeaderboard.set(entryId, updated);
+    return updated;
+  }
+
+  public giveCohortKudos(targetId: string): DbCohortLeaderboardEntry | null {
+    const entry = this.cohortLeaderboard.get(targetId);
+    if (!entry) return null;
+    entry.kudosCount = (entry.kudosCount || 0) + 1;
+    entry.updated_at = new Date().toISOString();
+    this.cohortLeaderboard.set(targetId, entry);
+    return entry;
   }
 }
 

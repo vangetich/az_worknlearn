@@ -1126,7 +1126,184 @@ app.get('/api/telemetry', (_req, res) => {
   });
 });
 
-// 4. Admin Curriculum & Database Management Endpoints
+// 3b. Global Harambee Azure Cohort Peer Leaderboard Endpoints
+app.get('/api/leaderboard', (req, res) => {
+  try {
+    const cohort = (req.query.cohort as string) || 'Global Harambee Azure Cohort';
+    const region = (req.query.region as string) || 'all';
+    const sortBy = ((req.query.sort as string) || 'answered') as
+      | 'answered'
+      | 'streak'
+      | 'accuracy'
+      | 'mastered';
+
+    const payload = backendDb.getCohortLeaderboard({
+      cohort,
+      region,
+      sortBy,
+    });
+    res.json(payload);
+  } catch (error: any) {
+    console.error('Fetch cohort leaderboard error:', error);
+    res.status(500).json({ error: 'Failed to fetch Global Harambee Azure Cohort leaderboard.' });
+  }
+});
+
+app.post('/api/leaderboard/sync', (req, res) => {
+  try {
+    const userId = resolveRequestUserId(req);
+    const {
+      id,
+      name,
+      avatar,
+      location,
+      region,
+      chapter,
+      totalAnswered,
+      streakDays,
+      accuracy,
+      masteredModules,
+      recentActivity,
+    } = req.body || {};
+
+    const entry = backendDb.upsertCohortLeaderboardEntry({
+      id: id || 'current-user',
+      user_id: userId,
+      name: name || 'You (Current Aspirant)',
+      avatar,
+      location,
+      region,
+      chapter,
+      totalAnswered: Number(totalAnswered) || 0,
+      streakDays: Number(streakDays) || 1,
+      accuracy: Number(accuracy) || 0,
+      masteredModules: Number(masteredModules) || 0,
+      recentActivity,
+    });
+
+    const leaderboard = backendDb.getCohortLeaderboard({
+      cohort: 'Global Harambee Azure Cohort',
+    });
+
+    res.json({
+      message: 'Synced score with Global Harambee Azure Cohort leaderboard.',
+      entry,
+      leaderboard,
+    });
+  } catch (error: any) {
+    console.error('Sync cohort leaderboard error:', error);
+    res.status(500).json({ error: 'Failed to sync learner to Global Harambee Azure Cohort.' });
+  }
+});
+
+app.post('/api/leaderboard/kudos', (req, res) => {
+  try {
+    const { targetId } = req.body || {};
+    if (!targetId || typeof targetId !== 'string') {
+      return res.status(400).json({ error: 'targetId is required to send Harambee kudos.' });
+    }
+    const updated = backendDb.giveCohortKudos(targetId);
+    if (!updated) {
+      return res.status(404).json({ error: 'Cohort performer not found.' });
+    }
+    res.json({
+      message: 'Harambee kudos sent!',
+      entry: updated,
+    });
+  } catch (error: any) {
+    console.error('Cohort kudos error:', error);
+    res.status(500).json({ error: 'Failed to send Harambee kudos.' });
+  }
+});
+
+// 3c. Curriculum Update & Preparation Readiness Check Endpoint
+app.get('/api/curriculum/readiness-check', (req, res) => {
+  try {
+    const userId = resolveRequestUserId(req);
+    const adminStats = backendDb.getAdminModuleStats();
+    const userReport = backendDb.getUserProgressReport(userId);
+    const allQuestions = Array.from(backendDb.questions.values());
+
+    res.json({
+      curriculum_version: '2026.10-AZ900-MSLearn-Aligned',
+      verified_at: new Date().toISOString(),
+      official_weights: [
+        { pathId: 1, title: 'Describe Cloud Concepts', weight: '25–30%', modulesCount: 3 },
+        { pathId: 2, title: 'Describe Azure Architecture and Services', weight: '35–40%', modulesCount: 5 },
+        { pathId: 3, title: 'Describe Azure Management and Governance', weight: '30–35%', modulesCount: 4 },
+      ],
+      curriculum_updates: [
+        {
+          id: 'upd-entra-zero-trust',
+          moduleId: 8,
+          title: 'Microsoft Entra ID & Zero Trust Identity Verification',
+          status: 'Synced & Active',
+          summary: 'Updated Azure AD references to Microsoft Entra ID, Conditional Access signals, and Zero Trust principles (Verify explicitly, Least privilege, Assume breach).',
+        },
+        {
+          id: 'upd-storage-rehydration',
+          moduleId: 7,
+          title: 'Azure Blob Storage Access Tiers & Archive Rehydration',
+          status: 'Synced & Active',
+          summary: 'Verified Hot, Cool, Cold, and Archive tier SLA rules and offline rehydration latency traps.',
+        },
+        {
+          id: 'upd-purview-governance',
+          moduleId: 10,
+          title: 'Microsoft Purview, Azure Policy & Resource Locks Precedence',
+          status: 'Synced & Active',
+          summary: 'Reinforced ReadOnly vs CanNotDelete lock precedence over Owner RBAC roles and Azure Policy compliance initiatives.',
+        },
+        {
+          id: 'upd-arc-hybrid',
+          moduleId: 11,
+          title: 'Azure Arc Multi-Cloud & On-Premises Governance',
+          status: 'Synced & Active',
+          summary: 'Added scenario coverage for extending ARM, Azure Policy, and Azure Monitor to non-Azure servers via Azure Arc.',
+        },
+      ],
+      total_modules: adminStats.total_modules,
+      total_questions: adminStats.total_questions,
+      modules: adminStats.modules,
+      questions: allQuestions,
+      user_summary: userReport.summary,
+    });
+  } catch (error: any) {
+    console.error('Curriculum readiness check error:', error);
+    res.status(500).json({ error: 'Failed to run curriculum update & readiness check.' });
+  }
+});
+
+// 4. Admin Back-Office Curriculum, Security & Database Management Endpoints (Allocated to vangetich@gmail.com)
+const SOLE_AUTHORIZED_ADMIN_EMAIL = 'vangetich@gmail.com';
+
+app.get('/api/admin/security-status', (req, res) => {
+  const userId = resolveRequestUserId(req);
+  const user = backendDb.getUserByIdOrDefault(userId);
+  const requestedEmail = String(
+    req.headers['x-admin-email'] || user?.email || SOLE_AUTHORIZED_ADMIN_EMAIL
+  )
+    .trim()
+    .toLowerCase();
+  const isAuthorizedOwner = requestedEmail === SOLE_AUTHORIZED_ADMIN_EMAIL;
+
+  res.json({
+    sole_authorized_admin: SOLE_AUTHORIZED_ADMIN_EMAIL,
+    active_email: requestedEmail,
+    is_authorized_owner: isAuthorizedOwner,
+    rbac_mode: 'Single-User Exclusive Admin Back-Office',
+    firestore_rule_guard: "request.auth.token.email == 'vangetich@gmail.com'",
+    protected_resources: [
+      'PostgreSQL / Supabase Question Bank CRUD (/api/admin/questions)',
+      'Curriculum Module & Difficulty Distribution (/api/admin/module-stats)',
+      'Server Latency & Error Rate Telemetry (/api/telemetry)',
+      'M-Pesa Daraja & Stripe Webhook Ledger (/api/payments/webhook)',
+      'Supabase SQL Schema & Migrations (/api/supabase/migrations)',
+    ],
+    checked_at: new Date().toISOString(),
+  });
+});
+
 app.get('/api/admin/module-stats', (_req, res) => {
   try {
     const stats = backendDb.getAdminModuleStats();

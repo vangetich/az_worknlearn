@@ -654,3 +654,150 @@ export async function upsertSupabaseCurriculumQuestion(
   return await res.json();
 }
 
+export interface CohortLeaderboardEntry {
+  id: string;
+  user_id?: string;
+  name: string;
+  avatar: string;
+  location: string;
+  region: 'East Africa' | 'West Africa' | 'Southern Africa' | 'North & Horn' | 'Global Diaspora';
+  cohort: string;
+  chapter: string;
+  totalAnswered: number;
+  streakDays: number;
+  accuracy: number;
+  masteredModules: number;
+  kudosCount: number;
+  specialBadge?: string;
+  recentActivity?: string;
+  isCurrentUser?: boolean;
+  updated_at?: string;
+}
+
+export interface CohortLeaderboardPayload {
+  cohort: string;
+  fetched_at: string;
+  total_performers: number;
+  total_cohort_questions_solved: number;
+  average_cohort_accuracy: number;
+  performers: CohortLeaderboardEntry[];
+}
+
+/**
+ * Fetches top performers from the 'Global Harambee Azure Cohort' via Supabase / Express API.
+ */
+export async function fetchGlobalHarambeeLeaderboard(params?: {
+  region?: string;
+  sortBy?: 'answered' | 'streak' | 'accuracy' | 'mastered';
+}): Promise<CohortLeaderboardPayload> {
+  const region = params?.region || 'all';
+  const sortBy = params?.sortBy || 'answered';
+
+  if (isSupabaseDirectConfigured) {
+    try {
+      const { data, error } = await (supabase.from('cohort_leaderboard' as any) as any)
+        .select('*')
+        .eq('cohort', 'Global Harambee Azure Cohort')
+        .order('total_answered', { ascending: false })
+        .limit(50);
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const mapped: CohortLeaderboardEntry[] = data.map((row: any) => ({
+          id: String(row.id),
+          name: String(row.name || 'Cohort Aspirant'),
+          avatar: String(row.avatar || '🇰🇪'),
+          location: String(row.location || 'Nairobi, Kenya'),
+          region: row.region || 'East Africa',
+          cohort: String(row.cohort || 'Global Harambee Azure Cohort'),
+          chapter: String(row.chapter || 'Harambee Cloud Hub'),
+          totalAnswered: Number(row.total_answered ?? row.totalAnswered ?? 0),
+          streakDays: Number(row.streak_days ?? row.streakDays ?? 1),
+          accuracy: Number(row.accuracy ?? 85),
+          masteredModules: Number(row.mastered_modules ?? row.masteredModules ?? 0),
+          kudosCount: Number(row.kudos_count ?? row.kudosCount ?? 10),
+          specialBadge: row.special_badge || row.specialBadge || 'Azure Explorer',
+          recentActivity: row.recent_activity || row.recentActivity || 'Active in AZ-900 Studio',
+          updated_at: row.updated_at,
+        }));
+
+        return {
+          cohort: 'Global Harambee Azure Cohort',
+          fetched_at: new Date().toISOString(),
+          total_performers: mapped.length,
+          total_cohort_questions_solved: mapped.reduce((s, p) => s + p.totalAnswered, 0),
+          average_cohort_accuracy: Math.round(
+            mapped.reduce((s, p) => s + p.accuracy, 0) / Math.max(1, mapped.length)
+          ),
+          performers: mapped,
+        };
+      }
+    } catch {
+      // Fallback to Express backend API
+    }
+  }
+
+  const query = new URLSearchParams({
+    cohort: 'Global Harambee Azure Cohort',
+    region,
+    sort: sortBy,
+  });
+
+  const res = await fetch(`/api/leaderboard?${query.toString()}`);
+  if (!res.ok) {
+    throw new Error('Failed to fetch Global Harambee Azure Cohort leaderboard.');
+  }
+  return (await res.json()) as CohortLeaderboardPayload;
+}
+
+/**
+ * Syncs the current learner's live stats and profile into the Global Harambee Azure Cohort leaderboard.
+ */
+export async function syncLearnerToGlobalCohort(input: {
+  name: string;
+  avatar?: string;
+  location?: string;
+  region?: 'East Africa' | 'West Africa' | 'Southern Africa' | 'North & Horn' | 'Global Diaspora';
+  chapter?: string;
+  totalAnswered: number;
+  streakDays: number;
+  accuracy: number;
+  masteredModules: number;
+  recentActivity?: string;
+}) {
+  const resolvedUserId =
+    auth.currentUser?.uid ||
+    authService.getStoredBackendUser()?.id ||
+    'usr-default-learner';
+  const headers = await authService.getAuthHeaders(resolvedUserId);
+
+  const res = await fetch('/api/leaderboard/sync', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      id: 'current-user',
+      user_id: resolvedUserId,
+      ...input,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to sync score to Global Harambee Azure Cohort.');
+  }
+  return await res.json();
+}
+
+/**
+ * Sends Harambee Kudos to a peer in the Global Harambee Azure Cohort.
+ */
+export async function sendHarambeePeerKudos(targetId: string) {
+  const res = await fetch('/api/leaderboard/kudos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targetId }),
+  });
+  if (!res.ok) {
+    throw new Error('Failed to send Harambee kudos.');
+  }
+  return await res.json();
+}
+
