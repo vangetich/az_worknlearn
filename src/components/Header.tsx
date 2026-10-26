@@ -403,41 +403,41 @@ export const Header: React.FC<HeaderProps> = ({
   }, [questions, stats]);
 
   return (
-    <header className="sticky top-0 z-40 w-full max-w-full overflow-x-clip bg-white/95 backdrop-blur-md border-b border-sky-200/80 shadow-xs relative">
+    <header className="sticky top-0 z-40 w-full max-w-full overflow-x-hidden bg-white/95 backdrop-blur-md border-b border-sky-200/80 shadow-xs relative">
       {/* Azure African Fabric Patterns Only (Multiple Opacities of Azure) */}
       <WavyAzureFabricMotif />
 
-      <div className="max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 relative z-10">
+      <div className="max-w-7xl w-full mx-auto px-2.5 sm:px-5 lg:px-6 relative z-10 min-w-0">
         {/* =====================================================================
             MOBILE & TABLET COMPACT TOP BAR (< lg screens)
            ===================================================================== */}
-        <div className="flex lg:hidden items-center justify-between py-2 gap-1.5 sm:gap-2 min-w-0">
+        <div className="flex lg:hidden flex-wrap sm:flex-nowrap items-center justify-between py-2 gap-1.5 sm:gap-2 min-w-0 w-full">
           {/* Compact Brand Logo & Title */}
           <div
-            className="flex items-center gap-2 cursor-pointer group/logo min-w-0 flex-1"
+            className="flex items-center gap-1.5 sm:gap-2 cursor-pointer group/logo min-w-0 flex-1"
             onClick={() => setActiveTab('quiz')}
           >
-            <div className="relative flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shrink-0">
-              <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+            <div className="relative flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shrink-0">
+              <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
               </svg>
               <div className="absolute -bottom-1 -right-1">
-                <MaasaiMedallion size={12} />
+                <MaasaiMedallion size={11} />
               </div>
             </div>
 
             <div className="truncate text-left min-w-0">
-              <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
-                <span className="font-black text-xs sm:text-base tracking-tight text-slate-900 truncate">
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="font-black text-xs sm:text-sm tracking-tight text-slate-900 truncate">
                   Azure Cloud Explorer
                 </span>
-                <span className="px-1.5 py-0.5 rounded text-[10.35px] sm:text-[11.5px] font-black bg-[#0078D4] text-white shrink-0 shadow-2xs">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-[#0078D4] text-white shrink-0 shadow-2xs">
                   AZ-900
                 </span>
               </div>
-              <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/35 shadow-2xs max-w-full">
-                <Sparkles className="w-3 h-3 text-[#0078D4] shrink-0" />
-                <span className="text-[10.35px] sm:text-[12.65px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent truncate studio-subtitle-standout">
+              <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/35 shadow-2xs max-w-full">
+                <Sparkles className="w-2.5 h-2.5 text-[#0078D4] shrink-0" />
+                <span className="text-[9.5px] sm:text-[11px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent truncate studio-subtitle-standout">
                   Fundamentals Practice Studio
                 </span>
               </div>
@@ -445,7 +445,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right Controls on Mobile & Tablet */}
-          <div className="flex items-center justify-end gap-1 sm:gap-1.5 shrink-0">
+          <div className="flex items-center justify-end gap-1 sm:gap-1.5 shrink-0 min-w-0">
             {/* Subtle Supabase Real-Time Connection Status Indicator Icon (Mobile/Tablet) */}
             <button
               type="button"
@@ -558,35 +558,35 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* =====================================================================
-            LAPTOP & DESKTOP COMPACT NAVIGATION BAR TOP TIER (lg+ screens)
+            LAPTOP & DESKTOP PERMANENT SLIM NAVIGATION BAR TOP TIER (lg+ screens)
            ===================================================================== */}
-        <div className="hidden lg:flex items-center justify-between py-2 gap-3">
+        <div className="hidden lg:flex items-center justify-between py-1.5 gap-2">
           {/* Left Brand: Logo & Compact Azure Curriculum Title */}
           <div
-            className="flex items-center gap-2.5 cursor-pointer group/logo shrink-0"
+            className="flex items-center gap-2 cursor-pointer group/logo shrink-0"
             onClick={() => setActiveTab('quiz')}
           >
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shadow-blue-500/20 group-hover/logo:scale-105 transition-transform shrink-0">
-              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+            <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shadow-blue-500/20 group-hover/logo:scale-105 transition-transform shrink-0">
+              <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
               </svg>
               <div className="absolute -bottom-1 -right-1">
-                <MaasaiMedallion size={14} />
+                <MaasaiMedallion size={12} />
               </div>
             </div>
 
             <div className="text-left">
               <div className="flex items-center gap-1.5">
-                <span className="font-black text-lg xl:text-xl tracking-tight text-slate-900 leading-none">
+                <span className="font-black text-base tracking-tight text-slate-900 leading-none">
                   Azure Cloud Explorer
                 </span>
-                <span className="px-1.5 py-0.5 rounded text-[11.5px] font-black bg-[#0078D4] text-white shadow-2xs">
+                <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-[#0078D4] text-white shadow-2xs">
                   AZ-900
                 </span>
               </div>
-              <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/40 shadow-2xs">
-                <Sparkles className="w-3 h-3 text-[#0078D4] shrink-0" />
-                <span className="text-[12.65px] font-extrabold tracking-wider uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent studio-subtitle-standout">
+              <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/40 shadow-2xs">
+                <Sparkles className="w-2.5 h-2.5 text-[#0078D4] shrink-0" />
+                <span className="text-[10.5px] font-extrabold tracking-wider uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent studio-subtitle-standout">
                   Fundamentals Practice Studio
                 </span>
               </div>
@@ -594,7 +594,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right Controls: Global Search, Compact Path Selector, Tools & Goal Dropdown, Goal Ring & Actions */}
-          <div className="flex items-center justify-end gap-1.5 xl:gap-2 flex-wrap">
+          <div className="flex items-center justify-end gap-1 xl:gap-1.5 flex-wrap">
             {onSearchQueryChange && onSelectQuestion && (
               <GlobalSearchBar
                 questions={questions}
@@ -995,164 +995,165 @@ export const Header: React.FC<HeaderProps> = ({
           );
         })()}
 
-        {/* Sliding Menu Bar: 50% Lighter Azure Opacity Shade with Azure Patterns & Warrior Motifs */}
-        <div
-          className={`relative w-full overflow-hidden transition-all duration-300 ease-in-out border-t border-sky-300/70 dark:border-sky-700/50 rounded-b-2xl shadow-xs backdrop-blur-md ${
+        {/* Permanent Slim Navigation Bar in Full-Size Window View: Fitted Width Around Contents */}
+        <nav
+          aria-label="Primary Studio Navigation"
+          className={`relative w-full lg:w-fit lg:max-w-full lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-xl lg:mb-1 shadow-xs backdrop-blur-md ${
             isMenuBarHidden
-              ? 'max-h-0 opacity-0 pointer-events-none py-0 border-transparent'
-              : 'max-h-24 opacity-100 py-2 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
+              ? 'max-h-0 opacity-0 pointer-events-none py-0 border-transparent lg:mb-0'
+              : 'max-h-20 opacity-100 py-1 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
           }`}
         >
           <WavyAzureFabricMotif className="opacity-50" />
-          <div className="relative z-10 flex items-center justify-start lg:justify-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none px-2.5 sm:px-3 py-0.5">
+          <div className="relative z-10 flex items-center justify-start lg:justify-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none px-2 py-0.5 max-w-full">
             {/* Left Kenyan Moran Warrior Shield Motif */}
-            <div className="hidden xl:flex items-center gap-1.5 shrink-0 pl-1 pr-1.5 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
-              <MoranShieldMotif size={22} animate={true} />
+            <div className="hidden xl:flex items-center shrink-0 px-1 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
+              <MoranShieldMotif size={18} animate={true} />
             </div>
 
             <button
               onClick={() => setActiveTab('quiz')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                 activeTab === 'quiz'
-                  ? 'bg-[#005A9E] text-white shadow-md ring-1 ring-white/80 font-black scale-102'
-                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+                  ? 'bg-[#005A9E] text-white shadow-sm ring-1 ring-white/80 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
               }`}
             >
-              {activeTab === 'quiz' ? <WarriorSpearBadge size={14} /> : <BookOpen className="w-3.5 h-3.5 text-[#005A9E] dark:text-sky-300" />}
+              {activeTab === 'quiz' ? <WarriorSpearBadge size={12} /> : <BookOpen className="w-3 h-3 text-[#005A9E] dark:text-sky-300" />}
               <span>Practice</span>
             </button>
 
             <button
               onClick={() => setActiveTab('study-decks')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                 activeTab === 'study-decks'
-                  ? 'bg-gradient-to-r from-[#0078D4] to-[#005A9E] text-white shadow-md ring-1 ring-amber-300 font-black scale-102'
-                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+                  ? 'bg-gradient-to-r from-[#0078D4] to-[#005A9E] text-white shadow-sm ring-1 ring-amber-300 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
               }`}
               title="Interactive Study Mode: Select Learning Path & Module to study Unit-by-Unit concepts, Azure services, and examples"
             >
-              {activeTab === 'study-decks' ? <WarriorSpearBadge size={14} /> : <Layers className="w-3.5 h-3.5 text-[#005A9E] dark:text-sky-300" />}
+              {activeTab === 'study-decks' ? <WarriorSpearBadge size={12} /> : <Layers className="w-3 h-3 text-[#005A9E] dark:text-sky-300" />}
               <span>Study Mode</span>
             </button>
 
             {/* Adaptive Quiz Mode with glowing Zap */}
             <button
               onClick={() => setActiveTab('adaptive')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                 activeTab === 'adaptive'
-                  ? 'bg-gradient-to-r from-blue-700 to-indigo-700 text-white shadow-md ring-1 ring-amber-300 font-black scale-102'
-                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+                  ? 'bg-gradient-to-r from-blue-700 to-indigo-700 text-white shadow-sm ring-1 ring-amber-300 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
               }`}
             >
-              {activeTab === 'adaptive' ? <WarriorSpearBadge size={14} /> : <Zap className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300 fill-amber-400" />}
+              {activeTab === 'adaptive' ? <WarriorSpearBadge size={12} /> : <Zap className="w-3 h-3 text-amber-600 dark:text-amber-300 fill-amber-400" />}
               <span>Adaptive Quiz</span>
             </button>
 
             <button
               onClick={() => setActiveTab('flashcards')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                 activeTab === 'flashcards'
-                  ? 'bg-gradient-to-r from-indigo-700 to-purple-700 text-white shadow-md ring-1 ring-white/80 font-black scale-102'
-                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+                  ? 'bg-gradient-to-r from-indigo-700 to-purple-700 text-white shadow-sm ring-1 ring-white/80 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
               }`}
             >
-              {activeTab === 'flashcards' ? <WarriorSpearBadge size={14} /> : <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300" />}
+              {activeTab === 'flashcards' ? <WarriorSpearBadge size={12} /> : <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-300" />}
               <span>Flashcards</span>
             </button>
 
             {/* Review History Tab */}
             <button
               onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                 activeTab === 'history'
-                  ? 'bg-[#005A9E] text-white shadow-md ring-1 ring-white/80 font-black scale-102'
-                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+                  ? 'bg-[#005A9E] text-white shadow-sm ring-1 ring-white/80 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
               }`}
             >
-              {activeTab === 'history' ? <WarriorSpearBadge size={14} /> : <History className="w-3.5 h-3.5 text-[#005A9E] dark:text-sky-300" />}
+              {activeTab === 'history' ? <WarriorSpearBadge size={12} /> : <History className="w-3 h-3 text-[#005A9E] dark:text-sky-300" />}
               <span>History</span>
             </button>
 
             <button
               onClick={() => setActiveTab('mock')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                 activeTab === 'mock'
-                  ? 'bg-gradient-to-r from-blue-800 to-[#005A9E] text-white shadow-md ring-1 ring-white/80 font-black scale-102'
-                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+                  ? 'bg-gradient-to-r from-blue-800 to-[#005A9E] text-white shadow-sm ring-1 ring-white/80 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
               }`}
             >
-              {activeTab === 'mock' ? <WarriorSpearBadge size={14} /> : <Award className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300" />}
+              {activeTab === 'mock' ? <WarriorSpearBadge size={12} /> : <Award className="w-3 h-3 text-amber-600 dark:text-amber-300" />}
               <span>Mock Exam</span>
             </button>
 
             <button
               onClick={() => setActiveTab('analytics')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                 activeTab === 'analytics'
-                  ? 'bg-slate-900 text-white shadow-md ring-1 ring-sky-300 font-black scale-102'
-                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+                  ? 'bg-slate-900 text-white shadow-sm ring-1 ring-sky-300 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
               }`}
             >
-              {activeTab === 'analytics' ? <WarriorSpearBadge size={14} /> : <TrendingUp className="w-3.5 h-3.5 text-[#005A9E] dark:text-sky-300" />}
+              {activeTab === 'analytics' ? <WarriorSpearBadge size={12} /> : <TrendingUp className="w-3 h-3 text-[#005A9E] dark:text-sky-300" />}
               <span>Analytics</span>
             </button>
 
             <button
               onClick={() => setActiveTab('assistant')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                 activeTab === 'assistant'
-                  ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md ring-1 ring-yellow-200 font-black scale-102'
-                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+                  ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-sm ring-1 ring-yellow-200 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
               }`}
             >
-              {activeTab === 'assistant' ? <WarriorSpearBadge size={14} /> : <Bot className="w-3.5 h-3.5 text-orange-700 dark:text-amber-300" />}
+              {activeTab === 'assistant' ? <WarriorSpearBadge size={12} /> : <Bot className="w-3 h-3 text-orange-700 dark:text-amber-300" />}
               <span>Tutor</span>
             </button>
 
             <button
               onClick={() => setActiveTab('leaderboard')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                 activeTab === 'leaderboard'
-                  ? 'bg-amber-600 text-white shadow-md ring-1 ring-amber-200 font-black scale-102'
-                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+                  ? 'bg-amber-600 text-white shadow-sm ring-1 ring-amber-200 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
               }`}
               title="Global Peer Leaderboard: Top performers from the Global Harambee Azure Cohort ranked by total questions solved"
             >
-              {activeTab === 'leaderboard' ? <WarriorSpearBadge size={14} /> : <Users className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />}
+              {activeTab === 'leaderboard' ? <WarriorSpearBadge size={12} /> : <Users className="w-3 h-3 text-amber-700 dark:text-amber-400" />}
               <span>Global Peer Leaderboard</span>
             </button>
 
             <button
               onClick={() => setActiveTab('profile')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                 activeTab === 'profile'
-                  ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-md ring-1 ring-purple-300 font-black scale-102'
-                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+                  ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-sm ring-1 ring-purple-300 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
               }`}
             >
-              {activeTab === 'profile' ? <WarriorSpearBadge size={14} /> : <Award className="w-3.5 h-3.5 text-purple-700 dark:text-amber-300" />}
+              {activeTab === 'profile' ? <WarriorSpearBadge size={12} /> : <Award className="w-3 h-3 text-purple-700 dark:text-amber-300" />}
               <span>Profile</span>
             </button>
 
             <button
               onClick={() => setActiveTab('glossary')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                 activeTab === 'glossary'
-                  ? 'bg-gradient-to-r from-emerald-700 to-[#005A9E] text-white shadow-md ring-1 ring-emerald-300 font-black scale-102'
-                  : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
+                  ? 'bg-gradient-to-r from-emerald-700 to-[#005A9E] text-white shadow-sm ring-1 ring-emerald-300 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
               }`}
               title="Azure Glossary & Dictionary: All AZ-900 terms, interrelated architecture pinpoints, and verified Microsoft Learn references"
             >
-              {activeTab === 'glossary' ? <WarriorSpearBadge size={14} /> : <BookOpen className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-300" />}
+              {activeTab === 'glossary' ? <WarriorSpearBadge size={12} /> : <BookOpen className="w-3 h-3 text-emerald-700 dark:text-emerald-300" />}
               <span>Glossary</span>
             </button>
 
             {/* Right Kenyan Moran Warrior Shield Motif */}
-            <div className="hidden xl:flex items-center gap-1.5 shrink-0 pr-1 pl-1.5 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
-              <MoranShieldMotif size={22} animate={true} />
+            <div className="hidden xl:flex items-center shrink-0 px-1 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
+              <MoranShieldMotif size={18} animate={true} />
             </div>
           </div>
-        </div>
+        </nav>
 
         {/* Minimalist Floating Expand Handle (visible when menu bar is hidden) */}
         {isMenuBarHidden && (

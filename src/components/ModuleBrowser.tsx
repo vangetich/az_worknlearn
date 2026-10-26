@@ -63,27 +63,27 @@ export const ModuleBrowser: React.FC<ModuleBrowserProps> = ({
       : 0;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 card-elevation p-3.5 sm:p-4 space-y-3">
+    <div className="bg-white rounded-xl border border-slate-200 card-elevation p-2.5 sm:p-3 space-y-2.5 min-w-0 w-full">
       {/* Top Filter Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <BookOpen className="w-4 h-4 text-[#0078D4] shrink-0" />
-          <h3 className="font-extrabold text-xs sm:text-sm uppercase tracking-wider text-slate-800 truncate">
-            Cloud Explorer Menu
+      <div className="flex items-center justify-between gap-1.5 border-b border-slate-100 pb-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <BookOpen className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+          <h3 className="font-extrabold text-[11px] uppercase tracking-wider text-slate-800 truncate">
+            Curriculum Nav
           </h3>
           <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
             {overallCompletedCount}/{totalCurriculumModules}
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={() => {
               onSelectPath('all');
               onSelectModule('all');
             }}
-            className={`text-[11px] px-2 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
+            className={`text-[10px] px-2 py-0.5 rounded-lg font-bold transition-colors cursor-pointer ${
               selectedPathId === 'all' && selectedModuleId === 'all'
                 ? 'bg-[#0078D4] text-white'
                 : 'text-slate-600 hover:text-slate-900 bg-slate-100'
@@ -107,25 +107,25 @@ export const ModuleBrowser: React.FC<ModuleBrowserProps> = ({
           <button
             type="button"
             onClick={() => setIsMobileOpen((prev) => !prev)}
-            className="lg:hidden inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold cursor-pointer"
+            className="lg:hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold cursor-pointer"
             aria-expanded={isMobileOpen}
           >
             <span>{isMobileOpen ? 'Hide' : 'Browse'}</span>
             {isMobileOpen ? (
-              <ChevronUp className="w-3.5 h-3.5" />
+              <ChevronUp className="w-3 h-3" />
             ) : (
-              <ChevronDown className="w-3.5 h-3.5" />
+              <ChevronDown className="w-3 h-3" />
             )}
           </button>
         </div>
       </div>
 
       {/* Overall Completion Summary Bar */}
-      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-        <div className="flex items-center justify-between text-[11px]">
-          <span className="font-bold text-slate-700 flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Overall Completion</span>
+      <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+        <div className="flex items-center justify-between text-[10px]">
+          <span className="font-bold text-slate-700 flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            <span>Progress</span>
           </span>
           <span className="font-mono font-black text-slate-900">
             {overallCompletedCount}/{totalCurriculumModules} ({overallCompletionPct}%)
@@ -140,7 +140,7 @@ export const ModuleBrowser: React.FC<ModuleBrowserProps> = ({
       </div>
 
       {/* 3 Learning Paths (Always visible on lg+ laptop, collapsible on mobile/tablet) */}
-      <div className={`${isMobileOpen ? 'block' : 'hidden lg:block'} space-y-2.5`}>
+      <div className={`${isMobileOpen ? 'block' : 'hidden lg:block'} space-y-2`}>
         {LEARNING_PATHS.map((path) => {
           const isPathSelected = selectedPathId === path.id;
           const isAccordionOpen = expandedPaths[path.id] ?? true;

@@ -513,6 +513,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       return false;
     }
   });
+  const [showAnalyzeDistractorsPanel, setShowAnalyzeDistractorsPanel] = useState<boolean>(false);
 
   const handleToggleEli5 = () => {
     setShowEli5Analogy((prev) => {
@@ -865,6 +866,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   React.useEffect(() => {
     setSelectedOption(null);
     setHasSubmitted(false);
+    setShowAnalyzeDistractorsPanel(false);
     setUserConfidence(stats?.confidenceScores?.[question.id] || null);
     setConfidenceToast(null);
     setExamFeedbackRevealed(false);
@@ -1322,12 +1324,12 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     <div
       onTouchStart={handleCardTouchStart}
       onTouchEnd={handleCardTouchEnd}
-      className="bg-white rounded-xl border border-slate-200/90 card-elevation overflow-visible transition-all"
+      className="w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden transition-all"
     >
       {/* Mobile-Responsive 'Quick Switcher' Swipe Gesture Bar (Toggle Active Filtered Lists Without Opening Menu) */}
       {onSelectQuickFilter && (
-        <div className="px-4 sm:px-6 py-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border-b border-slate-700/80 flex flex-wrap items-center justify-between gap-2 rounded-t-xl">
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+        <div className="px-3 sm:px-5 py-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border-b border-slate-700/80 flex flex-wrap items-center justify-between gap-2 rounded-t-xl min-w-0 w-full">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 min-w-0 max-w-full">
             <span className="text-[10px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1 shrink-0 mr-1">
               <Layers className="w-3 h-3 text-amber-400" />
               <span>Quick Switcher:</span>
@@ -1398,55 +1400,73 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
       )}
 
-      {/* Uncluttered, Neatly Ordered Top Header Bar with Study Zone Dropdown Menu */}
+      {/* Uncluttered, Neatly Ordered Top Header Bar with Persistent Difficulty Dropdown & Study Zone Menu */}
       <div
-        className={`relative px-4 sm:px-6 py-3 bg-slate-50/80 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2.5 ${
+        className={`relative px-3.5 sm:px-6 py-2.5 bg-slate-50/80 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2 min-w-0 w-full ${
           !onSelectQuickFilter ? 'rounded-t-xl' : ''
         }`}
       >
-        {/* Left Group: Path/Module Identity + Compact Difficulty Status + Active Mode Indicators */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Left Group: Path/Module Identity + Persistent Difficulty Level Dropdown Selector + Active Mode Indicators */}
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
           <span
             className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${pathColor}`}
           >
             Path {question.learningPathId}: Module {question.moduleId}
           </span>
 
-          <span className="text-xs font-semibold text-slate-700 hidden md:inline max-w-[230px] truncate">
+          <span className="text-xs font-semibold text-slate-700 hidden md:inline max-w-[200px] truncate">
             {question.moduleTitle}
           </span>
 
-          {/* Clear Color-Coded Difficulty Badge & Adaptive Status Pill */}
+          {/* Clear Color-Coded Difficulty Badge */}
           <button
             type="button"
             onClick={handleCycleDifficultyBadgeFilter}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-2xs ${difficultyBadgeConfig.pillClass}`}
-            title={`Question Difficulty: ${difficultyBadgeConfig.label} (${difficultyBadgeConfig.subLabel}) • Adaptive Tier: ${
-              activeLockedDifficulty
-                ? `Locked (${activeLockedDifficulty})`
-                : dynamicDifficulty || 'Intermediate'
-            }. Click to cycle difficulty filter or open Study Zone menu for granular controls.`}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-2xs ${difficultyBadgeConfig.pillClass}`}
+            title={`Current Question Difficulty: ${difficultyBadgeConfig.label} (${difficultyBadgeConfig.subLabel}). Click to cycle difficulty filter.`}
           >
             <span className={`w-2 h-2 rounded-full shrink-0 ${difficultyBadgeConfig.dotClass}`} />
             <span>{difficultyBadgeConfig.label}</span>
-            <span className="opacity-40">•</span>
-            <span className="text-[10px] font-extrabold opacity-85">
-              {activeLockedDifficulty
-                ? `🔒 ${activeLockedDifficulty.slice(0, 4)}`
-                : `Adaptive: ${
-                    (dynamicDifficulty || 'Intermediate') === 'Fundamental'
-                      ? 'Easy'
-                      : (dynamicDifficulty || 'Intermediate') === 'Intermediate'
-                      ? 'Med'
-                      : 'Hard'
-                  }`}
-            </span>
             {consecutiveStreak > 0 && (
               <span className="text-[10px] font-black bg-amber-200/90 text-amber-950 px-1 rounded-sm">
                 {consecutiveStreak}🔥
               </span>
             )}
           </button>
+
+          {/* Persistent Difficulty Level Dropdown Selector in Practice Workspace Toolbar (Overrides Dynamic Difficulty) */}
+          {onSelectDifficultyFilter && (
+            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-slate-300 shadow-2xs">
+              <Filter className="w-3 h-3 text-[#0078D4] shrink-0" />
+              <label
+                htmlFor="quizcard-difficulty-dropdown"
+                className="text-[10px] font-black uppercase tracking-wider text-slate-600 hidden sm:inline"
+              >
+                Level:
+              </label>
+              <select
+                id="quizcard-difficulty-dropdown"
+                aria-label="Filter question bank by difficulty level"
+                value={selectedDifficultyFilter}
+                onChange={(e) => {
+                  const nextLevel = e.target.value as
+                    | 'all'
+                    | 'Fundamental'
+                    | 'Intermediate'
+                    | 'Advanced';
+                  onSelectDifficultyFilter(nextLevel);
+                  handleSetLockedDifficulty(nextLevel === 'all' ? null : nextLevel);
+                }}
+                className="text-[11px] font-extrabold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                title="Persistent Difficulty Level Selector: Manually filter question bank (Fundamental, Intermediate, Advanced), overriding dynamic difficulty adjustment"
+              >
+                <option value="all">Adaptive (Auto)</option>
+                <option value="Fundamental">Fundamental</option>
+                <option value="Intermediate">Intermediate</option>
+                <option value="Advanced">Advanced</option>
+              </select>
+            </div>
+          )}
 
           {isQuestionSkipped && !hasSubmitted && (
             <span
@@ -2385,7 +2405,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
       </div>
 
-      <div className="p-6 sm:p-8">
+      <div className="p-4 sm:p-6 lg:p-8 min-w-0 w-full">
         {/* Optional Deep Work Timer Widget */}
         <DeepWorkTimerWidget
           moduleId={question.moduleId}
@@ -2405,9 +2425,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           />
         )}
 
-        <div className={`grid gap-6 ${showKnowledgeCheck ? 'grid-cols-1 lg:grid-cols-12 items-start' : 'grid-cols-1'}`}>
+        <div className={`grid gap-6 min-w-0 w-full ${showKnowledgeCheck ? 'grid-cols-1 lg:grid-cols-12 items-start' : 'grid-cols-1'}`}>
           {/* Main Question & Answering Column */}
-          <div className={`space-y-6 ${showKnowledgeCheck ? 'lg:col-span-8' : 'w-full'}`}>
+          <div className={`space-y-6 min-w-0 ${showKnowledgeCheck ? 'lg:col-span-8' : 'w-full'}`}>
             {/* Hands-Free Text-to-Speech (TTS) Audio Reader Toolbar */}
             <QuizTtsBar
               question={question}
@@ -2417,7 +2437,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
             {/* Scenario Narrative Box (Full-Width Text Layout) */}
             <div className="relative w-full bg-slate-50/80 rounded-xl p-4 sm:p-5 border-l-4 border-[#0078D4] border-t border-r border-b border-slate-200/60 shadow-xs space-y-3">
-              {/* Top Header Row: Scenario Context Label + ELI5 / Knowledge Check Toggles */}
+              {/* Top Header Row: Scenario Context Label + Analyze Distractors / ELI5 / Knowledge Check Toggles */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-200/70">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="p-1.5 rounded-lg bg-blue-100/70 text-[#0078D4] shrink-0">
@@ -2431,9 +2451,31 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   </h3>
                 </div>
 
-                {/* ELI5 Analogy & Knowledge Check Toggle Switches (Hidden in Exam Simulation Mode) */}
+                {/* Analyze Distractors, ELI5 Analogy & Knowledge Check Toggle Switches (Hidden in Exam Simulation Mode) */}
                 {!isExamMode ? (
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+                    {/* Interactive 'Analyze Distractors' Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAnalyzeDistractorsPanel((prev) => !prev);
+                        setShowConceptSummaryOnly(false);
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer border shadow-2xs ${
+                        showAnalyzeDistractorsPanel
+                          ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white border-rose-700 ring-2 ring-rose-400/30'
+                          : 'bg-white hover:bg-rose-50 text-rose-800 border-rose-200'
+                      }`}
+                      title="Analyze Distractors: Explain why the incorrect answer options are wrong and map them to common Azure architectural misconceptions"
+                    >
+                      <ShieldAlert
+                        className={`w-3.5 h-3.5 ${
+                          showAnalyzeDistractorsPanel ? 'text-amber-200' : 'text-rose-600'
+                        }`}
+                      />
+                      <span>Analyze Distractors</span>
+                    </button>
+
                     {/* ELI5 Toggle Button */}
                     <button
                       type="button"
@@ -2537,6 +2579,69 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                     <span>
                       <strong>Simple Rule:</strong> {eli5Content.takeaway}
                     </span>
+                  </div>
+                </div>
+              )}
+
+              {/* On-Demand 'Analyze Distractors' Architectural Misconception Drawer (When toggled in Study Mode before answering) */}
+              {showAnalyzeDistractorsPanel && !showImmediateFeedback && !isExamMode && (
+                <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-rose-50/85 via-white to-amber-50/50 border border-rose-200/90 space-y-3 shadow-xs animate-in fade-in duration-150">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-rose-200/70">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-rose-900">
+                      <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px]">
+                        Analyze Distractors
+                      </span>
+                      <span>Azure Architectural Misconception Breakdown</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAnalyzeDistractorsPanel(false)}
+                      className="text-[11px] font-bold text-rose-800 hover:underline cursor-pointer"
+                    >
+                      Hide Distractor Analysis
+                    </button>
+                  </div>
+                  <div className="space-y-2.5">
+                    {question.distractorBreakdown.map((distractor) => {
+                      const misconception = getArchitecturalMisconceptionForDistractor(
+                        question,
+                        distractor.letter,
+                        distractor.reason
+                      );
+                      const distractorOptionText =
+                        question.options.find((o) => o.letter === distractor.letter)?.text || '';
+                      return (
+                        <div
+                          key={distractor.letter}
+                          className="p-3 rounded-xl bg-white border border-rose-200/80 space-y-1.5 shadow-2xs"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 text-[11px] font-black">
+                                Option {distractor.letter}
+                              </span>
+                              <span className="text-xs font-extrabold text-slate-900">
+                                {distractorOptionText}
+                              </span>
+                            </div>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 text-[10px] font-extrabold">
+                              <ShieldAlert className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span>{misconception.misconceptionName}</span>
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-700 leading-relaxed">
+                            <strong className="text-slate-900">Why Incorrect: </strong>
+                            {distractor.reason}
+                          </p>
+                          <div className="px-2.5 py-1.5 rounded-lg bg-sky-50/80 border border-sky-200/70 text-[11px] text-slate-700">
+                            <strong className="text-[#005A9E] font-extrabold">
+                              Architectural Rule ({misconception.domainTag}):{' '}
+                            </strong>
+                            <span>{misconception.counterRule}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

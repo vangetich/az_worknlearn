@@ -510,9 +510,10 @@ export const KenyanFlagMiniEmblem: React.FC<{ size?: number; className?: string 
  * (Black #0F172A, Crimson Red #BB0000, Highland Green #006600, White #FFFFFF)
  * Randomly distributed across the Quick-Sort Dashboard Area to brighten the section.
  */
-export const KenyanFlagQuickSortMotifs: React.FC<{ className?: string }> = ({
-  className = '',
-}) => {
+export const KenyanFlagQuickSortMotifs: React.FC<{
+  className?: string;
+  isFetching?: boolean;
+}> = ({ className = '', isFetching = false }) => {
   const kenyanMotifs = [
     {
       id: 'ke-1',
@@ -589,7 +590,7 @@ export const KenyanFlagQuickSortMotifs: React.FC<{ className?: string }> = ({
     {
       id: 'ke-7',
       type: 'kenyan-rosette',
-      left: '86%',
+      left: '83%',
       top: '14%',
       size: 36,
       anim: 'animate-spin',
@@ -601,7 +602,7 @@ export const KenyanFlagQuickSortMotifs: React.FC<{ className?: string }> = ({
     {
       id: 'ke-8',
       type: 'kenyan-chevron',
-      left: '95%',
+      left: '89%',
       top: '56%',
       size: 30,
       anim: 'animate-pulse',
@@ -614,7 +615,10 @@ export const KenyanFlagQuickSortMotifs: React.FC<{ className?: string }> = ({
 
   return (
     <div
-      className={`KenyanFlagQuickSortMotifs pointer-events-none absolute inset-0 overflow-hidden select-none rounded-2xl transition-all duration-300 ease-out hover:scale-[1.01] group-hover:scale-[1.01] group-hover:animate-pulse hover:animate-pulse hover:animate-kenyan-pulse group-hover:animate-kenyan-pulse ${className}`}
+      data-fetching={isFetching ? 'true' : 'false'}
+      className={`KenyanFlagQuickSortMotifs ${
+        isFetching ? 'is-fetching' : ''
+      } pointer-events-none absolute inset-0 overflow-hidden select-none rounded-2xl transition-all duration-300 ease-out group-hover:animate-pulse hover:animate-pulse hover:animate-kenyan-pulse group-hover:animate-kenyan-pulse ${className}`}
       aria-hidden="true"
     >
       {/* Top Kenyan Flag Tri-Band Woven Accent Thread (Black - White - Red - White - Green) */}
@@ -642,7 +646,7 @@ export const KenyanFlagQuickSortMotifs: React.FC<{ className?: string }> = ({
       {kenyanMotifs.map((m) => (
         <div
           key={m.id}
-          className={`absolute pointer-events-auto ${m.anim} group-hover:animate-pulse hover:animate-pulse transition-transform duration-300 group-hover:scale-110 hover:scale-125`}
+          className={`absolute pointer-events-auto ${m.anim} group-hover:animate-pulse hover:animate-pulse transition-transform duration-300 group-hover:scale-105 hover:scale-110`}
           style={{
             left: m.left,
             top: m.top,

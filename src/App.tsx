@@ -1183,10 +1183,10 @@ export default function App() {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 relative z-10">
+      <main className="flex-1 max-w-7xl w-full min-w-0 overflow-x-hidden mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 relative z-10">
         {/* TAB 1: PRACTICE MODULES */}
         {activeTab === 'quiz' && (
-          <div className="space-y-4 sm:space-y-5">
+          <div className="space-y-4 sm:space-y-5 w-full min-w-0">
             {/* Compact Responsive Hero Section + Glassy Study Hub Dropdown (Hidden in Focus Mode) */}
             {!isFocusMode && (
               <div className="text-center py-1 sm:py-2 space-y-2.5 max-w-5xl mx-auto relative z-20">
@@ -1357,10 +1357,10 @@ export default function App() {
                   isFetchingState ? 'is-fetching' : ''
                 } ${
                   isAllTimeHighReached ? 'is-all-time-high' : ''
-                } group relative overflow-hidden bg-white rounded-2xl border border-slate-200/90 hover:border-[#006600]/40 card-elevation p-3.5 sm:px-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 transition-all duration-300 ease-out hover:scale-[1.01] hover:animate-pulse hover:animate-kenyan-pulse hover:shadow-md`}
+                } group relative overflow-hidden w-full max-w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 hover:border-[#006600]/40 card-elevation p-3.5 sm:px-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 transition-all duration-300 ease-out hover:animate-pulse hover:animate-kenyan-pulse hover:shadow-md`}
               >
                 {/* Random & Partially Animated Kenyan Motifs in Kenyan Flag Colours (Black, Red #BB0000, Green #006600, White) */}
-                <KenyanFlagQuickSortMotifs />
+                <KenyanFlagQuickSortMotifs isFetching={isFetchingState} />
 
                 {/* Left: Quick-Sort Toggle Buttons & Persistent Difficulty Level Dropdown Selector */}
                 <div className="relative z-10 flex flex-wrap items-center gap-1.5">
@@ -1720,11 +1720,23 @@ export default function App() {
                 onClose={() => setShowPostSessionReview(false)}
               />
             ) : (
-            /* Main Studio Grid: Curriculum Sidebar + Quiz Card (Left sidebar hidden in Focus Mode or when collapsed) */
-            <div className={isFocusMode ? "max-w-4xl mx-auto w-full" : "grid grid-cols-1 lg:grid-cols-12 gap-5 items-start lg:items-stretch"}>
-              {/* Left Column: Expandable Harambee Companion + Navigator & Filters (4 cols, hidden during Focus Mode or when sidebar is collapsed) */}
+            /* Main Studio Layout: Permanently Slim Desktop Navigation Sidebar + Quiz Card (Left sidebar hidden in Focus Mode or when collapsed) */
+            <div
+              className={
+                isFocusMode
+                  ? 'max-w-4xl mx-auto w-full min-w-0'
+                  : 'flex flex-col lg:flex-row gap-4 items-start lg:items-stretch w-full min-w-0'
+              }
+            >
+              {/* Left Column: Expandable Harambee Companion + Permanently Slim Desktop Navigator & Filters */}
               {!isFocusMode && !isMenuHidden && (
-                <div className="lg:col-span-4 flex flex-col gap-3.5 lg:self-stretch">
+                <div
+                  className={`w-full min-w-0 shrink-0 flex flex-col gap-3 lg:self-stretch transition-all duration-300 ${
+                    isHarambeeExpanded
+                      ? 'lg:w-[350px] xl:w-[380px]'
+                      : 'lg:w-[252px] xl:w-[268px]'
+                  }`}
+                >
                   {/* Expandable & Retractable Harambee • Consistent Reading & Exam Success Box (Positioned directly on the left of Session Learning Path Focus & Quick Switcher on laptop/desktop screens) */}
                   <HarambeeSuccessCompanion
                     selectedPathId={selectedPathId}
@@ -1741,21 +1753,21 @@ export default function App() {
                   />
 
                   {/* Quick Filters */}
-                  <div className="bg-white rounded-xl border border-slate-200 p-3 card-elevation flex items-center justify-between gap-2">
+                  <div className="bg-white rounded-xl border border-slate-200 p-2.5 card-elevation flex items-center justify-between gap-1.5">
                     <button
                       onClick={() => {
                         setOnlyBookmarks(!onlyBookmarks);
                         setOnlyAiGenerated(false);
                         setCurrentQuestionIndex(0);
                       }}
-                      className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
                         onlyBookmarks
                           ? 'bg-amber-500 text-white shadow-2xs'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
-                      <Bookmark className="w-3.5 h-3.5 fill-current" />
-                      <span>Bookmarked ({stats.bookmarks.length})</span>
+                      <Bookmark className="w-3 h-3 fill-current shrink-0" />
+                      <span className="truncate">Bookmarked ({stats.bookmarks.length})</span>
                     </button>
 
                     <button
@@ -1764,14 +1776,14 @@ export default function App() {
                         setOnlyBookmarks(false);
                         setCurrentQuestionIndex(0);
                       }}
-                      className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
                         onlyAiGenerated
                           ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-2xs'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>AI Scenarios ({questions.filter((q) => q.isAiGenerated).length})</span>
+                      <Sparkles className="w-3 h-3 shrink-0" />
+                      <span className="truncate">AI ({questions.filter((q) => q.isAiGenerated).length})</span>
                     </button>
                   </div>
 
@@ -1799,11 +1811,11 @@ export default function App() {
                 </div>
               )}
 
-              {/* Right Column: Active Scenario Question Card (Takes full width in Focus Mode or when sidebar is collapsed) */}
-              <div className={isFocusMode || isMenuHidden ? "w-full lg:col-span-12" : "lg:col-span-8"}>
+              {/* Right Column: Active Scenario Question Card (Takes full remaining width seamlessly) */}
+              <div className="flex-1 min-w-0 w-full max-w-full">
                 {/* Learning Path Focus Selector & Confirmation + Rolling-Average Adaptive Difficulty Bar */}
                 {!isFocusMode && (
-                  <div className="mb-4 rounded-xl border border-slate-200 bg-white card-elevation overflow-hidden">
+                  <div className="mb-4 rounded-xl border border-slate-200 bg-white card-elevation overflow-hidden w-full min-w-0">
                     {/* Top Summary Bar: Active Path Focus + Rolling-Average Adaptive Difficulty Status */}
                     <div className="p-3.5 sm:px-4 bg-gradient-to-r from-slate-900 via-[#0078D4] to-sky-700 text-white flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5">

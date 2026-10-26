@@ -36,7 +36,7 @@ const PEER_LEADERBOARD_DATA: LeaderboardEntry[] = [
     name: 'Amina Kimani',
     avatar: '🇰🇪',
     location: 'Nairobi, Kenya',
-    cohort: 'Harambee Cloud Circle',
+    cohort: 'Global Harambee Azure Cohort • Nairobi Hub',
     totalAnswered: 142,
     streakDays: 14,
     accuracy: 94,
@@ -47,7 +47,7 @@ const PEER_LEADERBOARD_DATA: LeaderboardEntry[] = [
     name: 'Chidi Okonkwo',
     avatar: '🇳🇬',
     location: 'Lagos, Nigeria',
-    cohort: 'Yaba Cloud Explorers',
+    cohort: 'Global Harambee Azure Cohort • Lagos Hub',
     totalAnswered: 128,
     streakDays: 12,
     accuracy: 91,
@@ -58,7 +58,7 @@ const PEER_LEADERBOARD_DATA: LeaderboardEntry[] = [
     name: 'Thabo Mokoena',
     avatar: '🇿🇦',
     location: 'Johannesburg, South Africa',
-    cohort: 'Mzansi Azure Guild',
+    cohort: 'Global Harambee Azure Cohort • Mzansi Chapter',
     totalAnswered: 115,
     streakDays: 9,
     accuracy: 88,
@@ -69,7 +69,7 @@ const PEER_LEADERBOARD_DATA: LeaderboardEntry[] = [
     name: 'Abeba Haile',
     avatar: '🇪🇹',
     location: 'Addis Ababa, Ethiopia',
-    cohort: 'Highland Cloud Cohort',
+    cohort: 'Global Harambee Azure Cohort • Highland Hub',
     totalAnswered: 96,
     streakDays: 8,
     accuracy: 89,
@@ -80,7 +80,7 @@ const PEER_LEADERBOARD_DATA: LeaderboardEntry[] = [
     name: 'Kofi Mensah',
     avatar: '🇬🇭',
     location: 'Accra, Ghana',
-    cohort: 'Black Star Tech Hub',
+    cohort: 'Global Harambee Azure Cohort • Accra Chapter',
     totalAnswered: 84,
     streakDays: 7,
     accuracy: 86,
@@ -91,7 +91,7 @@ const PEER_LEADERBOARD_DATA: LeaderboardEntry[] = [
     name: 'Claudine Uwase',
     avatar: '🇷🇼',
     location: 'Kigali, Rwanda',
-    cohort: 'Kigali Innovation City',
+    cohort: 'Global Harambee Azure Cohort • Kigali Hub',
     totalAnswered: 72,
     streakDays: 6,
     accuracy: 92,
@@ -102,7 +102,7 @@ const PEER_LEADERBOARD_DATA: LeaderboardEntry[] = [
     name: 'Marcus Vance',
     avatar: '🇬🇧',
     location: 'London, UK',
-    cohort: 'Global Cloud Aspirants',
+    cohort: 'Global Harambee Azure Cohort • London Chapter',
     totalAnswered: 65,
     streakDays: 5,
     accuracy: 84,
@@ -113,7 +113,7 @@ const PEER_LEADERBOARD_DATA: LeaderboardEntry[] = [
     name: 'Fatima Al-Mansoor',
     avatar: '🇪🇬',
     location: 'Cairo, Egypt',
-    cohort: 'Nile Valley Azure League',
+    cohort: 'Global Harambee Azure Cohort • Cairo Hub',
     totalAnswered: 58,
     streakDays: 5,
     accuracy: 85,
@@ -124,7 +124,7 @@ const PEER_LEADERBOARD_DATA: LeaderboardEntry[] = [
     name: 'David Ochieng',
     avatar: '🇰🇪',
     location: 'Kisumu, Kenya',
-    cohort: 'Victoria Cloud Network',
+    cohort: 'Global Harambee Azure Cohort • Victoria Hub',
     totalAnswered: 44,
     streakDays: 4,
     accuracy: 82,
@@ -135,7 +135,7 @@ const PEER_LEADERBOARD_DATA: LeaderboardEntry[] = [
     name: 'Elena Rostova',
     avatar: '🇨🇦',
     location: 'Toronto, Canada',
-    cohort: 'North Star Azure Group',
+    cohort: 'Global Harambee Azure Cohort • North Star Hub',
     totalAnswered: 36,
     streakDays: 3,
     accuracy: 80,
@@ -167,7 +167,7 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
       name: 'You (Current Aspirant)',
       avatar: '🌟',
       location: 'Local Workspace • Kenya / Global',
-      cohort: 'Harambee AZ-900 Aspirant',
+      cohort: 'Global Harambee Azure Cohort • Active Aspirant',
       totalAnswered: stats.totalAnswered,
       streakDays: stats.streakDays || 1,
       accuracy: userAccuracy,
@@ -206,10 +206,18 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
     return combined;
   }, [stats.totalAnswered, stats.streakDays, userAccuracy, activeSort]);
 
-  // Find user's dynamic rank
+  // Find user's dynamic rank & next peer target
   const userRank = useMemo(() => {
     const idx = fullLeaderboard.findIndex((entry) => entry.isCurrentUser);
     return idx >= 0 ? idx + 1 : 1;
+  }, [fullLeaderboard]);
+
+  const nextPeerAbove = useMemo(() => {
+    const idx = fullLeaderboard.findIndex((entry) => entry.isCurrentUser);
+    if (idx > 0) {
+      return fullLeaderboard[idx - 1];
+    }
+    return null;
   }, [fullLeaderboard]);
 
   const filteredLeaderboard = useMemo(() => {
@@ -224,9 +232,9 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
   }, [fullLeaderboard, searchTerm]);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6 w-full min-w-0">
       {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-[#004C87] to-slate-900 border border-slate-800 text-white p-6 sm:p-8 shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-[#004C87] to-slate-900 border border-slate-800 text-white p-5 sm:p-8 shadow-xl">
         <div className="absolute top-0 left-0 right-0">
           <KitengeRibbon height={3} />
         </div>
@@ -249,21 +257,39 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
             </p>
           </div>
 
-          {/* User's Current Rank Card */}
-          <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-md shrink-0">
-            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black text-xl shadow-inner">
-              #{userRank}
-            </div>
-            <div>
-              <div className="text-xs text-amber-300 font-bold uppercase tracking-wider">
-                Your Current Rank
+          {/* User's Current Rank Card + Next Cohort Rank Target */}
+          <div className="flex flex-col gap-2.5 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-md shrink-0">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black text-xl shadow-inner">
+                #{userRank}
               </div>
-              <div className="text-sm font-bold text-white flex items-center gap-2">
-                <span>{stats.totalAnswered} Questions</span>
-                <span className="text-amber-400">•</span>
-                <span>{stats.streakDays || 1}d Streak</span>
+              <div>
+                <div className="text-xs text-amber-300 font-bold uppercase tracking-wider">
+                  Your Cohort Standing
+                </div>
+                <div className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>{stats.totalAnswered} Questions Solved</span>
+                  <span className="text-amber-400">•</span>
+                  <span>{stats.streakDays || 1}d Streak</span>
+                </div>
               </div>
             </div>
+            {nextPeerAbove ? (
+              <div className="pt-2 border-t border-white/15 text-[11px] text-sky-100 flex items-center justify-between gap-3">
+                <span>
+                  Next Target: <strong className="text-amber-300">{nextPeerAbove.name}</strong> (#
+                  {userRank - 1})
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 font-extrabold">
+                  +{Math.max(1, nextPeerAbove.totalAnswered - stats.totalAnswered + 1)} Qs to pass
+                </span>
+              </div>
+            ) : (
+              <div className="pt-2 border-t border-white/15 text-[11px] text-amber-300 font-bold flex items-center gap-1.5">
+                <Crown className="w-3.5 h-3.5" />
+                <span>You are #1 in the Global Harambee Azure Cohort!</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
