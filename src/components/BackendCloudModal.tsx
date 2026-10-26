@@ -24,6 +24,7 @@ import {
   FileCode,
 } from 'lucide-react';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 import { UserStats, Question } from '../types/quiz';
 import {
   FirebaseUser,
@@ -356,8 +357,12 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
   const isPremiumUnlocked = Boolean(progressReport?.user?.is_premium || unlockedCount >= 12);
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-[min(64rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+    <ResponsiveModalContainer
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="4xl"
+      ariaLabel="Cloud Sync, Protected Curriculum & M-Pesa Unlocks"
+    >
         <div className="shrink-0">
           <KitengeRibbon height={4} />
         </div>
@@ -1117,12 +1122,11 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
             />
           )}
         </div>
-      </div>
 
       <ApiDocumentationModal
         isOpen={showInternalApiDocs}
         onClose={() => setShowInternalApiDocs(false)}
       />
-    </div>
+    </ResponsiveModalContainer>
   );
 };

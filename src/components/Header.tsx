@@ -36,6 +36,7 @@ import { DailyStudyStreak } from './DailyStudyStreak';
 import { PWAInstallButton } from './PWAInstallButton';
 import { DailyGoalAlertsModal } from './DailyGoalAlertsModal';
 import { ThemeToggle } from './ThemeToggle';
+import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
 import { GlobalSearchBar } from './GlobalSearchBar';
 import { FocusSessionWidget } from './FocusSessionWidget';
 import { SupabaseRealtimeStatus } from '../hooks/usePostgresDatabase';
@@ -792,6 +793,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            <AccessibilityFontSizeControl variant="header-button" />
             <ThemeToggle />
             <PWAInstallButton />
 
@@ -967,23 +969,26 @@ export const Header: React.FC<HeaderProps> = ({
                   )}
                 </div>
 
-                <div className="flex items-center gap-1.5 lg:hidden">
-                  <ThemeToggle />
-                  <PWAInstallButton />
-                  {onLogout && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileDetailsOpen(false);
-                        onLogout();
-                      }}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-600 text-xs font-bold transition-all shadow-2xs hover:scale-105 cursor-pointer"
-                      title="Save progress and sign out"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>Sign Out</span>
-                    </button>
-                  )}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <AccessibilityFontSizeControl variant="inline-bar" />
+                  <div className="flex items-center gap-1.5 lg:hidden">
+                    <ThemeToggle />
+                    <PWAInstallButton />
+                    {onLogout && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMobileDetailsOpen(false);
+                          onLogout();
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-600 text-xs font-bold transition-all shadow-2xs hover:scale-105 cursor-pointer"
+                        title="Save progress and sign out"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Sign Out</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

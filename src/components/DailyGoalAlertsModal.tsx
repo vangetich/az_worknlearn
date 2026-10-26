@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import {
   Target,
   Bell,
@@ -22,6 +21,8 @@ import {
 import { UserStats } from '../types/quiz';
 import { setDailyGoal } from '../utils/storage';
 import { MaasaiMedallion } from './MotifDecorations';
+import { ResponsiveModalContainer } from './ResponsiveModalContainer';
+import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
 import confetti from 'canvas-confetti';
 
 export interface CustomAlertSettings {
@@ -209,17 +210,16 @@ export const DailyGoalAlertsModal: React.FC<DailyGoalAlertsModalProps> = ({
     applyDailyGoalImmediately(true);
   };
 
-  if (!isOpen || typeof document === 'undefined') return null;
+  if (!isOpen) return null;
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/65 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-150"
-      onClick={onClose}
+  return (
+    <ResponsiveModalContainer
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="lg"
+      closeOnBackdropClick={true}
+      ariaLabel="Daily Learning Goal & Study Reminder Settings"
     >
-      <div
-        className="bg-white w-full max-w-[min(36rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Modal Header */}
         <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-gradient-to-r from-orange-50/80 via-white to-amber-50/60">
           <div className="flex items-center gap-3 min-w-0">
@@ -722,10 +722,12 @@ export const DailyGoalAlertsModal: React.FC<DailyGoalAlertsModalProps> = ({
               </div>
             </div>
           </div>
+          {/* Accessibility Font Size Adjustment Control in User Settings Panel */}
+          <AccessibilityFontSizeControl variant="panel" />
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between">
+        <div className="shrink-0 px-6 py-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between">
           <button
             type="button"
             onClick={onClose}
@@ -756,9 +758,7 @@ export const DailyGoalAlertsModal: React.FC<DailyGoalAlertsModalProps> = ({
             )}
           </button>
         </div>
-      </div>
-    </div>,
-    document.body
+    </ResponsiveModalContainer>
   );
 };
 

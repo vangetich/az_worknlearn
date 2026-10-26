@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import {
   Share2,
@@ -15,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Question } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
+import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 
 interface ShareQuestionModalProps {
   question: Question;
@@ -101,15 +101,14 @@ export const ShareQuestionModal: React.FC<ShareQuestionModalProps> = ({
 
   const hasNativeShare = typeof navigator !== 'undefined' && Boolean(navigator.share);
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/65 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-150"
-      onClick={onClose}
+  return (
+    <ResponsiveModalContainer
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="sm"
+      closeOnBackdropClick={true}
+      ariaLabel="Share Question for Study Group"
     >
-      <div
-        className="bg-white w-full max-w-[min(28rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-y-auto overscroll-contain flex flex-col animate-in zoom-in-95 duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-gradient-to-r from-blue-50/80 via-white to-sky-50/50">
           <div className="flex items-center gap-2.5">
@@ -290,8 +289,6 @@ export const ShareQuestionModal: React.FC<ShareQuestionModalProps> = ({
             </div>
           )}
         </div>
-      </div>
-    </div>,
-    document.body
+    </ResponsiveModalContainer>
   );
 };

@@ -45,6 +45,7 @@ import { triggerAchievementOverlay } from './AchievementOverlay';
 import { AppTab } from './Header';
 import { StreakActivityGraph } from './StreakActivityGraph';
 import { DailyStudyReminder } from './DailyStudyReminder';
+import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
 import { getUnresolvedMistakesMap } from '../utils/storage';
 import { BUILTIN_QUESTIONS } from '../data/questionBank';
 
@@ -608,6 +609,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* =====================================================================
+          USER SETTINGS PANEL: APPLICATION-WIDE ACCESSIBILITY FONT SIZE CONTROL
+         ===================================================================== */}
+      <AccessibilityFontSizeControl variant="panel" />
 
       {/* =====================================================================
           DEDICATED TOP-LEVEL 'KNOWLEDGE GAPS' TAB VIEW

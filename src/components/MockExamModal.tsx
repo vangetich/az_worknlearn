@@ -21,6 +21,7 @@ import {
 import confetti from 'canvas-confetti';
 import { Question } from '../types/quiz';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 
 interface MockExamProps {
   questions: Question[];
@@ -189,8 +190,13 @@ export const MockExamModal: React.FC<MockExamProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain">
-      <div className="bg-white w-full max-w-[min(56rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl border border-slate-200 card-elevation overflow-hidden flex flex-col">
+    <ResponsiveModalContainer
+      isOpen={true}
+      onClose={onClose}
+      maxWidth="3xl"
+      closeOnEscape={false}
+      ariaLabel="AZ-900 Azure Fundamentals Mock Exam"
+    >
         {/* Top African Motif */}
         <div className="shrink-0">
           <KitengeRibbon height={4} />
@@ -758,7 +764,6 @@ export const MockExamModal: React.FC<MockExamProps> = ({
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </ResponsiveModalContainer>
   );
 };

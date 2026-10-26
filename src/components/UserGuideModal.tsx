@@ -29,6 +29,7 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 import { LEARNING_PATHS } from '../data/curriculum';
 import {
   FAQ_HELP_DATASET,
@@ -684,8 +685,13 @@ ${
   });
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain">
-      <div className="bg-white w-full max-w-[min(64rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl border border-slate-200 card-elevation overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
+    <ResponsiveModalContainer
+      isOpen={true}
+      onClose={onClose}
+      maxWidth="4xl"
+      closeOnBackdropClick={true}
+      ariaLabel="Azure Fundamentals (AZ-900) Studio Guide & FAQ"
+    >
         <div className="shrink-0">
           <KitengeRibbon height={5} />
         </div>
@@ -1592,7 +1598,6 @@ ${
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </ResponsiveModalContainer>
   );
 };

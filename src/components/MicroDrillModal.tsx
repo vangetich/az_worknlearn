@@ -15,6 +15,7 @@ import {
 import confetti from 'canvas-confetti';
 import { Question } from '../types/quiz';
 import { KitengeRibbon, MaasaiMedallion, KenyanFlagMiniEmblem } from './MotifDecorations';
+import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 
 interface MicroDrillProps {
   questions: Question[];
@@ -87,8 +88,12 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
   const earnedAccuracyBadge = accuracyPercent >= 80;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-white w-full max-w-2xl max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] flex flex-col rounded-2xl border border-slate-200 card-elevation overflow-hidden shadow-2xl my-auto animate-in zoom-in-95 duration-200">
+    <ResponsiveModalContainer
+      isOpen={true}
+      onClose={onClose}
+      maxWidth="xl"
+      ariaLabel="5-Question Rapid Weakness Drill"
+    >
         <div className="shrink-0">
           <KitengeRibbon height={4} />
         </div>
@@ -362,7 +367,6 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </ResponsiveModalContainer>
   );
 };

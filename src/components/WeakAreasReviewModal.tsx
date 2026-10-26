@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion, KitengeRibbon } from './MotifDecorations';
+import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 import confetti from 'canvas-confetti';
 
 interface WeakAreasReviewModalProps {
@@ -137,8 +138,12 @@ export const WeakAreasReviewModal: React.FC<WeakAreasReviewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/65 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-[min(48rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+    <ResponsiveModalContainer
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="2xl"
+      ariaLabel="Weak Areas Review Drill"
+    >
         <div className="shrink-0">
           <KitengeRibbon height={3} />
         </div>
@@ -374,7 +379,6 @@ export const WeakAreasReviewModal: React.FC<WeakAreasReviewModalProps> = ({
             )}
           </div>
         )}
-      </div>
-    </div>
+    </ResponsiveModalContainer>
   );
 };

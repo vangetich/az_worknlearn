@@ -21,6 +21,7 @@ import confetti from 'canvas-confetti';
 import { Question, UserStats } from '../types/quiz';
 import { getUnresolvedMistakesMap } from '../utils/storage';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 
 interface ReviewSessionModalProps {
   stats: UserStats;
@@ -525,8 +526,12 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[min(56rem,calc(100vw-1.25rem))] w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto flex flex-col overflow-hidden card-elevation">
+    <ResponsiveModalContainer
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="3xl"
+      ariaLabel="Personalized Review Session"
+    >
         <div className="shrink-0">
           <KitengeRibbon height={4} />
         </div>
@@ -759,7 +764,6 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
             Done with Review Session
           </button>
         </div>
-      </div>
-    </div>
+    </ResponsiveModalContainer>
   );
 };

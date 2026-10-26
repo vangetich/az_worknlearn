@@ -16,6 +16,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 import { BackendTelemetryLineChart } from './BackendTelemetryLineChart';
 import {
   postgresBackendService,
@@ -672,8 +673,13 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-[min(72rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+    <ResponsiveModalContainer
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="6xl"
+      closeOnBackdropClick={true}
+      ariaLabel="AZ-900 Backend API Documentation and Real-Time Telemetry Monitor"
+    >
         <div className="shrink-0">
           <KitengeRibbon height={4} />
         </div>
@@ -1037,8 +1043,7 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </ResponsiveModalContainer>
   );
 };
 

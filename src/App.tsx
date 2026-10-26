@@ -109,13 +109,16 @@ import { generateDomainConfidencePdf } from './utils/pdfGenerator';
 import { fireModuleCompletionConfetti } from './utils/confetti';
 import { ThemeToggle } from './components/ThemeToggle';
 import { getStoredTheme, applyTheme } from './utils/theme';
+import { getStoredFontScalePercent, applyFontScalePercent } from './utils/fontSize';
+import { AccessibilityFontSizeControl } from './components/AccessibilityFontSizeControl';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('quiz');
 
-  // Initialize theme on mount
+  // Initialize theme and accessibility font size scale on mount
   useEffect(() => {
     applyTheme(getStoredTheme());
+    applyFontScalePercent(getStoredFontScalePercent());
   }, []);
 
   // Questions state (built-in + any AI generated)
@@ -217,10 +220,11 @@ export default function App() {
   const [trendScoreFlipParity, setTrendScoreFlipParity] = useState<boolean>(false);
   const [isHarambeeExpanded, setIsHarambeeExpanded] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('az900_harambee_companion_expanded_v1');
-      return saved !== null ? saved === 'true' : true;
+      const savedMode = localStorage.getItem('az900_harambee_display_mode_v2');
+      if (savedMode === 'view') return true;
+      return false; // Auto-retract as default
     } catch {
-      return true;
+      return false;
     }
   });
   const [isDesktopModuleListCollapsed, setIsDesktopModuleListCollapsed] = useState<boolean>(false);
@@ -1726,6 +1730,7 @@ export default function App() {
                     selectedPathId={selectedPathId}
                     isExpanded={isHarambeeExpanded}
                     onToggleExpand={handleToggleHarambeeExpanded}
+                    autoRetractTrigger={currentQuestionIndex + sessionAnswerCount}
                     isModuleBrowserCollapsed={isDesktopModuleListCollapsed}
                     onToggleModuleBrowserCollapse={() =>
                       setIsDesktopModuleListCollapsed((prev) => !prev)
@@ -2656,6 +2661,9 @@ export default function App() {
               <span>Official Learning Objectives • Offline PWA Enabled</span>
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              {/* Footer User Settings: Application-Wide Accessibility Font Size Adjustment Control */}
+              <AccessibilityFontSizeControl variant="inline-bar" />
+              <span className="text-slate-300">|</span>
               {/* Footer Settings: Audio Feedback Mute Toggle */}
               <button
                 type="button"

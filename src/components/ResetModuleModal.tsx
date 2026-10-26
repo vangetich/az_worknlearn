@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { RotateCcw, AlertTriangle, Check, X, ShieldAlert, CheckCircle2, ChevronRight } from 'lucide-react';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { UserStats } from '../types/quiz';
+import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 
 interface ResetModuleModalProps {
   stats: UserStats;
@@ -45,8 +46,13 @@ export const ResetModuleModal: React.FC<ResetModuleModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain">
-      <div className="bg-white rounded-2xl max-w-[min(32rem,calc(100vw-1.25rem))] w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto border border-slate-200 shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <ResponsiveModalContainer
+      isOpen={true}
+      onClose={onClose}
+      maxWidth="md"
+      closeOnBackdropClick={true}
+      ariaLabel="Reset Module Confidence"
+    >
         {/* Header */}
         <div className="shrink-0 px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center gap-2.5">
@@ -187,7 +193,6 @@ export const ResetModuleModal: React.FC<ResetModuleModalProps> = ({
             </>
           )}
         </div>
-      </div>
-    </div>
+    </ResponsiveModalContainer>
   );
 };

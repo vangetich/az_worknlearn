@@ -11,6 +11,7 @@ import {
   Smile,
 } from 'lucide-react';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 
 interface StudyBreakModalProps {
   questionsAnsweredCount: number;
@@ -41,8 +42,13 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
   }, [timerRunning, timerSeconds]);
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain">
-      <div className="bg-white w-full max-w-[min(32rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl border border-slate-200 card-elevation overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
+    <ResponsiveModalContainer
+      isOpen={true}
+      onClose={onDismiss}
+      maxWidth="md"
+      closeOnBackdropClick={true}
+      ariaLabel="Mindful Study Break"
+    >
         <div className="shrink-0">
           <KitengeRibbon height={5} />
         </div>
@@ -150,7 +156,6 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </ResponsiveModalContainer>
   );
 };
