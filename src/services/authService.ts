@@ -24,6 +24,7 @@ export interface BackendUserProfile {
   full_name: string;
   role: LearnerRole;
   is_premium: boolean;
+  paid_status?: 'active' | 'inactive';
   unlocked_modules: number[];
   created_at: string;
 }
@@ -562,7 +563,39 @@ export class FirebaseBackendAuthService {
   public getStoredBackendUser(): BackendUserProfile | null {
     try {
       const raw = localStorage.getItem(BACKEND_USER_STORAGE_KEY);
-      return raw ? (JSON.parse(raw) as BackendUserProfile) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as BackendUserProfile;
+      if (!parsed.paid_status) {
+        parsed.paid_status = parsed.is_premium ? 'active' : 'inactive';
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  public updateStoredUser(partial: Partial<BackendUserProfile>): BackendUserProfile | null {
+    try {
+      const existing = this.getStoredBackendUser() || {
+        id: 'usr_student_1',
+        email: 'student@az900.ke',
+        full_name: 'Nairobi Cloud Scholar',
+        role: 'student' as LearnerRole,
+        is_premium: false,
+        paid_status: 'inactive' as const,
+        unlocked_modules: [1, 2, 3, 4],
+        created_at: new Date().toISOString(),
+      };
+      const updated: BackendUserProfile = {
+        ...existing,
+        ...partial,
+        paid_status:
+          partial.paid_status ??
+          (partial.is_premium ?? existing.is_premium ? 'active' : 'inactive'),
+      };
+      const token = this.getStoredBackendToken() || 'jwt_sim_token';
+      this.persistSession(token, updated);
+      return updated;
     } catch {
       return null;
     }
@@ -571,7 +604,21 @@ export class FirebaseBackendAuthService {
   private persistSession(token: string, user: BackendUserProfile): void {
     try {
       if (token) localStorage.setItem(BACKEND_TOKEN_STORAGE_KEY, token);
-      if (user) localStorage.setItem(BACKEND_USER_STORAGE_KEY, JSON.stringify(user));
+      if (user) {
+        const normalized: BackendUserProfile = {
+          ...user,
+          paid_status: user.paid_status ?? (user.is_premium ? 'active' : 'inactive'),
+        };
+        localStorage.setItem(BACKEND_USER_STORAGE_KEY, JSON.stringify(normalized));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('az900-auth-session-change', {
+              detail: { user: normalized, token },
+            })
+          );
+        }
+        return;
+      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('az900-auth-session-change', { detail: { user, token } })

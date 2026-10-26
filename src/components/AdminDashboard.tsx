@@ -19,6 +19,9 @@ import {
   KeyRound,
   ShieldCheck,
   Unlock,
+  Download,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import {
   fetchSupabaseAdminModuleStats,
@@ -70,6 +73,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [managePremium, setManagePremium] = useState<boolean>(true);
   const [manageNewPassword, setManageNewPassword] = useState<string>('');
   const [isUpdatingUser, setIsUpdatingUser] = useState<boolean>(false);
+
+  // Bulk Actions Toolbar state for User Management tab
+  const [selectedBulkEmails, setSelectedBulkEmails] = useState<string[]>([]);
+  const [bulkTempPassword, setBulkTempPassword] = useState<string>('Az900Reset!2026');
+  const [isRunningBulkAction, setIsRunningBulkAction] = useState<boolean>(false);
 
   // Form state for Add / Edit Question
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
@@ -208,6 +216,126 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       });
     } finally {
       setIsUpdatingUser(false);
+    }
+  };
+
+  const handleToggleBulkSelectEmail = (email: string) => {
+    const clean = email.toLowerCase();
+    setSelectedBulkEmails((prev) =>
+      prev.includes(clean) ? prev.filter((e) => e !== clean) : [...prev, clean]
+    );
+  };
+
+  const handleToggleSelectAllUsers = () => {
+    if (selectedBulkEmails.length === adminUsers.length && adminUsers.length > 0) {
+      setSelectedBulkEmails([]);
+    } else {
+      setSelectedBulkEmails(adminUsers.map((u) => String(u.email).toLowerCase()));
+    }
+  };
+
+  const handleBulkExportUsersCsv = () => {
+    const targetUsers =
+      selectedBulkEmails.length > 0
+        ? adminUsers.filter((u) => selectedBulkEmails.includes(String(u.email).toLowerCase()))
+        : adminUsers;
+
+    if (targetUsers.length === 0) {
+      notifyBanner({
+        type: 'info',
+        message: 'No user accounts available to export.',
+      });
+      return;
+    }
+
+    const headers = [
+      'ID',
+      'Full Name',
+      'Email',
+      'Role',
+      'Paid Status',
+      'Premium',
+      'Unlocked Modules Count',
+      'Sessions Completed',
+      'Created At',
+    ];
+    const rows = targetUsers.map((u) => [
+      u.id || '',
+      `"${String(u.full_name || '').replace(/"/g, '""')}"`,
+      u.email || '',
+      u.role || 'student',
+      u.is_premium ? 'active' : 'inactive',
+      u.is_premium ? 'Yes' : 'No',
+      (u.unlocked_modules || []).length,
+      u.sessions_completed ?? 0,
+      u.created_at || new Date().toISOString(),
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `az900-cohort-users-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    notifyBanner({
+      type: 'success',
+      message: `Exported ${targetUsers.length} user record${
+        targetUsers.length === 1 ? '' : 's'
+      } to CSV.`,
+    });
+  };
+
+  const handleBulkResetPasswords = async () => {
+    if (selectedBulkEmails.length === 0) {
+      notifyBanner({
+        type: 'error',
+        message: 'Select at least one student checkbox in the directory to bulk reset passwords.',
+      });
+      return;
+    }
+
+    const passwordToApply = bulkTempPassword.trim() || 'Az900Reset!2026';
+    setIsRunningBulkAction(true);
+
+    try {
+      const targetUsers = adminUsers.filter((u) =>
+        selectedBulkEmails.includes(String(u.email).toLowerCase())
+      );
+
+      for (const u of targetUsers) {
+        await fetch('/api/admin/users/manage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: u.email,
+            full_name: u.full_name,
+            role: u.role,
+            is_premium: Boolean(u.is_premium),
+            unlockAllModules: Boolean(u.is_premium),
+            newPassword: passwordToApply,
+          }),
+        });
+      }
+
+      await loadAdminUsers();
+      notifyBanner({
+        type: 'success',
+        message: `Bulk password reset completed for ${targetUsers.length} selected account${
+          targetUsers.length === 1 ? '' : 's'
+        } (${targetUsers.map((u) => u.email).join(', ')}).`,
+      });
+    } catch (err: any) {
+      notifyBanner({
+        type: 'error',
+        message: err.message || 'Bulk password reset encountered an error.',
+      });
+    } finally {
+      setIsRunningBulkAction(false);
     }
   };
 
@@ -525,82 +653,171 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* SECTION A: USER ACCOUNTS, ROLES & PASSWORD RESETS */}
       {dashboardSection === 'users' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          {/* Left: Registered User Directory */}
-          <div className="lg:col-span-7 rounded-xl border border-slate-200 bg-white overflow-hidden">
-            <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-sky-400" />
-                <h4 className="text-xs sm:text-sm font-extrabold">
-                  Registered Learner &amp; Admin Accounts ({adminUsers.length})
-                </h4>
-              </div>
+        <div className="space-y-4">
+          {/* Bulk Actions Toolbar for User Management */}
+          <div
+            role="toolbar"
+            aria-label="User Management Bulk Actions Toolbar"
+            className="p-3.5 rounded-xl bg-gradient-to-r from-slate-900 via-[#003865] to-slate-900 text-white border border-sky-400/30 flex flex-wrap items-center justify-between gap-3 shadow-xs"
+          >
+            <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
-                onClick={loadAdminUsers}
-                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                onClick={handleToggleSelectAllUsers}
+                className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-extrabold flex items-center gap-1.5 border border-white/15 cursor-pointer transition-colors"
               >
-                <RefreshCw className={`w-3 h-3 ${isLoadingUsers ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
+                {selectedBulkEmails.length === adminUsers.length && adminUsers.length > 0 ? (
+                  <CheckSquare className="w-3.5 h-3.5 text-amber-300" />
+                ) : (
+                  <Square className="w-3.5 h-3.5 text-sky-300" />
+                )}
+                <span>
+                  {selectedBulkEmails.length === adminUsers.length && adminUsers.length > 0
+                    ? 'Deselect All'
+                    : `Select All (${adminUsers.length})`}
+                </span>
+              </button>
+
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-400 text-slate-950">
+                {selectedBulkEmails.length} Selected
+              </span>
+
+              <span className="text-xs text-sky-200 hidden sm:inline">
+                Bulk Actions Toolbar: Export selected students to CSV or reset passwords simultaneously
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg border border-white/15">
+                <KeyRound className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                <input
+                  type="text"
+                  value={bulkTempPassword}
+                  onChange={(e) => setBulkTempPassword(e.target.value)}
+                  placeholder="Bulk temp password"
+                  aria-label="Temporary password for bulk student password reset"
+                  className="bg-transparent text-xs font-mono font-bold text-white focus:outline-hidden w-32"
+                />
+              </div>
+
+              <button
+                type="button"
+                disabled={isRunningBulkAction || selectedBulkEmails.length === 0}
+                onClick={handleBulkResetPasswords}
+                className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-45 text-slate-950 text-xs font-black flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>
+                  {isRunningBulkAction
+                    ? 'Resetting...'
+                    : `Bulk Reset Passwords (${selectedBulkEmails.length})`}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleBulkExportUsersCsv}
+                className="px-3 py-1.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-black flex items-center gap-1.5 border border-sky-300/30 cursor-pointer transition-colors"
+              >
+                <Download className="w-3.5 h-3.5 text-amber-300" />
+                <span>
+                  {selectedBulkEmails.length > 0
+                    ? `Export Selected (${selectedBulkEmails.length}) to CSV`
+                    : 'Export All Users to CSV'}
+                </span>
               </button>
             </div>
-
-            <div className="divide-y divide-slate-100">
-              {adminUsers.map((u) => {
-                const isSelected = u.email.toLowerCase() === selectedUserEmail.toLowerCase();
-                return (
-                  <div
-                    key={u.id}
-                    onClick={() => handleSelectUserForManage(u)}
-                    className={`p-3.5 flex flex-wrap items-center justify-between gap-3 cursor-pointer transition-colors ${
-                      isSelected ? 'bg-sky-50/90 border-l-4 border-[#0078D4]' : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-extrabold text-xs sm:text-sm text-slate-900">
-                          {u.full_name}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                            u.role === 'bootcamp_admin'
-                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                              : u.role === 'enterprise_user'
-                              ? 'bg-purple-100 text-purple-900 border border-purple-300'
-                              : 'bg-blue-100 text-blue-800 border border-blue-200'
-                          }`}
-                        >
-                          {u.role}
-                        </span>
-                        {u.is_premium && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                            Premium (12 Modules)
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs font-mono text-slate-600">{u.email}</div>
-                      <div className="text-[10px] text-slate-500">
-                        Unlocked Modules: {(u.unlocked_modules || []).length}/12 • Sessions:{' '}
-                        {u.sessions_completed ?? 0}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelectUserForManage(u);
-                      }}
-                      className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                    >
-                      <KeyRound className="w-3 h-3 text-amber-300" />
-                      <span>Manage / Reset Password</span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            {/* Left: Registered User Directory */}
+            <div className="lg:col-span-7 rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-sky-400" />
+                  <h4 className="text-xs sm:text-sm font-extrabold">
+                    Registered Learner &amp; Admin Accounts ({adminUsers.length})
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadAdminUsers}
+                  className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoadingUsers ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {adminUsers.map((u) => {
+                  const isSelected = u.email.toLowerCase() === selectedUserEmail.toLowerCase();
+                  const isBulkChecked = selectedBulkEmails.includes(
+                    String(u.email).toLowerCase()
+                  );
+                  return (
+                    <div
+                      key={u.id}
+                      onClick={() => handleSelectUserForManage(u)}
+                      className={`p-3.5 flex flex-wrap items-center justify-between gap-3 cursor-pointer transition-colors ${
+                        isSelected ? 'bg-sky-50/90 border-l-4 border-[#0078D4]' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={isBulkChecked}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => handleToggleBulkSelectEmail(u.email)}
+                          aria-label={`Select ${u.full_name} (${u.email}) for bulk actions`}
+                          className="mt-1 w-4 h-4 rounded border-slate-300 text-[#0078D4] focus:ring-[#0078D4] cursor-pointer"
+                        />
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-xs sm:text-sm text-slate-900">
+                              {u.full_name}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                u.role === 'bootcamp_admin'
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                  : u.role === 'enterprise_user'
+                                  ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                                  : 'bg-blue-100 text-blue-800 border border-blue-200'
+                              }`}
+                            >
+                              {u.role}
+                            </span>
+                            {u.is_premium && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                Premium (12 Modules)
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs font-mono text-slate-600">{u.email}</div>
+                          <div className="text-[10px] text-slate-500">
+                            Unlocked Modules: {(u.unlocked_modules || []).length}/12 • Sessions:{' '}
+                            {u.sessions_completed ?? 0}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectUserForManage(u);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <KeyRound className="w-3 h-3 text-amber-300" />
+                        <span>Manage / Reset Password</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
           {/* Right: Account Editor & Direct Password Reset Form */}
           <div className="lg:col-span-5 rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -701,6 +918,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </span>
               </button>
             </form>
+          </div>
           </div>
         </div>
       )}

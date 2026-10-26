@@ -46,6 +46,7 @@ import { AppTab } from './Header';
 import { StreakActivityGraph } from './StreakActivityGraph';
 import { DailyStudyReminder } from './DailyStudyReminder';
 import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
+import { SubscriptionPanel } from './SubscriptionPanel';
 import { getUnresolvedMistakesMap } from '../utils/storage';
 import { BUILTIN_QUESTIONS } from '../data/questionBank';
 
@@ -614,6 +615,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           USER SETTINGS PANEL: APPLICATION-WIDE ACCESSIBILITY FONT SIZE CONTROL
          ===================================================================== */}
       <AccessibilityFontSizeControl variant="panel" />
+
+      {/* =====================================================================
+          SUBSCRIPTION PANEL: STRIPE ELEMENTS PAYMENT & PREMIUM MODULE UNLOCK
+         ===================================================================== */}
+      <SubscriptionPanel
+        onSelectModuleToPractice={(modId) => {
+          if (onSelectModule) {
+            onSelectModule(modId, 'all');
+          }
+          onNavigateToPractice();
+        }}
+      />
 
       {/* =====================================================================
           DEDICATED TOP-LEVEL 'KNOWLEDGE GAPS' TAB VIEW

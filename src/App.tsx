@@ -76,6 +76,8 @@ import { DomainAccuracyHeatmapD3 } from './components/DomainAccuracyHeatmapD3';
 import { CohortPerformanceView } from './components/CohortPerformanceView';
 import { ExitStudySessionModal } from './components/ExitStudySessionModal';
 import { ProtectedRoute, AuthenticatedSupabaseUser } from './components/ProtectedRoute';
+import { PaymentGatekeeper } from './components/PaymentGatekeeper';
+import { SubscriptionTierSelection } from './components/SubscriptionTierSelection';
 import { usePostgresDatabase } from './hooks/usePostgresDatabase';
 import { authService } from './services/authService';
 import { isWhitelistedAdminEmail } from './utils/adminSecurity';
@@ -249,6 +251,129 @@ export default function App() {
   const [allTimeHighToast, setAllTimeHighToast] = useState<string | null>(null);
   const [showCurriculumReadinessModal, setShowCurriculumReadinessModal] = useState<boolean>(false);
   const [showAdminBackOfficeModal, setShowAdminBackOfficeModal] = useState<boolean>(false);
+  const [tierSelectionLockedModuleId, setTierSelectionLockedModuleId] = useState<number | null>(
+    null
+  );
+  const [paymentSuccessToast, setPaymentSuccessToast] = useState<{
+    receiptNumber: string;
+    planLabel: string;
+    amountUsd: number;
+  } | null>(null);
+
+  // Auto-dismiss All-Time High toast after 5.5s
+  useEffect(() => {
+    if (!allTimeHighToast) return;
+    const timer = setTimeout(() => setAllTimeHighToast(null), 5500);
+    return () => clearTimeout(timer);
+  }, [allTimeHighToast]);
+
+  // Listen for Stripe checkout return (?payment_status=success) or 'az900-payment-success' event
+  // to display global 'Payment Successful' toast and refresh Supabase profile without a page reload
+  useEffect(() => {
+    const handlePaymentSuccessEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{
+        receiptNumber?: string;
+        planLabel?: string;
+        amountUsd?: number;
+        unlockedModules?: number[];
+      }>;
+      const detail = customEvent.detail || {};
+      const refreshedProfile = authService.getStoredBackendUser();
+      if (refreshedProfile) {
+        setAuthenticatedUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                is_premium: refreshedProfile.is_premium,
+                paid_status: refreshedProfile.paid_status || 'active',
+                unlocked_modules: refreshedProfile.unlocked_modules,
+              }
+            : {
+                id: refreshedProfile.id,
+                email: refreshedProfile.email,
+                full_name: refreshedProfile.full_name,
+                role: refreshedProfile.role,
+                is_premium: refreshedProfile.is_premium,
+                paid_status: refreshedProfile.paid_status || 'active',
+                unlocked_modules: refreshedProfile.unlocked_modules,
+                auth_source: 'postgres_backend',
+              }
+        );
+      }
+      setPaymentSuccessToast({
+        receiptNumber: detail.receiptNumber || `STRP-${Date.now().toString().slice(-6)}`,
+        planLabel: detail.planLabel || 'AZ-900 Pro All-Access Pass (Modules 1–12)',
+        amountUsd: detail.amountUsd ?? 15,
+      });
+    };
+
+    window.addEventListener('az900-payment-success', handlePaymentSuccessEvent);
+
+    // Check URL query parameters for returning from external Stripe Checkout redirect
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const paymentStatus = params.get('payment_status') || params.get('stripe_checkout');
+      if (paymentStatus === 'success') {
+        const updatedProfile = authService.updateStoredUser({
+          is_premium: true,
+          paid_status: 'active',
+          unlocked_modules: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        });
+        if (updatedProfile) {
+          setAuthenticatedUser((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  is_premium: true,
+                  paid_status: 'active',
+                  unlocked_modules: updatedProfile.unlocked_modules,
+                }
+              : null
+          );
+        }
+        setPaymentSuccessToast({
+          receiptNumber: params.get('receipt') || `STRP-${Date.now().toString().slice(-6)}`,
+          planLabel: 'AZ-900 Pro All-Access Pass (Modules 1–12)',
+          amountUsd: 15,
+        });
+        params.delete('payment_status');
+        params.delete('stripe_checkout');
+        const nextSearch = params.toString();
+        window.history.replaceState(
+          {},
+          '',
+          `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}`
+        );
+      }
+    } catch {
+      // ignore URL parsing errors
+    }
+
+    return () => {
+      window.removeEventListener('az900-payment-success', handlePaymentSuccessEvent);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!paymentSuccessToast) return;
+    const timer = setTimeout(() => setPaymentSuccessToast(null), 7500);
+    return () => clearTimeout(timer);
+  }, [paymentSuccessToast]);
+
+  const isModuleLockedForCurrentUser = (modId: number | 'all'): boolean => {
+    if (modId === 'all' || modId <= 4) return false;
+    const stored = authService.getStoredBackendUser();
+    const email = authenticatedUser?.email || stored?.email;
+    if (isWhitelistedAdminEmail(email)) return false;
+    const isPaid =
+      stored?.paid_status === 'active' ||
+      authenticatedUser?.paid_status === 'active' ||
+      Boolean(stored?.is_premium) ||
+      Boolean(authenticatedUser?.is_premium);
+    if (isPaid) return false;
+    const unlocked = stored?.unlocked_modules || authenticatedUser?.unlocked_modules || [1, 2, 3, 4];
+    return !unlocked.includes(modId);
+  };
 
   const handleToggleHarambeeExpanded = () => {
     setIsHarambeeExpanded((prev) => {
@@ -1141,6 +1266,9 @@ export default function App() {
       setSelectedPathId(foundPath.id);
       setSelectedModuleId(moduleId);
     }
+    if (isModuleLockedForCurrentUser(moduleId)) {
+      setTierSelectionLockedModuleId(moduleId);
+    }
     setCurrentQuestionIndex(0);
     setActiveTab('quiz');
   };
@@ -1155,6 +1283,68 @@ export default function App() {
 
         {/* Offline Status Toast Indicator */}
         <OfflineIndicator />
+
+        {/* Global 'Payment Successful' Toast Notification & All-Time High Toast */}
+        {(paymentSuccessToast || allTimeHighToast) && (
+          <div
+            className="fixed top-16 right-4 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none px-2 sm:px-0"
+            aria-live="polite"
+          >
+            {paymentSuccessToast && (
+              <div
+                role="status"
+                className="pointer-events-auto p-4 rounded-2xl bg-slate-900 text-white border-2 border-emerald-400 shadow-2xl flex items-start justify-between gap-3 animate-in slide-in-from-top-3 duration-200"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-emerald-500 text-slate-950 shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs sm:text-sm font-black text-emerald-300">
+                        Payment Successful!
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 font-mono text-[10px] font-black">
+                        #{paymentSuccessToast.receiptNumber}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-200 mt-0.5 leading-snug">
+                      {paymentSuccessToast.planLabel} (${paymentSuccessToast.amountUsd}.00 USD) unlocked. Your Supabase profile{' '}
+                      <code className="font-mono text-amber-300">paid_status</code> has been refreshed to{' '}
+                      <code className="font-mono text-emerald-300">active</code>.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPaymentSuccessToast(null)}
+                  className="text-xs font-bold text-slate-400 hover:text-white cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {allTimeHighToast && (
+              <div
+                role="status"
+                className="pointer-events-auto p-3.5 rounded-2xl bg-gradient-to-r from-slate-900 via-[#006600] to-slate-900 text-white border border-amber-300 shadow-xl flex items-center justify-between gap-3 animate-in slide-in-from-top-3 duration-200"
+              >
+                <div className="flex items-center gap-2.5 text-xs font-black">
+                  <Award className="w-4 h-4 text-amber-300 shrink-0" />
+                  <span>{allTimeHighToast}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAllTimeHighToast(null)}
+                  className="text-[11px] font-bold text-amber-200 hover:text-white cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Primary Header with African Motif Ribbon & Azure Curriculum Branding (Hidden in Focus Mode) */}
         {!isFocusMode && (
@@ -1955,6 +2145,9 @@ export default function App() {
                   onSelectModule={(modId, pathId) => {
                     setSelectedPathId(pathId);
                     setSelectedModuleId(modId);
+                    if (typeof modId === 'number' && isModuleLockedForCurrentUser(modId)) {
+                      setTierSelectionLockedModuleId(modId);
+                    }
                     setCurrentQuestionIndex(0);
                     setShowPostSessionReview(false);
                   }}
@@ -2134,6 +2327,9 @@ export default function App() {
                       }}
                       onSelectModule={(modId) => {
                         setSelectedModuleId(modId);
+                        if (typeof modId === 'number' && isModuleLockedForCurrentUser(modId)) {
+                          setTierSelectionLockedModuleId(modId);
+                        }
                         setCurrentQuestionIndex(0);
                         triggerMotifShimmer();
                       }}
@@ -2449,6 +2645,30 @@ export default function App() {
                   key={`filtered-results-${searchQuery}-${currentQ?.id || currentQuestionIndex}`}
                   className="animate-quiz-card-fade-in-up"
                 >
+                <PaymentGatekeeper
+                  moduleId={
+                    selectedModuleId !== 'all'
+                      ? selectedModuleId
+                      : currentQ?.moduleId ?? 'all'
+                  }
+                  user={authenticatedUser}
+                  onRedirectToPaymentPage={() => {
+                    setActiveTab('profile');
+                    setTimeout(() => {
+                      document
+                        .getElementById('profile-subscription-panel')
+                        ?.scrollIntoView({ behavior: 'smooth' });
+                    }, 120);
+                  }}
+                  onOpenTierSelectionModal={(lockedModId) =>
+                    setTierSelectionLockedModuleId(lockedModId)
+                  }
+                  onSelectFreeModule={(freeModId) => {
+                    setSelectedPathId(1);
+                    setSelectedModuleId(freeModId);
+                    setCurrentQuestionIndex(0);
+                  }}
+                >
                 {filteredQuestions.length > 0 && currentQ ? (
                   <QuizCard
                     key={currentQ.id}
@@ -2560,6 +2780,7 @@ export default function App() {
                     </button>
                   </div>
                 )}
+                </PaymentGatekeeper>
                 </div>
               </div>
             </div>
@@ -3091,6 +3312,22 @@ export default function App() {
         userEmail={authenticatedUser?.email || null}
         userName={authenticatedUser?.full_name || null}
         todayAnsweredCount={todayAnsweredCount}
+      />
+
+      {/* Subscription Tier Selection Modal (Triggers when selecting a locked premium AZ-900 module) */}
+      <SubscriptionTierSelection
+        isOpen={tierSelectionLockedModuleId !== null}
+        lockedModuleId={tierSelectionLockedModuleId}
+        onClose={() => setTierSelectionLockedModuleId(null)}
+        onRedirectToProfileSubscription={() => {
+          setTierSelectionLockedModuleId(null);
+          setActiveTab('profile');
+          setTimeout(() => {
+            document
+              .getElementById('profile-subscription-panel')
+              ?.scrollIntoView({ behavior: 'smooth' });
+          }, 120);
+        }}
       />
 
       {/* Footer with Randomly Placed Light-Azure Animated African Motifs & Heritage Accent (Hidden in Focus Mode) */}

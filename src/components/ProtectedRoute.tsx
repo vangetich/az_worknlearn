@@ -40,6 +40,7 @@ export interface AuthenticatedSupabaseUser {
   full_name: string;
   role: LearnerRole;
   is_premium?: boolean;
+  paid_status?: 'active' | 'inactive';
   unlocked_modules?: number[];
   auth_source: 'supabase' | 'firebase' | 'postgres_backend';
 }
@@ -62,6 +63,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         full_name: stored.full_name,
         role: stored.role,
         is_premium: stored.is_premium,
+        paid_status: stored.paid_status ?? (stored.is_premium ? 'active' : 'inactive'),
         unlocked_modules: stored.unlocked_modules,
         auth_source: 'postgres_backend',
       };
@@ -103,6 +105,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           const { data } = await supabase.auth.getSession();
           const sbUser = data?.session?.user;
           if (sbUser && isMounted) {
+            const stored = authService.getStoredBackendUser();
+            const isPaid =
+              Boolean(sbUser.user_metadata?.is_premium) ||
+              sbUser.user_metadata?.paid_status === 'active' ||
+              Boolean(stored?.is_premium) ||
+              stored?.paid_status === 'active';
             setUser({
               id: sbUser.id,
               email: sbUser.email || 'learner@az900.ke',
@@ -111,6 +119,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                 sbUser.email?.split('@')[0] ||
                 'AZ-900 Cloud Learner',
               role: (sbUser.user_metadata?.role as LearnerRole) || 'student',
+              is_premium: isPaid,
+              paid_status: isPaid ? 'active' : 'inactive',
+              unlocked_modules: stored?.unlocked_modules || (isPaid ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4]),
               auth_source: 'supabase',
             });
             setIsCheckingAuth(false);
@@ -127,6 +138,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             full_name: storedBackendUser.full_name,
             role: storedBackendUser.role,
             is_premium: storedBackendUser.is_premium,
+            paid_status:
+              storedBackendUser.paid_status ??
+              (storedBackendUser.is_premium ? 'active' : 'inactive'),
             unlocked_modules: storedBackendUser.unlocked_modules,
             auth_source: 'postgres_backend',
           });
@@ -142,6 +156,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             email: fbUser.email || 'learner@az900.ke',
             full_name: fbUser.displayName || fbUser.email?.split('@')[0] || 'AZ-900 Learner',
             role: 'student',
+            is_premium: false,
+            paid_status: 'inactive',
+            unlocked_modules: [1, 2, 3, 4],
             auth_source: 'firebase',
           });
           setIsCheckingAuth(false);
@@ -163,6 +180,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       if (!isMounted) return;
       if (session?.user) {
         const sbUser = session.user;
+        const stored = authService.getStoredBackendUser();
+        const isPaid =
+          Boolean(sbUser.user_metadata?.is_premium) ||
+          sbUser.user_metadata?.paid_status === 'active' ||
+          Boolean(stored?.is_premium) ||
+          stored?.paid_status === 'active';
         setUser({
           id: sbUser.id,
           email: sbUser.email || 'learner@az900.ke',
@@ -171,6 +194,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             sbUser.email?.split('@')[0] ||
             'AZ-900 Cloud Learner',
           role: (sbUser.user_metadata?.role as LearnerRole) || 'student',
+          is_premium: isPaid,
+          paid_status: isPaid ? 'active' : 'inactive',
+          unlocked_modules: stored?.unlocked_modules || (isPaid ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4]),
           auth_source: 'supabase',
         });
       } else if (!authService.getStoredBackendUser() && !authService.getCurrentFirebaseUser()) {
@@ -189,6 +215,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           full_name: stored.full_name,
           role: stored.role,
           is_premium: stored.is_premium,
+          paid_status: stored.paid_status ?? (stored.is_premium ? 'active' : 'inactive'),
           unlocked_modules: stored.unlocked_modules,
           auth_source: 'postgres_backend',
         });
@@ -198,6 +225,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           email: fbUser.email || 'learner@az900.ke',
           full_name: fbUser.displayName || fbUser.email?.split('@')[0] || 'AZ-900 Learner',
           role: 'student',
+          is_premium: false,
+          paid_status: 'inactive',
+          unlocked_modules: [1, 2, 3, 4],
           auth_source: 'firebase',
         });
       } else {
@@ -217,6 +247,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           full_name: nextUser.full_name,
           role: nextUser.role,
           is_premium: nextUser.is_premium,
+          paid_status: nextUser.paid_status ?? (nextUser.is_premium ? 'active' : 'inactive'),
           unlocked_modules: nextUser.unlocked_modules,
           auth_source: 'postgres_backend',
         });
