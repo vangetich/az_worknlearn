@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   FileText,
@@ -11,10 +11,12 @@ import {
   AlertTriangle,
   Zap,
   BookmarkCheck,
+  Loader2,
+  CloudCheck,
 } from 'lucide-react';
 import { Question } from '../types/quiz';
-import { getQuestionNote, saveQuestionNote } from '../utils/storage';
 import { MaasaiMedallion } from './MotifDecorations';
+import { useDebouncedNotes } from '../hooks/useDebouncedNotes';
 
 interface QuickNotesDrawerProps {
   question: Question;
@@ -29,19 +31,21 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
   onClose,
   onNoteSaved,
 }) => {
-  const [noteText, setNoteText] = useState<string>('');
-  const [saveToast, setSaveToast] = useState<boolean>(false);
-  const [hasExistingNote, setHasExistingNote] = useState<boolean>(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const {
+    noteText,
+    setNoteText,
+    saveStatus,
+    lastSavedTimestamp,
+    forceSave,
+    deleteNote,
+    hasExistingNote,
+  } = useDebouncedNotes({
+    questionId: question?.id || '',
+    delayMs: 450,
+    onSaved: onNoteSaved,
+  });
 
-  // Load existing note when drawer opens or question changes
-  useEffect(() => {
-    if (question?.id) {
-      const existing = getQuestionNote(question.id);
-      setNoteText(existing);
-      setHasExistingNote(Boolean(existing.trim()));
-    }
-  }, [question?.id, isOpen]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Focus textarea when drawer opens
   useEffect(() => {
@@ -65,24 +69,11 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
   }, [isOpen, onClose]);
 
   const handleSave = () => {
-    saveQuestionNote(question.id, noteText);
-    setHasExistingNote(Boolean(noteText.trim()));
-    setSaveToast(true);
-    if (onNoteSaved) {
-      onNoteSaved(noteText.trim());
-    }
-    setTimeout(() => setSaveToast(false), 2200);
+    forceSave();
   };
 
   const handleDelete = () => {
-    saveQuestionNote(question.id, '');
-    setNoteText('');
-    setHasExistingNote(false);
-    if (onNoteSaved) {
-      onNoteSaved('');
-    }
-    setSaveToast(true);
-    setTimeout(() => setSaveToast(false), 2000);
+    deleteNote();
   };
 
   const insertSnippet = (prefix: string) => {
@@ -124,18 +115,24 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
               <FileText className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-black text-base text-slate-900">
                   Personal Quick Notes &amp; Mnemonics
                 </h3>
-                {hasExistingNote && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
-                    Saved
+                {saveStatus === 'saving' ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Auto-saving...</span>
                   </span>
-                )}
+                ) : hasExistingNote ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                    <Check className="w-3 h-3 text-emerald-700" />
+                    <span>Auto-saved</span>
+                  </span>
+                ) : null}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Save your memory anchors and rules for this specific Azure concept. Persists locally.
+                Notes auto-save as you type and persist locally in browser storage.
               </p>
             </div>
           </div>
@@ -230,10 +227,16 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
           )}
 
           {/* Status Feedback */}
-          {saveToast && (
+          {saveStatus === 'saving' && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold flex items-center gap-2 animate-in fade-in duration-150">
+              <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
+              <span>Auto-saving study note to localStorage...</span>
+            </div>
+          )}
+          {saveStatus === 'saved' && hasExistingNote && (
             <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in duration-200">
               <Check className="w-4 h-4 stroke-[3] text-emerald-600" />
-              <span>Note saved successfully! Persisted in your browser.</span>
+              <span>Note automatically saved &amp; persisted! No manual click required.</span>
             </div>
           )}
         </div>
