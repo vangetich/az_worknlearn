@@ -233,7 +233,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
 
       {/* Dropdown Search Results & Quick Filter Panel */}
       {isOpen && (
-        <div className="absolute left-0 right-0 sm:left-1/2 sm:-translate-x-1/2 sm:w-[460px] md:w-[520px] mt-2 bg-white rounded-2xl border border-slate-200/90 shadow-2xl card-elevation z-50 overflow-hidden text-left animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="absolute left-0 right-0 sm:left-0 sm:right-auto sm:w-[min(30rem,calc(100vw-1.5rem))] max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain mt-2 bg-white rounded-2xl border border-slate-200/90 shadow-2xl card-elevation z-50 text-left animate-in fade-in slide-in-from-top-2 duration-150">
           {!normalizedQuery ? (
             /* Empty Query State: Popular Azure Services & Key Terms */
             <div className="p-4 space-y-3">

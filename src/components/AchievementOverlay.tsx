@@ -216,13 +216,13 @@ export const AchievementOverlay: React.FC<AchievementOverlayProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[130] flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       aria-labelledby="achievement-unlock-title"
     >
       {/* Main Celebration Card */}
-      <div className="relative w-full max-w-md rounded-3xl bg-gradient-to-b from-slate-900 via-[#0b192f] to-slate-950 text-white border border-sky-400/30 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+      <div className="relative w-full max-w-[min(28rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-3xl bg-gradient-to-b from-slate-900 via-[#0b192f] to-slate-950 text-white border border-sky-400/30 shadow-2xl overflow-y-auto overscroll-contain animate-in zoom-in-95 duration-300">
         {/* Top Kitenge Cultural Accent Ribbon */}
         <KitengeRibbon height={5} />
 
@@ -239,7 +239,7 @@ export const AchievementOverlay: React.FC<AchievementOverlayProps> = ({
           <X className="w-4 h-4" />
         </button>
 
-        <div className="relative z-10 p-6 sm:p-7 text-center space-y-5">
+        <div className="relative z-10 p-5 sm:p-7 text-center space-y-4 sm:space-y-5">
           {/* Header Pill */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-400/15 border border-amber-400/35 text-amber-300 text-[11px] font-black uppercase tracking-widest shadow-xs">
             <PartyPopper className="w-3.5 h-3.5 text-amber-400 animate-bounce" />

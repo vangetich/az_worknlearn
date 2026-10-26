@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   CheckCircle,
   XCircle,
@@ -1557,48 +1558,50 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               />
             </button>
 
-            {/* Centered Modal Popup in the Middle of the Page (Not Sideways, Comfortably Lower Down) */}
-            {showStudyZoneMenu && (
-              <div
-                className="fixed inset-0 z-50 flex items-start justify-center pt-20 sm:pt-24 pb-10 px-4 overflow-y-auto bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150"
-                onClick={() => setShowStudyZoneMenu(false)}
-              >
+            {/* Centered Modal Popup Fitted Cleanly into the Active Viewport */}
+            {showStudyZoneMenu &&
+              typeof document !== 'undefined' &&
+              createPortal(
                 <div
-                  ref={studyZoneMenuRef}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-full max-w-xl my-auto sm:my-0 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl bg-white border border-slate-200 shadow-2xl text-left animate-in slide-in-from-top-4 zoom-in-95 duration-200"
+                  className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150"
+                  onClick={() => setShowStudyZoneMenu(false)}
                 >
-                  {/* Modal Header */}
-                  <div className="sticky top-0 z-10 bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white px-5 py-4 flex items-center justify-between gap-3 border-b border-slate-800">
-                    <div className="flex items-center gap-2.5">
-                      <span className="p-2 rounded-xl bg-white/10 border border-white/15 text-amber-300">
-                        <SlidersHorizontal className="w-4 h-4" />
-                      </span>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-black uppercase tracking-wider text-white">
-                            Study Zone Command Hub
-                          </h4>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950">
-                            Accordion Menu
-                          </span>
+                  <div
+                    ref={studyZoneMenuRef}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full max-w-[min(36rem,calc(100vw-1.25rem))] my-auto max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] flex flex-col overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-2xl text-left animate-in zoom-in-95 duration-200"
+                  >
+                    {/* Modal Header */}
+                    <div className="shrink-0 bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white px-4 sm:px-5 py-3.5 sm:py-4 flex items-center justify-between gap-3 border-b border-slate-800">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="p-2 rounded-xl bg-white/10 border border-white/15 text-amber-300 shrink-0">
+                          <SlidersHorizontal className="w-4 h-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
+                              Study Zone Command Hub
+                            </h4>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950 shrink-0">
+                              Accordion Menu
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-sky-100/90 mt-0.5">
+                            Expand any section below to sort questions, calibrate difficulty, or launch study tools
+                          </p>
                         </div>
-                        <p className="text-[11px] text-sky-100/90 mt-0.5">
-                          Expand any section below to sort questions, calibrate difficulty, or launch study tools
-                        </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowStudyZoneMenu(false)}
+                        className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-extrabold transition-colors cursor-pointer shrink-0"
+                      >
+                        Close ✕
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowStudyZoneMenu(false)}
-                      className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-extrabold transition-colors cursor-pointer shrink-0"
-                    >
-                      Close ✕
-                    </button>
-                  </div>
 
-                  {/* Accordion Sections Container */}
-                  <div className="p-4 sm:p-5 space-y-3">
+                    {/* Accordion Sections Container */}
+                    <div className="p-3.5 sm:p-5 space-y-3 overflow-y-auto overscroll-contain flex-1 min-h-0">
                     {/* ACCORDION SECTION 1: Quick-Sort & Question Queue Filters */}
                     <div className="rounded-xl border border-slate-200 bg-slate-50/60 overflow-hidden">
                       <button
@@ -2323,7 +2326,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                     </div>
                   </div>
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
           </div>
 

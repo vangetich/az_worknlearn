@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   FileText,
   X,
@@ -106,8 +107,8 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end animate-in fade-in duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[120] flex justify-end animate-in fade-in duration-200">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
@@ -115,9 +116,9 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
       />
 
       {/* Slide-out Panel */}
-      <div className="relative w-full max-w-md sm:max-w-lg bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col z-10 animate-in slide-in-from-right duration-300">
+      <div className="relative w-full max-w-[min(32rem,100vw)] bg-white h-[100dvh] max-h-[100dvh] shadow-2xl border-l border-slate-200 flex flex-col z-10 overflow-hidden animate-in slide-in-from-right duration-300">
         {/* Header */}
-        <div className="p-5 border-b border-slate-100 flex items-start justify-between bg-gradient-to-r from-slate-50 via-white to-blue-50/30">
+        <div className="shrink-0 p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between bg-gradient-to-r from-slate-50 via-white to-blue-50/30">
           <div className="flex items-start gap-3">
             <div className="p-2.5 rounded-xl bg-blue-50 text-[#0078D4] border border-blue-200/80 shadow-2xs mt-0.5">
               <FileText className="w-5 h-5" />
@@ -272,6 +273,7 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

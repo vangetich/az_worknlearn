@@ -213,25 +213,25 @@ export const DailyGoalAlertsModal: React.FC<DailyGoalAlertsModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6 bg-slate-950/65 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/65 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-xl max-h-[88vh] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+        className="bg-white w-full max-w-[min(36rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-orange-50/80 via-white to-amber-50/60">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-xs">
+        <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-gradient-to-r from-orange-50/80 via-white to-amber-50/60">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-xs shrink-0">
               <Target className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base text-slate-900">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
                   Daily Learning Goal &amp; Study Reminder Settings
                 </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-100 text-orange-900">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-100 text-orange-900 shrink-0">
                   Adaptive Cadence
                 </span>
               </div>
@@ -244,14 +244,14 @@ export const DailyGoalAlertsModal: React.FC<DailyGoalAlertsModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+            className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
+        <div className="p-4 sm:p-6 space-y-5 overflow-y-auto overscroll-contain flex-1 min-h-0">
           {/* Direct Daily Learning Goal Editor with Live Circular Progress Ring UI Feedback */}
           <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-50 via-white to-blue-50/40 border border-slate-200/90 space-y-4 shadow-2xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

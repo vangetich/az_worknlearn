@@ -189,13 +189,15 @@ export const MockExamModal: React.FC<MockExamProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white w-full max-w-4xl rounded-2xl border border-slate-200 card-elevation overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain">
+      <div className="bg-white w-full max-w-[min(56rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl border border-slate-200 card-elevation overflow-hidden flex flex-col">
         {/* Top African Motif */}
-        <KitengeRibbon height={4} />
+        <div className="shrink-0">
+          <KitengeRibbon height={4} />
+        </div>
 
         {/* Header Bar */}
-        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div className="shrink-0 px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-blue-600/30 border border-blue-400/30">
               <Award className="w-5 h-5 text-amber-300" />

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { BookOpen, Zap, Sparkles, ChevronRight } from 'lucide-react';
 import { ConceptDefinition } from './KeyConceptSidePanel';
 
@@ -26,6 +27,7 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
   } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const tooltipCardRef = useRef<HTMLDivElement>(null);
   const hoverCloseTimeoutRef = useRef<number | null>(null);
 
   const clearHoverCloseTimeout = () => {
@@ -45,9 +47,11 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
   // Close tooltip on outside click
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as Node;
       if (
         containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
+        !containerRef.current.contains(target) &&
+        (!tooltipCardRef.current || !tooltipCardRef.current.contains(target))
       ) {
         setActiveTooltipTerm(null);
       }
@@ -151,77 +155,91 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
         })}
       </p>
 
-      {/* Floating Animated Azure Concept Snap Definition Card */}
-      {activeTooltipTerm && (
-        <div
-          onMouseEnter={clearHoverCloseTimeout}
-          onMouseLeave={scheduleHoverClose}
-          className="fixed z-50 w-76 sm:w-88 bg-white rounded-2xl border-2 border-[#0078D4]/40 shadow-2xl p-4 space-y-2.5 text-left animate-in fade-in zoom-in-95 slide-in-from-bottom-1 duration-200"
-          style={{
-            top: Math.min(window.innerHeight - 250, activeTooltipTerm.rect.bottom + 8),
-            left: Math.max(
-              16,
-              Math.min(window.innerWidth - 360, activeTooltipTerm.rect.left - 20)
-            ),
-          }}
-        >
-          <div className="flex items-center justify-between gap-2 border-b border-sky-100 pb-2">
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-[#0078D4] to-[#005A9E] text-white text-[10px] font-black uppercase tracking-wider shadow-2xs">
-              <Sparkles className="w-3 h-3 text-amber-300" />
-              <span>Azure Concept Snap</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setActiveTooltipTerm(null)}
-              className="text-slate-400 hover:text-slate-700 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-slate-100 cursor-pointer"
-              aria-label="Close Azure Concept Snap"
-            >
-              ✕
-            </button>
-          </div>
+      {/* Floating Animated Azure Concept Snap Definition Card — Fitted to Active Viewport */}
+      {activeTooltipTerm &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={tooltipCardRef}
+            onMouseEnter={clearHoverCloseTimeout}
+            onMouseLeave={scheduleHoverClose}
+            className="fixed z-[125] w-[min(22rem,calc(100vw-1rem))] max-h-[calc(100dvh-1.5rem)] overflow-y-auto overscroll-contain bg-white rounded-2xl border-2 border-[#0078D4]/40 shadow-2xl p-4 space-y-2.5 text-left animate-in fade-in zoom-in-95 slide-in-from-bottom-1 duration-200"
+            style={{
+              top: Math.max(
+                12,
+                Math.min(
+                  (typeof window !== 'undefined' ? window.innerHeight : 800) - 270,
+                  activeTooltipTerm.rect.bottom + 8
+                )
+              ),
+              left: Math.max(
+                8,
+                Math.min(
+                  (typeof window !== 'undefined' ? window.innerWidth : 1024) -
+                    Math.min(356, (typeof window !== 'undefined' ? window.innerWidth : 1024) - 16),
+                  activeTooltipTerm.rect.left - 16
+                )
+              ),
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-sky-100 pb-2">
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-[#0078D4] to-[#005A9E] text-white text-[10px] font-black uppercase tracking-wider shadow-2xs">
+                <Sparkles className="w-3 h-3 text-amber-300" />
+                <span>Azure Concept Snap</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveTooltipTerm(null)}
+                className="text-slate-400 hover:text-slate-700 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-slate-100 cursor-pointer"
+                aria-label="Close Azure Concept Snap"
+              >
+                ✕
+              </button>
+            </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-1.5 flex-wrap">
-              <h5 className="font-extrabold text-xs sm:text-sm text-slate-900 flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
-                <span>{activeTooltipTerm.concept.term}</span>
-              </h5>
-              {activeTooltipTerm.concept.acronym && (
-                <span className="text-[10px] font-black bg-sky-100 text-[#005A9E] px-2 py-0.5 rounded-md border border-sky-200">
-                  {activeTooltipTerm.concept.acronym}
-                </span>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                <h5 className="font-extrabold text-xs sm:text-sm text-slate-900 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+                  <span>{activeTooltipTerm.concept.term}</span>
+                </h5>
+                {activeTooltipTerm.concept.acronym && (
+                  <span className="text-[10px] font-black bg-sky-100 text-[#005A9E] px-2 py-0.5 rounded-md border border-sky-200">
+                    {activeTooltipTerm.concept.acronym}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-700 leading-relaxed bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
+                {activeTooltipTerm.concept.officialDefinition}
+              </p>
+              {activeTooltipTerm.concept.scenarioRelevance && (
+                <div className="text-[11px] text-amber-950 bg-amber-50/90 px-2.5 py-1.5 rounded-lg border border-amber-200/80 leading-snug">
+                  <strong className="font-extrabold text-amber-800">Exam Role: </strong>
+                  {activeTooltipTerm.concept.scenarioRelevance}
+                </div>
               )}
             </div>
-            <p className="text-xs text-slate-700 leading-relaxed bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
-              {activeTooltipTerm.concept.officialDefinition}
-            </p>
-            {activeTooltipTerm.concept.scenarioRelevance && (
-              <div className="text-[11px] text-amber-950 bg-amber-50/90 px-2.5 py-1.5 rounded-lg border border-amber-200/80 leading-snug">
-                <strong className="font-extrabold text-amber-800">Exam Role: </strong>
-                {activeTooltipTerm.concept.scenarioRelevance}
-              </div>
-            )}
-          </div>
 
-          <div className="flex items-center justify-between pt-1 text-[11px]">
-            <span className="text-slate-400 font-semibold">
-              Hover or click service keywords
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                onSelectConcept(activeTooltipTerm.concept.id);
-                onActivateKnowledgeCheck();
-                setActiveTooltipTerm(null);
-              }}
-              className="font-extrabold text-[#0078D4] hover:underline flex items-center gap-0.5 cursor-pointer"
-            >
-              <span>Pin to Side-Panel</span>
-              <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      )}
+            <div className="flex items-center justify-between pt-1 text-[11px]">
+              <span className="text-slate-400 font-semibold">
+                Hover or click service keywords
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectConcept(activeTooltipTerm.concept.id);
+                  onActivateKnowledgeCheck();
+                  setActiveTooltipTerm(null);
+                }}
+                className="font-extrabold text-[#0078D4] hover:underline flex items-center gap-0.5 cursor-pointer"
+              >
+                <span>Pin to Side-Panel</span>
+                <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

@@ -267,14 +267,16 @@ export const ExitStudySessionModal: React.FC<ExitStudySessionModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto overscroll-contain animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       aria-label="Exit Study Session and Sign Out"
     >
-      <div className="relative w-full max-w-2xl bg-white dark:bg-[#0B1526] text-slate-900 dark:text-slate-100 rounded-3xl shadow-2xl border border-sky-200/80 dark:border-sky-500/30 overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="relative w-full max-w-[min(42rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto bg-white dark:bg-[#0B1526] text-slate-900 dark:text-slate-100 rounded-3xl shadow-2xl border border-sky-200/80 dark:border-sky-500/30 overflow-hidden flex flex-col">
         {/* Kitenge Heritage Top Ribbon Motif */}
-        <KitengeRibbon height={5} />
+        <div className="shrink-0">
+          <KitengeRibbon height={5} />
+        </div>
 
         {/* Header Hero Banner with Maasai Medallion & African Proverb */}
         <div className="relative p-5 sm:p-6 bg-gradient-to-r from-slate-900 via-[#003865] to-[#005A9E] text-white">

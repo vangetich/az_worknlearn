@@ -356,9 +356,11 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
   const isPremiumUnlocked = Boolean(progressReport?.user?.is_premium || unlockedCount >= 12);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
-        <KitengeRibbon height={4} />
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-150">
+      <div className="bg-white w-full max-w-[min(64rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+        <div className="shrink-0">
+          <KitengeRibbon height={4} />
+        </div>
 
         {/* Header */}
         <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-[#003E6B] to-slate-900 text-white flex items-center justify-between gap-4 shrink-0">

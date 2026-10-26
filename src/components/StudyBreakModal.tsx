@@ -41,12 +41,14 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
   }, [timerRunning, timerSeconds]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-lg rounded-2xl border border-slate-200 card-elevation overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-        <KitengeRibbon height={5} />
+    <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain">
+      <div className="bg-white w-full max-w-[min(32rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl border border-slate-200 card-elevation overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="shrink-0">
+          <KitengeRibbon height={5} />
+        </div>
 
         {/* Header */}
-        <div className="p-6 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-b border-amber-200/80 flex items-start justify-between">
+        <div className="shrink-0 p-4 sm:p-6 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-b border-amber-200/80 flex items-start justify-between">
           <div className="flex items-start gap-3">
             <div className="p-3 rounded-2xl bg-gradient-to-br from-[#D97706] to-[#C2410C] text-white shadow-xs">
               <Coffee className="w-6 h-6" />
@@ -73,7 +75,7 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
         </div>
 
         {/* Body with Swahili Wisdom and Relaxation */}
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-5 overflow-y-auto overscroll-contain flex-1 min-h-0">
           {/* Proverb card */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
             <span className="font-bold text-amber-800 uppercase tracking-wider block text-[10px]">

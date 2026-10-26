@@ -465,14 +465,14 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
         typeof document !== 'undefined' &&
         createPortal(
           <div
-            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150"
+            className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-150"
             onClick={() => {
               setShowDropdown(false);
               setIsEditingGoal(false);
             }}
           >
             <div
-              className="w-full max-w-md max-h-[88vh] overflow-y-auto bg-white rounded-2xl border border-slate-200 card-elevation shadow-2xl p-5 animate-in zoom-in-95 duration-150 space-y-4 text-left"
+              className="w-full max-w-[min(28rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto overflow-y-auto overscroll-contain bg-white rounded-2xl border border-slate-200 card-elevation shadow-2xl p-4 sm:p-5 animate-in zoom-in-95 duration-150 space-y-4 text-left"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header with Title and Close Button */}

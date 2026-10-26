@@ -430,13 +430,13 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="font-black text-xs sm:text-base tracking-tight text-slate-900 truncate">
                   Azure Cloud Explorer
                 </span>
-                <span className="px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-black bg-[#0078D4] text-white shrink-0 shadow-2xs">
+                <span className="px-1.5 py-0.5 rounded text-[10.35px] sm:text-[11.5px] font-black bg-[#0078D4] text-white shrink-0 shadow-2xs">
                   AZ-900
                 </span>
               </div>
               <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/35 shadow-2xs max-w-full">
-                <Sparkles className="w-2.5 h-2.5 text-[#0078D4] shrink-0" />
-                <span className="text-[9px] sm:text-[11px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent truncate studio-subtitle-standout">
+                <Sparkles className="w-3 h-3 text-[#0078D4] shrink-0" />
+                <span className="text-[10.35px] sm:text-[12.65px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent truncate studio-subtitle-standout">
                   Fundamentals Practice Studio
                 </span>
               </div>
@@ -579,13 +579,13 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="font-black text-lg xl:text-xl tracking-tight text-slate-900 leading-none">
                   Azure Cloud Explorer
                 </span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-[#0078D4] text-white shadow-2xs">
+                <span className="px-1.5 py-0.5 rounded text-[11.5px] font-black bg-[#0078D4] text-white shadow-2xs">
                   AZ-900
                 </span>
               </div>
               <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/40 shadow-2xs">
-                <Sparkles className="w-2.5 h-2.5 text-[#0078D4] shrink-0" />
-                <span className="text-[11px] font-extrabold tracking-wider uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent studio-subtitle-standout">
+                <Sparkles className="w-3 h-3 text-[#0078D4] shrink-0" />
+                <span className="text-[12.65px] font-extrabold tracking-wider uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent studio-subtitle-standout">
                   Fundamentals Practice Studio
                 </span>
               </div>
@@ -840,7 +840,7 @@ export const Header: React.FC<HeaderProps> = ({
           const activeTele = pathTelemetry[inspectedPathInMenu];
 
           return (
-            <div className="mb-2 px-3 py-2 rounded-xl bg-white/98 border border-sky-200/90 shadow-lg space-y-1.5 text-xs animate-in slide-in-from-top-1 duration-150">
+            <div className="mb-2 px-3 py-2 rounded-xl bg-white/98 border border-sky-200/90 shadow-lg space-y-1.5 text-xs animate-in slide-in-from-top-1 duration-150 max-h-[calc(100dvh-4.5rem)] overflow-y-auto overscroll-contain">
               {/* LINE 1: Path Selector + Accuracy & Missed Retry */}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">

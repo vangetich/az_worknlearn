@@ -137,9 +137,11 @@ export const WeakAreasReviewModal: React.FC<WeakAreasReviewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/65 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
-        <KitengeRibbon height={3} />
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/65 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-150">
+      <div className="bg-white w-full max-w-[min(48rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+        <div className="shrink-0">
+          <KitengeRibbon height={3} />
+        </div>
 
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-rose-50/80 via-white to-amber-50/60 shrink-0">

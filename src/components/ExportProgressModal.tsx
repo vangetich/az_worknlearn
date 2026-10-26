@@ -247,12 +247,14 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-lg rounded-2xl border border-slate-200 card-elevation overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-        <KitengeRibbon height={5} />
+    <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain">
+      <div className="bg-white w-full max-w-[min(32rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl border border-slate-200 card-elevation overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="shrink-0">
+          <KitengeRibbon height={5} />
+        </div>
 
         {/* Header */}
-        <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
+        <div className="shrink-0 p-4 sm:p-6 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-blue-600/30 text-blue-300 border border-blue-400/30">
               <Download className="w-5 h-5" />
@@ -276,7 +278,7 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-5 overflow-y-auto overscroll-contain flex-1 min-h-0">
           {/* Status Snapshot Banner */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
             <div className="space-y-0.5">

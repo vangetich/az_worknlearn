@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import {
   Share2,
@@ -100,17 +101,17 @@ export const ShareQuestionModal: React.FC<ShareQuestionModalProps> = ({
 
   const hasNativeShare = typeof navigator !== 'undefined' && Boolean(navigator.share);
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/65 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+        className="bg-white w-full max-w-[min(28rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-y-auto overscroll-contain flex flex-col animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-gradient-to-r from-blue-50/80 via-white to-sky-50/50">
+        <div className="shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-gradient-to-r from-blue-50/80 via-white to-sky-50/50">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] text-white shadow-xs">
               <Share2 className="w-4 h-4" />
@@ -290,6 +291,7 @@ export const ShareQuestionModal: React.FC<ShareQuestionModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

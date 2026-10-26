@@ -45,10 +45,10 @@ export const ResetModuleModal: React.FC<ResetModuleModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain">
+      <div className="bg-white rounded-2xl max-w-[min(32rem,calc(100vw-1.25rem))] w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto border border-slate-200 shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+        <div className="shrink-0 px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-rose-100 text-rose-700">
               <RotateCcw className="w-5 h-5" />
@@ -71,7 +71,7 @@ export const ResetModuleModal: React.FC<ResetModuleModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-5">
+        <div className="p-5 sm:p-6 space-y-5 overflow-y-auto overscroll-contain flex-1 min-h-0">
           {resetSuccessMessage ? (
             <div className="p-6 text-center space-y-3">
               <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">

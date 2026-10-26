@@ -586,7 +586,7 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
   const partnerParticipants = participantList.filter((p) => p.userId !== myUserId);
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] md:w-[540px] bg-white/98 backdrop-blur-xl border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-y-0 right-0 z-[120] w-full max-w-[100vw] sm:w-[480px] md:w-[540px] h-[100dvh] max-h-[100dvh] bg-white/98 backdrop-blur-xl border-l border-slate-200 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">

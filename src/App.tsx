@@ -1258,7 +1258,7 @@ export default function App() {
                   className="space-y-1 animate-search-fade-in"
                 >
                   <h1
-                    className={`text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight animate-azure-shimmer text-center transition-all duration-300 ${
+                    className={`text-[1.725rem] sm:text-[2.156rem] lg:text-[2.588rem] font-black tracking-tight leading-tight animate-azure-shimmer text-center transition-all duration-300 ${
                       searchQuery.trim() ? 'scale-[1.01]' : 'scale-100'
                     }`}
                   >

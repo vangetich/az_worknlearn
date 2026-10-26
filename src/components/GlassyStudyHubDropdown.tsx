@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Award,
   Flame,
@@ -178,26 +179,35 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
           />
         </button>
 
-        {/* Semi-transparent Glassy Dropdown Panel */}
-        {isOpen && (
-          <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-[calc(100vw-1.5rem)] max-w-[380px] sm:max-w-[440px] rounded-2xl bg-white/98 backdrop-blur-xl border border-sky-200/80 shadow-2xl shadow-blue-500/15 p-3 z-50 space-y-2.5 animate-in fade-in zoom-in-95 duration-150 max-h-[80vh] overflow-y-auto scrollbar-thin">
-            {/* Header Note */}
-            <div className="px-2 py-1.5 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <MaasaiMedallion size={15} />
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
-                  Azure Cloud Explorer • Study Hub
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
-                aria-label="Close Study Hub menu"
+        {/* Semi-transparent Glassy Dropdown Panel — Fitted to Active Viewport */}
+        {isOpen &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/45 backdrop-blur-xs overflow-y-auto overscroll-contain animate-in fade-in duration-150"
+              onClick={() => setIsOpen(false)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-[min(28rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl bg-white/98 backdrop-blur-xl border border-sky-200/80 shadow-2xl shadow-blue-500/15 p-3.5 sm:p-4 space-y-2.5 animate-in zoom-in-95 duration-150 overflow-y-auto overscroll-contain scrollbar-thin text-left"
               >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
+                {/* Header Note */}
+                <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md px-2 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <MaasaiMedallion size={15} />
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
+                      Azure Cloud Explorer • Study Hub
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsOpen(false)}
+                    className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    aria-label="Close Study Hub menu"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
 
             {/* FEATURE 1: Daily Learning Goals & Streak (Compact Interactive Card) */}
             <div className="p-2.5 rounded-xl bg-gradient-to-br from-orange-50/90 via-amber-50/60 to-white border border-orange-200/80 space-y-2">
@@ -528,55 +538,66 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
               )}
             </div>
           </div>
+          </div>,
+          document.body
         )}
       </div>
 
       {/* Standalone Domain Confidence Radar Modal */}
-      {showRadarModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-[#0078D4] text-white">
-                  <TrendingUp className="w-5 h-5" />
+      {showRadarModal &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-200"
+            onClick={() => setShowRadarModal(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full max-w-[min(56rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-slate-50/80">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 rounded-xl bg-[#0078D4] text-white shrink-0">
+                    <TrendingUp className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-extrabold text-sm sm:text-base text-slate-900 truncate">
+                      Domain Confidence Radar • Study Hub Diagnostic
+                    </h3>
+                    <p className="text-xs text-slate-500 truncate">
+                      Full poly-axial evaluation of knowledge domains against 700 passing mark
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-base text-slate-900">
-                    Domain Confidence Radar • Study Hub Diagnostic
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Full poly-axial evaluation of knowledge domains against 700 passing mark
-                  </p>
-                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowRadarModal(false)}
+                  className="p-1.5 rounded-xl hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowRadarModal(false)}
-                className="p-1.5 rounded-xl hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              {/* Modal Body */}
+              <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain flex-1 min-h-0">
+                <DomainConfidenceRadar
+                  stats={stats}
+                  onDrillDomain={(moduleIds) => {
+                    setShowRadarModal(false);
+                    if (onDrillDomain) {
+                      onDrillDomain(moduleIds);
+                    } else {
+                      setActiveTab('adaptive');
+                    }
+                  }}
+                />
+              </div>
             </div>
-
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto">
-              <DomainConfidenceRadar
-                stats={stats}
-                onDrillDomain={(moduleIds) => {
-                  setShowRadarModal(false);
-                  if (onDrillDomain) {
-                    onDrillDomain(moduleIds);
-                  } else {
-                    setActiveTab('adaptive');
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </>
   );
 };

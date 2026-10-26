@@ -525,12 +525,14 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden card-elevation">
-        <KitengeRibbon height={4} />
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto overscroll-contain animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[min(56rem,calc(100vw-1.25rem))] w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto flex flex-col overflow-hidden card-elevation">
+        <div className="shrink-0">
+          <KitengeRibbon height={4} />
+        </div>
 
         {/* Modal Header */}
-        <div className="px-5 sm:px-7 py-4 bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 text-white flex flex-wrap items-center justify-between gap-4">
+        <div className="shrink-0 px-4 sm:px-7 py-3.5 sm:py-4 bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 text-white flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#0078D4] to-blue-600 text-white shadow-md">
               <RotateCcw className="w-5 h-5" />
