@@ -402,41 +402,41 @@ export const Header: React.FC<HeaderProps> = ({
   }, [questions, stats]);
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-sky-200/80 shadow-xs relative">
+    <header className="sticky top-0 z-40 w-full max-w-full overflow-x-clip bg-white/95 backdrop-blur-md border-b border-sky-200/80 shadow-xs relative">
       {/* Azure African Fabric Patterns Only (Multiple Opacities of Azure) */}
       <WavyAzureFabricMotif />
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 relative z-10">
+      <div className="max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 relative z-10">
         {/* =====================================================================
             MOBILE & TABLET COMPACT TOP BAR (< lg screens)
            ===================================================================== */}
-        <div className="flex lg:hidden items-center justify-between py-2 gap-2">
+        <div className="flex lg:hidden items-center justify-between py-2 gap-1.5 sm:gap-2 min-w-0">
           {/* Compact Brand Logo & Title */}
           <div
-            className="flex items-center gap-2.5 cursor-pointer group/logo min-w-0"
+            className="flex items-center gap-2 cursor-pointer group/logo min-w-0 flex-1"
             onClick={() => setActiveTab('quiz')}
           >
-            <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shrink-0">
-              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+            <div className="relative flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shrink-0">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
               </svg>
               <div className="absolute -bottom-1 -right-1">
-                <MaasaiMedallion size={13} />
+                <MaasaiMedallion size={12} />
               </div>
             </div>
 
-            <div className="truncate text-left">
-              <div className="flex items-center gap-1.5">
-                <span className="font-black text-sm sm:text-base tracking-tight text-slate-900 truncate">
+            <div className="truncate text-left min-w-0">
+              <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+                <span className="font-black text-xs sm:text-base tracking-tight text-slate-900 truncate">
                   Azure Cloud Explorer
                 </span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-[#0078D4] text-white shrink-0 shadow-2xs">
+                <span className="px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-black bg-[#0078D4] text-white shrink-0 shadow-2xs">
                   AZ-900
                 </span>
               </div>
-              <div className="mt-0.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/35 shadow-2xs">
+              <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/35 shadow-2xs max-w-full">
                 <Sparkles className="w-2.5 h-2.5 text-[#0078D4] shrink-0" />
-                <span className="text-[10px] sm:text-[11px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent truncate studio-subtitle-standout">
+                <span className="text-[9px] sm:text-[11px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent truncate studio-subtitle-standout">
                   Fundamentals Practice Studio
                 </span>
               </div>
@@ -444,7 +444,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right Controls on Mobile & Tablet */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center justify-end gap-1 sm:gap-1.5 shrink-0">
             {/* Subtle Supabase Real-Time Connection Status Indicator Icon (Mobile/Tablet) */}
             <button
               type="button"
@@ -484,14 +484,17 @@ export const Header: React.FC<HeaderProps> = ({
               {realtimeStatus === 'offline' && (
                 <WifiOff className="w-3.5 h-3.5 text-rose-600" />
               )}
-              <span className="hidden sm:inline capitalize">{realtimeStatus}</span>
+              <span className="hidden md:inline capitalize">{realtimeStatus}</span>
             </button>
 
-            <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
+            <div className="hidden md:block">
+              <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
+            </div>
+
             <button
               type="button"
               onClick={toggleMenuBar}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer border ${
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer border ${
                 isMenuBarHidden
                   ? 'bg-blue-50 text-[#0078D4] border-blue-200 hover:bg-blue-100'
                   : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80'
@@ -500,7 +503,7 @@ export const Header: React.FC<HeaderProps> = ({
               aria-expanded={!isMenuBarHidden}
             >
               <Layers className="w-3.5 h-3.5 text-[#0078D4]" />
-              <span className="hidden sm:inline">{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
+              <span className="hidden md:inline">{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
             </button>
 
             <DailyStudyGoalRing
@@ -513,7 +516,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => setIsMobileDetailsOpen((prev) => !prev)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer border ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer border ${
                 isMobileDetailsOpen
                   ? 'bg-[#0078D4] text-white border-[#0078D4]'
                   : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200/90'
@@ -522,11 +525,12 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="Toggle Tools and Goal dropdown"
             >
               {isMobileDetailsOpen ? (
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               ) : (
                 <SlidersHorizontal className="w-3.5 h-3.5 text-[#0078D4]" />
               )}
-              <span>Tools &amp; Goal</span>
+              <span className="hidden sm:inline">Tools &amp; Goal</span>
+              <span className="sm:hidden">Tools</span>
               <ChevronDown
                 className={`w-3.5 h-3.5 transition-transform duration-200 ${
                   isMobileDetailsOpen ? 'rotate-180' : ''
@@ -539,11 +543,11 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onLogout}
-                className="group relative flex items-center justify-center hover:justify-start gap-0 hover:gap-2 px-2.5 hover:px-3.5 py-1.5 max-w-[38px] hover:max-w-[132px] overflow-hidden rounded-xl bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
+                className="group relative flex items-center justify-center hover:justify-start gap-0 hover:gap-2 px-2 hover:px-3 py-1.5 max-w-[34px] sm:max-w-[38px] hover:max-w-[128px] overflow-hidden rounded-xl bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
                 title={userEmail ? `Signed in as ${userEmail} • Click to open 17s Secure Exit & WhatsApp Study Report` : 'Sign out & Save Progress'}
                 aria-label="Sign out"
               >
-                <ArrowLeftOnRectangle className="w-4 h-4 shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
+                <ArrowLeftOnRectangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
                 <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 max-w-0 group-hover:max-w-[80px] transition-all duration-300 ease-in-out font-extrabold tracking-tight">
                   Sign out
                 </span>

@@ -2411,31 +2411,25 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               onSpeakingChange={setIsSpeaking}
             />
 
-            {/* Scenario Narrative Box */}
-            <div className="relative bg-slate-50/80 rounded-xl p-5 border-l-4 border-[#0078D4] border-t border-r border-b border-slate-200/60 shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                <div className="flex items-start gap-3 grow">
-                  <div className="p-2 rounded-lg bg-blue-100/70 text-[#0078D4] shrink-0 mt-0.5">
+            {/* Scenario Narrative Box (Full-Width Text Layout) */}
+            <div className="relative w-full bg-slate-50/80 rounded-xl p-4 sm:p-5 border-l-4 border-[#0078D4] border-t border-r border-b border-slate-200/60 shadow-xs space-y-3">
+              {/* Top Header Row: Scenario Context Label + ELI5 / Knowledge Check Toggles */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-200/70">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-blue-100/70 text-[#0078D4] shrink-0">
                     <Info className="w-4 h-4" />
                   </div>
-                  <div className="grow">
-                    <h3 className="text-xs font-bold tracking-wider uppercase text-blue-900 mb-1.5 flex items-center gap-1.5 flex-wrap">
-                      <span>Scenario Context</span>
-                      <span className="text-[10px] text-slate-400 font-normal lowercase">(hover/click highlighted terms for quick concept definition)</span>
-                    </h3>
-                    <ScenarioTextWithTooltips
-                      text={question.scenario}
-                      concepts={scenarioConcepts}
-                      onSelectConcept={setSelectedConceptId}
-                      isKnowledgeCheckActive={showKnowledgeCheck}
-                      onActivateKnowledgeCheck={() => setShowKnowledgeCheck(true)}
-                    />
-                  </div>
+                  <h3 className="text-xs font-bold tracking-wider uppercase text-blue-900 flex items-center gap-1.5 flex-wrap">
+                    <span>Scenario Context</span>
+                    <span className="text-[10px] text-slate-500 font-normal lowercase">
+                      (hover/click highlighted terms for quick concept definition)
+                    </span>
+                  </h3>
                 </div>
 
                 {/* ELI5 Analogy & Knowledge Check Toggle Switches (Hidden in Exam Simulation Mode) */}
                 {!isExamMode ? (
-                  <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     {/* ELI5 Toggle Button */}
                     <button
                       type="button"
@@ -2494,11 +2488,23 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                     </button>
                   </div>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-amber-300 border border-slate-700 shrink-0 self-start">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-amber-300 border border-slate-700 shrink-0">
                     <ShieldCheck className="w-3.5 h-3.5" />
                     <span>Exam Mode • Hints Disabled</span>
                   </span>
                 )}
+              </div>
+
+              {/* Full-Width Scenario Text Body */}
+              <div className="w-full max-w-none">
+                <ScenarioTextWithTooltips
+                  text={question.scenario}
+                  concepts={scenarioConcepts}
+                  onSelectConcept={setSelectedConceptId}
+                  isKnowledgeCheckActive={showKnowledgeCheck}
+                  onActivateKnowledgeCheck={() => setShowKnowledgeCheck(true)}
+                  textClassName="w-full max-w-none text-slate-700 text-sm sm:text-base leading-relaxed font-normal"
+                />
               </div>
 
               {/* ELI5 Child-Friendly Analogy Card (When ELI5 Toggle is Active) */}

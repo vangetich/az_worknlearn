@@ -81,11 +81,20 @@
   --theme-focus-ring: #38bdf8;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   background-color: var(--theme-bg-body);
   color: var(--theme-text-primary);
   min-height: 100vh;
-  margin: 0;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.25s ease, color 0.25s ease;
 }
@@ -501,7 +510,12 @@ body {
 
 .KenyanFlagQuickSortMotifs {
   position: relative;
-  transition: opacity 0.3s ease, filter 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+  transition: opacity 0.3s ease, filter 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.KenyanFlagQuickSortMotifs.is-all-time-high {
+  border-color: rgba(16, 185, 129, 0.75) !important;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.28), 0 8px 26px rgba(0, 102, 0, 0.16);
 }
 
 .group:hover .KenyanFlagQuickSortMotifs,
@@ -513,11 +527,16 @@ body {
 /* CSS-only shimmer loading animation for .KenyanFlagQuickSortMotifs during Supabase/Postgres data fetching */
 @keyframes kenyanMotifShimmer {
   0% {
-    transform: translateX(-100%) skewX(-18deg);
+    transform: translateX(-110%) skewX(-18deg);
   }
   100% {
     transform: translateX(220%) skewX(-18deg);
   }
+}
+
+.KenyanFlagQuickSortMotifs.is-fetching,
+.KenyanFlagQuickSortMotifs[data-fetching="true"] {
+  border-color: rgba(0, 120, 212, 0.55);
 }
 
 .KenyanFlagQuickSortMotifs.is-fetching::after,
@@ -530,12 +549,13 @@ body {
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0) 0%,
-    rgba(0, 102, 0, 0.08) 25%,
-    rgba(255, 255, 255, 0.65) 50%,
-    rgba(187, 0, 0, 0.08) 75%,
+    rgba(0, 102, 0, 0.12) 22%,
+    rgba(0, 120, 212, 0.16) 38%,
+    rgba(255, 255, 255, 0.78) 50%,
+    rgba(187, 0, 0, 0.14) 68%,
     rgba(255, 255, 255, 0) 100%
   );
-  animation: kenyanMotifShimmer 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: kenyanMotifShimmer 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 /* Smooth 180-degree CSS transform transition for the .KenyanFlagQuickSortMotifs trend arrow indicator */

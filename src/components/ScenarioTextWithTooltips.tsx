@@ -66,7 +66,7 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
 
   // If no concepts available, just return raw text
   if (!concepts || concepts.length === 0) {
-    return <p className={textClassName}>{text}</p>;
+    return <p className={`w-full max-w-none ${textClassName}`}>{text}</p>;
   }
 
   // Create regex pattern matching key terms or acronyms
@@ -90,7 +90,7 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
   );
 
   if (escapedPatterns.length === 0) {
-    return <p className={textClassName}>{text}</p>;
+    return <p className={`w-full max-w-none ${textClassName}`}>{text}</p>;
   }
 
   const combinedRegex = new RegExp(
@@ -103,8 +103,8 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
   const splitParts = text.split(combinedRegex);
 
   return (
-    <div className="relative" ref={containerRef}>
-      <p className={textClassName}>
+    <div className="relative w-full max-w-none" ref={containerRef}>
+      <p className={`w-full max-w-none ${textClassName}`}>
         {splitParts.map((chunk, index) => {
           const matched = escapedPatterns.find(
             (p) => p.pattern.toLowerCase() === chunk.toLowerCase()
