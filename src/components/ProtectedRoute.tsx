@@ -15,6 +15,11 @@ import {
   UserPlus,
   Globe,
   Layers,
+  Key,
+  Eye,
+  EyeOff,
+  ShieldAlert,
+  Send,
 } from 'lucide-react';
 import { supabase, isSupabaseDirectConfigured } from '../lib/supabase';
 import {
@@ -65,13 +70,20 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   });
 
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'admin_reset'>('login');
   const [email, setEmail] = useState<string>('student@az900.ke');
   const [password, setPassword] = useState<string>('Az900Cloud!2025');
   const [fullName, setFullName] = useState<string>('Nairobi Cloud Scholar');
   const [role, setRole] = useState<LearnerRole>('student');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Admin password reset & creation for vangetich@gmail.com
+  const [adminTargetEmail, setAdminTargetEmail] = useState<string>('vangetich@gmail.com');
+  const [adminNewPassword, setAdminNewPassword] = useState<string>('Az900Admin!2026');
+  const [adminConfirmPassword, setAdminConfirmPassword] = useState<string>('Az900Admin!2026');
+  const [showAdminPassword, setShowAdminPassword] = useState<boolean>(false);
 
   // Sync user state with parent if callback provided
   useEffect(() => {
@@ -333,6 +345,63 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
   };
 
+  const handleSetAdminPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const cleanEmail = adminTargetEmail.trim().toLowerCase();
+    if (!cleanEmail) {
+      setErrorMsg('Please specify an admin email address.');
+      return;
+    }
+    if (adminNewPassword.length < 6) {
+      setErrorMsg('New admin password must be at least 6 characters long.');
+      return;
+    }
+    if (adminNewPassword !== adminConfirmPassword) {
+      setErrorMsg('Passwords do not match. Please ensure both fields match.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await authService.setAdminPassword(cleanEmail, adminNewPassword);
+      setSuccessMsg(
+        `Admin password created successfully for ${cleanEmail}! Entering Practice Studio with bootcamp_admin privileges...`
+      );
+      setTimeout(() => {
+        setUser({
+          id: result.user.id,
+          email: result.user.email,
+          full_name: result.user.full_name,
+          role: result.user.role,
+          is_premium: result.user.is_premium,
+          unlocked_modules: result.user.unlocked_modules,
+          auth_source: 'postgres_backend',
+        });
+      }, 700);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to update admin password.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSendAdminResetEmail = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setIsSubmitting(true);
+    try {
+      const res = await authService.sendPasswordReset(adminTargetEmail.trim().toLowerCase());
+      setSuccessMsg(res.message);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to dispatch password recovery request.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (isCheckingAuth) {
     return (
       <div className="min-h-screen bg-[#0F172A] text-white flex flex-col items-center justify-center p-6">
@@ -471,23 +540,28 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             <div className="lg:col-span-5">
               <div className="rounded-3xl bg-slate-900/95 border border-slate-700/80 shadow-2xl p-6 sm:p-7 space-y-5 backdrop-blur-xl">
                 {/* Card Header & Mode Switch */}
-                <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
                   <div>
                     <span className="text-[11px] font-black uppercase tracking-widest text-sky-400 block">
                       Supabase &amp; Postgres Auth
                     </span>
-                    <h2 className="text-lg font-black text-white mt-0.5">
-                      {authMode === 'login' ? 'Sign In to Practice Studio' : 'Register Learner Account'}
+                    <h2 className="text-base sm:text-lg font-black text-white mt-0.5">
+                      {authMode === 'login'
+                        ? 'Sign In to Practice Studio'
+                        : authMode === 'signup'
+                        ? 'Register Learner Account'
+                        : 'Reset / Create Admin Password'}
                     </h2>
                   </div>
-                  <div className="inline-flex p-1 rounded-xl bg-slate-800/90 border border-slate-700 text-xs font-bold">
+                  <div className="inline-flex p-1 rounded-xl bg-slate-800/90 border border-slate-700 text-xs font-bold shrink-0">
                     <button
                       type="button"
                       onClick={() => {
                         setAuthMode('login');
                         setErrorMsg(null);
+                        setSuccessMsg(null);
                       }}
-                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                         authMode === 'login'
                           ? 'bg-[#0078D4] text-white font-black shadow-xs'
                           : 'text-slate-400 hover:text-white'
@@ -501,8 +575,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                       onClick={() => {
                         setAuthMode('signup');
                         setErrorMsg(null);
+                        setSuccessMsg(null);
                       }}
-                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                         authMode === 'signup'
                           ? 'bg-[#0078D4] text-white font-black shadow-xs'
                           : 'text-slate-400 hover:text-white'
@@ -511,40 +586,202 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                       <UserPlus className="w-3.5 h-3.5" />
                       <span>Sign Up</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('admin_reset');
+                        setErrorMsg(null);
+                        setSuccessMsg(null);
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                        authMode === 'admin_reset'
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                          : 'text-amber-400/90 hover:text-amber-300'
+                      }`}
+                      title="Reset or Create new admin sign password for vangetich@gmail.com"
+                    >
+                      <Key className="w-3.5 h-3.5" />
+                      <span>Admin</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* 1-Click Instant Demo Access Banner */}
-                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-sky-500/15 via-blue-500/10 to-emerald-500/15 border border-sky-500/30 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span className="text-xs font-black text-white">
-                        Instant Demo Cloud Learner
-                      </span>
+                {/* 1-Click Instant Demo Access Banner (visible on login & signup) */}
+                {authMode !== 'admin_reset' && (
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-sky-500/15 via-blue-500/10 to-emerald-500/15 border border-sky-500/30 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span className="text-xs font-black text-white">
+                          Instant Demo Cloud Learner
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 truncate mt-0.5">
+                        Pre-seeded Postgres profile (<code className="text-sky-300">student@az900.ke</code>)
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-300 truncate mt-0.5">
-                      Pre-seeded Postgres profile (<code className="text-sky-300">student@az900.ke</code>)
-                    </p>
+                    <button
+                      type="button"
+                      onClick={handleQuickDemoLogin}
+                      disabled={isSubmitting}
+                      className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 shadow-md cursor-pointer shrink-0"
+                    >
+                      <span>1-Click Enter</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleQuickDemoLogin}
-                    disabled={isSubmitting}
-                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 shadow-md cursor-pointer shrink-0"
-                  >
-                    <span>1-Click Enter</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                )}
 
                 {errorMsg && (
-                  <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-2">
+                  <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-2 animate-in fade-in">
                     <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     <span>{errorMsg}</span>
                   </div>
                 )}
 
+                {successMsg && (
+                  <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 text-xs flex items-start gap-2 animate-in fade-in">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>{successMsg}</span>
+                  </div>
+                )}
+
+                {/* Dedicated Admin Password Reset / Create Form */}
+                {authMode === 'admin_reset' ? (
+                  <form onSubmit={handleSetAdminPassword} className="space-y-3.5">
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                        <ShieldCheck className="w-4 h-4 text-amber-400" />
+                        <span>Exclusive Sole Administrator Security</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        Designated Lead Administrator:{' '}
+                        <code className="text-amber-300 font-bold">vangetich@gmail.com</code>.
+                        Setting a new password grants immediate <code className="text-sky-300">bootcamp_admin</code> access,
+                        all 12 unlocked modules, and question bank CRUD authority.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Admin Email Address
+                      </label>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="email"
+                          value={adminTargetEmail}
+                          onChange={(e) => setAdminTargetEmail(e.target.value)}
+                          placeholder="vangetich@gmail.com"
+                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-300">
+                          New Admin Password
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowAdminPassword(!showAdminPassword)}
+                          className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                        >
+                          {showAdminPassword ? (
+                            <>
+                              <EyeOff className="w-3 h-3" />
+                              <span>Hide</span>
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-3 h-3" />
+                              <span>Show</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showAdminPassword ? 'text' : 'password'}
+                          value={adminNewPassword}
+                          onChange={(e) => setAdminNewPassword(e.target.value)}
+                          placeholder="••••••••••••"
+                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                          required
+                          minLength={6}
+                        />
+                      </div>
+                      <span className="text-[10px] text-slate-400 mt-0.5 block">
+                        Minimum 6 characters. Use letters, numbers, and symbols.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Confirm New Admin Password
+                      </label>
+                      <div className="relative">
+                        <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showAdminPassword ? 'text' : 'password'}
+                          value={adminConfirmPassword}
+                          onChange={(e) => setAdminConfirmPassword(e.target.value)}
+                          placeholder="••••••••••••"
+                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                          required
+                          minLength={6}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-1 space-y-2">
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 disabled:opacity-50 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                            <span>Updating Admin Password...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                            <span>Set Admin Password &amp; Sign In</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSendAdminResetEmail}
+                        disabled={isSubmitting}
+                        className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5 text-sky-400" />
+                        <span>Send Firebase Cloud Reset Email</span>
+                      </button>
+
+                      <div className="text-center pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAuthMode('login');
+                            setErrorMsg(null);
+                            setSuccessMsg(null);
+                          }}
+                          className="text-xs text-sky-400 hover:text-sky-300 underline cursor-pointer"
+                        >
+                          Return to Standard Sign In
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                ) : (
                 <form onSubmit={handleFormSubmit} className="space-y-3.5">
                   {authMode === 'signup' && (
                     <div>
@@ -638,6 +875,24 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                     )}
                   </button>
                 </form>
+                )}
+
+                {authMode === 'login' && (
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('admin_reset');
+                        setErrorMsg(null);
+                        setSuccessMsg(null);
+                      }}
+                      className="text-xs text-amber-400 hover:text-amber-300 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Key className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Reset or create new admin sign password for vangetich@gmail.com</span>
+                    </button>
+                  </div>
+                )}
 
                 <div className="relative flex py-1 items-center">
                   <div className="flex-grow border-t border-slate-800" />

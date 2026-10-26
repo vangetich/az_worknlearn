@@ -15,9 +15,25 @@ import {
   ArrowRight,
   MessageSquare,
   Radio,
+  Clock,
+  Play,
+  Pause,
+  Volume2,
+  Sparkles,
+  Compass,
+  AlertTriangle,
+  BookOpen,
+  Layers,
+  ShieldCheck,
+  ChevronRight,
 } from 'lucide-react';
 import { Question } from '../types/quiz';
 import { BUILTIN_QUESTIONS } from '../data/questionBank';
+import {
+  VIRTUAL_STUDY_AREAS,
+  VirtualStudyArea,
+  getStudyAreaById,
+} from '../data/virtualStudyAreas';
 
 interface StudyMessage {
   id: string;
@@ -84,6 +100,7 @@ interface VirtualStudyRoomProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectSharedQuestion?: (questionId: string) => void;
+  initialRoomAreaId?: string;
 }
 
 const PEER_STUDENTS = [
@@ -148,6 +165,7 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
   isOpen,
   onClose,
   onSelectSharedQuestion,
+  initialRoomAreaId,
 }) => {
   // Mode tab: 'hub' (Live 2-User Collaborative Study Hub) vs 'chat' (Community Peer Circle)
   const [activeMode, setActiveMode] = useState<'hub' | 'chat'>('hub');
@@ -188,18 +206,63 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
     }
   });
 
-  // Active Study Hub Room Code
+  // Active Study Hub Room Code (synchronized with detailed Study Room Area)
   const [roomId, setRoomId] = useState<string>(() => {
     try {
+      if (initialRoomAreaId && initialRoomAreaId.trim()) {
+        return initialRoomAreaId.trim().toUpperCase();
+      }
       const params = new URLSearchParams(window.location.search);
       const urlHub = params.get('hub');
       if (urlHub) return urlHub.trim().toUpperCase();
-      return localStorage.getItem(ROOM_ID_STORAGE_KEY) || 'AZ900-HUB';
+      return localStorage.getItem(ROOM_ID_STORAGE_KEY) || 'AZ900-CONCEPTS';
     } catch {
-      return 'AZ900-HUB';
+      return 'AZ900-CONCEPTS';
     }
   });
   const [roomInput, setRoomInput] = useState<string>(roomId);
+
+  // Sync initialRoomAreaId when updated by parent
+  useEffect(() => {
+    if (initialRoomAreaId && initialRoomAreaId.trim()) {
+      const target = initialRoomAreaId.trim().toUpperCase();
+      if (target !== roomId) {
+        setRoomId(target);
+        setRoomInput(target);
+      }
+    }
+  }, [initialRoomAreaId]);
+
+  // Current Study Room Area metadata
+  const activeArea = getStudyAreaById(roomId);
+  const [isAreaDossierExpanded, setIsAreaDossierExpanded] = useState<boolean>(true);
+  const [timerSecondsLeft, setTimerSecondsLeft] = useState<number>(() =>
+    roomId.includes('WAR-ROOM') ? 45 * 60 : 25 * 60
+  );
+  const [isTimerActive, setIsTimerActive] = useState<boolean>(false);
+  const [isAmbiancePlaying, setIsAmbiancePlaying] = useState<boolean>(false);
+
+  // Re-arm timer when room area changes
+  useEffect(() => {
+    const isWarRoom = roomId.includes('WAR-ROOM');
+    setTimerSecondsLeft(isWarRoom ? 45 * 60 : 25 * 60);
+    setIsTimerActive(false);
+  }, [roomId]);
+
+  // Countdown ticker for area timer
+  useEffect(() => {
+    if (!isTimerActive) return;
+    const interval = setInterval(() => {
+      setTimerSecondsLeft((prev) => {
+        if (prev <= 1) {
+          setIsTimerActive(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isTimerActive]);
 
   // Server-authoritative Study Hub state
   const [hubState, setHubState] = useState<StudyHubRoomState | null>(null);
@@ -573,6 +636,26 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
     }, 1500);
   };
 
+  const handleLoadAreaQuestion = () => {
+    const area = getStudyAreaById(roomId);
+    let matchedQs = BUILTIN_QUESTIONS;
+    if (area.pathId) {
+      matchedQs = BUILTIN_QUESTIONS.filter((q) => q.learningPathId === area.pathId);
+    } else if (roomId.includes('WAR-ROOM')) {
+      matchedQs = BUILTIN_QUESTIONS.filter(
+        (q) => q.difficulty === 'Intermediate' || q.difficulty === 'Advanced'
+      );
+    } else if (roomId.includes('CLINIC')) {
+      matchedQs = BUILTIN_QUESTIONS.filter(
+        (q) => Object.keys(q.distractorBreakdown || {}).length >= 3
+      );
+    }
+    if (matchedQs.length === 0) matchedQs = BUILTIN_QUESTIONS;
+    const randomPick = matchedQs[Math.floor(Math.random() * matchedQs.length)];
+    const snapshot = toQuestionSnapshot(randomPick);
+    dispatchHubEvent('question:set', { question: snapshot });
+  };
+
   if (!isOpen) return null;
 
   const activeHubQuestion =
@@ -585,8 +668,12 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
   const myParticipant = hubState?.participants?.[myUserId];
   const partnerParticipants = participantList.filter((p) => p.userId !== myUserId);
 
+  const timerMinutes = Math.floor(timerSecondsLeft / 60);
+  const timerSecs = timerSecondsLeft % 60;
+  const formattedTimer = `${String(timerMinutes).padStart(2, '0')}:${String(timerSecs).padStart(2, '0')}`;
+
   return (
-    <div className="fixed inset-y-0 right-0 z-[120] w-full max-w-[100vw] sm:w-[480px] md:w-[540px] h-[100dvh] max-h-[100dvh] bg-white/98 backdrop-blur-xl border-l border-slate-200 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-y-0 right-0 z-[120] w-full max-w-[100vw] sm:w-[480px] md:w-[560px] h-[100dvh] max-h-[100dvh] bg-white/98 backdrop-blur-xl border-l border-slate-200 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 font-sans">
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
@@ -596,15 +683,15 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-extrabold text-sm text-white">
-                Virtual Study Room &amp; Live Hub
+                Virtual Study Room • Study Hub
               </h3>
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>{wsConnected ? 'Live Sync' : 'Synced'}</span>
               </span>
             </div>
-            <p className="text-[11px] text-sky-100/80 truncate max-w-[260px]">
-              Solve scenario questions together in real-time
+            <p className="text-[11px] text-sky-100/80 truncate max-w-[280px]">
+              {activeArea.name} ({activeArea.examWeight})
             </p>
           </div>
         </div>
@@ -613,9 +700,169 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
           type="button"
           onClick={onClose}
           className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+          title="Close Virtual Study Room"
         >
           <X className="w-5 h-5" />
         </button>
+      </div>
+
+      {/* 6 Detailed Virtual Study Room Areas Selector Strip */}
+      <div className="bg-slate-900 text-white px-3 py-2 border-b border-slate-800 shrink-0 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+            <Compass className="w-3 h-3 text-sky-400" />
+            <span>Select Study Room Area:</span>
+          </span>
+          <span className="text-[10px] text-emerald-400 font-bold">
+            {activeArea.onlineCount} peers active in this room
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          {VIRTUAL_STUDY_AREAS.map((area) => {
+            const isSelected = area.id.toUpperCase() === roomId.toUpperCase();
+            return (
+              <button
+                key={area.id}
+                type="button"
+                onClick={() => {
+                  setRoomId(area.id);
+                  setRoomInput(area.id);
+                  localStorage.setItem(ROOM_ID_STORAGE_KEY, area.id);
+                }}
+                className={`px-2.5 py-1 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                  isSelected
+                    ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80'
+                }`}
+              >
+                <span>{area.shortCode}</span>
+                <span
+                  className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-md ${
+                    isSelected ? 'bg-sky-700 text-sky-100' : 'bg-slate-900 text-slate-400'
+                  }`}
+                >
+                  {area.examWeight}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Active Area Interactive Dossier (Mission, Key Topics & Focus Timer) */}
+      <div className="bg-gradient-to-b from-slate-50 to-white border-b border-slate-200 p-3 shrink-0 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-black text-slate-900 truncate">
+                {activeArea.name}
+              </span>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${activeArea.badgeBg}`}>
+                {activeArea.examWeight}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 truncate mt-0.5">
+              {activeArea.mission}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsAreaDossierExpanded(!isAreaDossierExpanded)}
+            className="text-[10px] font-bold text-sky-700 hover:text-sky-900 px-2 py-1 rounded-lg bg-sky-50 border border-sky-200 shrink-0 cursor-pointer"
+          >
+            {isAreaDossierExpanded ? 'Hide Details' : 'View Details'}
+          </button>
+        </div>
+
+        {/* Focus Timer & Soundscape Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/80">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 font-mono font-black text-xs px-2.5 py-1 rounded-lg bg-slate-900 text-amber-300 shadow-2xs">
+              <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+              <span>{formattedTimer}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsTimerActive(!isTimerActive)}
+              className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition-colors"
+              title={isTimerActive ? 'Pause Study Timer' : 'Start Study Timer'}
+            >
+              {isTimerActive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const isWarRoom = roomId.includes('WAR-ROOM');
+                setTimerSecondsLeft(isWarRoom ? 45 * 60 : 25 * 60);
+                setIsTimerActive(false);
+              }}
+              className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition-colors"
+              title="Reset Study Timer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+
+            <span className="hidden xs:inline text-[10px] text-slate-500 font-medium">
+              {activeArea.ambianceLabel}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleLoadAreaQuestion}
+            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-extrabold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+            title="Load an official exam question for this study area into the co-op board"
+          >
+            <Sparkles className="w-3 h-3 text-amber-300" />
+            <span>Load Area Question</span>
+          </button>
+        </div>
+
+        {/* Expanded Area Topic Cues & Cohort Peers */}
+        {isAreaDossierExpanded && (
+          <div className="pt-2 border-t border-slate-100 space-y-2 animate-in fade-in duration-200">
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 mr-1">
+                Area Objectives:
+              </span>
+              {activeArea.keyTopics.map((topic, i) => (
+                <span
+                  key={i}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700"
+                >
+                  {topic}
+                </span>
+              ))}
+            </div>
+
+            {/* Active Peers in this Room Area */}
+            <div className="flex items-center justify-between text-[11px] bg-sky-50/70 p-2 rounded-xl border border-sky-100">
+              <div className="flex items-center gap-2">
+                <div className="flex -space-x-1.5">
+                  {activeArea.activePeers.map((peer, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white border border-slate-300 text-xs shadow-2xs"
+                      title={`${peer.name} (${peer.location}) • ${peer.role}`}
+                    >
+                      {peer.avatar}
+                    </span>
+                  ))}
+                </div>
+                <span className="text-slate-700 font-semibold text-[10px] truncate">
+                  Studying with {activeArea.activePeers.map((p) => p.name).join(', ')}
+                </span>
+              </div>
+              <span className="text-[10px] font-mono font-bold text-sky-700">
+                {activeArea.recommendedDuration}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Mode Switcher Tabs */}

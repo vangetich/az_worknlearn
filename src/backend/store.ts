@@ -128,6 +128,7 @@ class Az900BackendDatabase {
   public quizSessions: DbQuizSession[] = [];
   public paymentTransactions = new Map<string, DbPaymentTransaction>();
   public cohortLeaderboard = new Map<string, DbCohortLeaderboardEntry>();
+  public passwordsByEmail = new Map<string, string>(); // email -> password
 
   constructor() {
     this.seedCurriculumAndQuestions();
@@ -184,14 +185,15 @@ class Az900BackendDatabase {
     const defaultUser: DbUser = {
       id: 'usr-default-learner',
       email: 'vangetich@gmail.com',
-      full_name: 'Cloud Architect Learner',
-      role: 'student',
-      is_premium: false,
-      unlocked_modules: [1, 2, 3, 4],
+      full_name: 'Vincent Kiprono A. (Lead Administrator)',
+      role: 'bootcamp_admin',
+      is_premium: true,
+      unlocked_modules: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
       created_at: new Date().toISOString(),
     };
     this.users.set(defaultUser.id, defaultUser);
     this.usersByEmail.set(defaultUser.email.toLowerCase(), defaultUser.id);
+    this.passwordsByEmail.set('vangetich@gmail.com', 'Az900Admin!2026');
   }
 
   public upsertUser(params: {
@@ -270,6 +272,80 @@ class Az900BackendDatabase {
       }).user;
     }
     return this.users.get('usr-default-learner')!;
+  }
+
+  public getUserByEmail(email: string): DbUser | undefined {
+    const cleanEmail = email.trim().toLowerCase();
+    const userId = this.usersByEmail.get(cleanEmail);
+    if (userId && this.users.has(userId)) {
+      return this.users.get(userId);
+    }
+    return undefined;
+  }
+
+  public setAdminPassword(
+    email: string,
+    newPassword: string
+  ): { success: boolean; user: DbUser; token: string; message: string } {
+    const cleanEmail = email.trim().toLowerCase();
+    this.passwordsByEmail.set(cleanEmail, newPassword.trim());
+
+    let user = this.getUserByEmail(cleanEmail);
+    if (user) {
+      user.role = 'bootcamp_admin';
+      user.is_premium = true;
+      user.unlocked_modules = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+      this.users.set(user.id, user);
+    } else {
+      const created = this.upsertUser({
+        email: cleanEmail,
+        full_name: 'Vincent Kiprono A. (Lead Administrator)',
+        role: 'bootcamp_admin',
+      });
+      user = created.user;
+      user.is_premium = true;
+      user.unlocked_modules = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+      this.users.set(user.id, user);
+    }
+
+    const token = `az900_tok_${Buffer.from(`${user.id}:${Date.now()}`).toString('base64url')}`;
+    this.tokens.set(token, user.id);
+
+    return {
+      success: true,
+      user,
+      token,
+      message: `Admin password updated successfully for ${cleanEmail}. Lead administrator privileges granted.`,
+    };
+  }
+
+  public verifyCredentials(
+    email: string,
+    password?: string
+  ): { isValid: boolean; user?: DbUser; token?: string } {
+    const cleanEmail = email.trim().toLowerCase();
+    const storedPw = this.passwordsByEmail.get(cleanEmail);
+    const user = this.getUserByEmail(cleanEmail);
+
+    if (!storedPw) {
+      if (user) {
+        const token = `az900_tok_${Buffer.from(`${user.id}:${Date.now()}`).toString('base64url')}`;
+        this.tokens.set(token, user.id);
+        return { isValid: true, user, token };
+      }
+      return { isValid: true };
+    }
+
+    if (password && password.trim() === storedPw) {
+      if (user) {
+        const token = `az900_tok_${Buffer.from(`${user.id}:${Date.now()}`).toString('base64url')}`;
+        this.tokens.set(token, user.id);
+        return { isValid: true, user, token };
+      }
+      return { isValid: true };
+    }
+
+    return { isValid: false };
   }
 
   public recordAnswerSubmission(params: {

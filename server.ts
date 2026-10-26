@@ -603,7 +603,7 @@ app.post('/api/auth/signup', (req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
   try {
-    const { email, full_name, fullName, role, uid, firebase_uid, firebase_token } = req.body || {};
+    const { email, password, full_name, fullName, role, uid, firebase_uid, firebase_token } = req.body || {};
     const bearerToken = req.headers.authorization?.startsWith('Bearer ')
       ? req.headers.authorization.slice(7).trim()
       : firebase_token;
@@ -614,14 +614,28 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(400).json({ error: 'Email is required to authenticate.' });
     }
 
+    // Verify password if credential protection is active
+    const credCheck = backendDb.verifyCredentials(effectiveEmail, password);
+    if (!credCheck.isValid) {
+      return res.status(401).json({
+        error: 'Invalid password. Please enter the correct password or use the Reset Admin Password feature.',
+      });
+    }
+
     const effectiveUid = fbClaims?.uid || firebase_uid || uid;
 
     const { user, token } = backendDb.upsertUser({
       id: typeof effectiveUid === 'string' && effectiveUid.trim() ? effectiveUid.trim() : undefined,
       email: effectiveEmail,
       full_name: full_name || fullName || fbClaims?.name,
-      role,
+      role: effectiveEmail.toLowerCase() === SOLE_AUTHORIZED_ADMIN_EMAIL.toLowerCase() ? 'bootcamp_admin' : role,
     });
+
+    if (effectiveEmail.toLowerCase() === SOLE_AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
+      user.role = 'bootcamp_admin';
+      user.is_premium = true;
+      user.unlocked_modules = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    }
 
     if (bearerToken) {
       backendDb.tokens.set(bearerToken, user.id);
@@ -631,13 +645,64 @@ app.post('/api/auth/login', (req, res) => {
     res.json({
       message: 'Authenticated successfully',
       user,
-      token: bearerToken || token,
+      token: bearerToken || credCheck.token || token,
       firebase_linked: Boolean(effectiveUid),
       progress_summary: progressReport.summary,
     });
   } catch (error: any) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Failed to authenticate learner.' });
+  }
+});
+
+// Admin & Account Password Reset / Create Endpoints
+app.post('/api/admin/set-password', (req, res) => {
+  try {
+    const { email, newPassword, password } = req.body || {};
+    const targetEmail = String(email || SOLE_AUTHORIZED_ADMIN_EMAIL).trim().toLowerCase();
+    const desiredPassword = String(newPassword || password || '').trim();
+
+    if (!desiredPassword || desiredPassword.length < 6) {
+      return res.status(400).json({
+        error: 'New admin password must be at least 6 characters long.',
+      });
+    }
+
+    const result = backendDb.setAdminPassword(targetEmail, desiredPassword);
+    res.json({
+      success: true,
+      message: `Admin sign-in password updated successfully for ${targetEmail}.`,
+      user: result.user,
+      token: result.token,
+    });
+  } catch (error: any) {
+    console.error('Set admin password error:', error);
+    res.status(500).json({ error: 'Failed to update admin password.' });
+  }
+});
+
+app.post('/api/auth/reset-password', (req, res) => {
+  try {
+    const { email, newPassword, password } = req.body || {};
+    const targetEmail = String(email || SOLE_AUTHORIZED_ADMIN_EMAIL).trim().toLowerCase();
+    const desiredPassword = String(newPassword || password || '').trim();
+
+    if (!desiredPassword || desiredPassword.length < 6) {
+      return res.status(400).json({
+        error: 'Password must be at least 6 characters long.',
+      });
+    }
+
+    const result = backendDb.setAdminPassword(targetEmail, desiredPassword);
+    res.json({
+      success: true,
+      message: `Password reset successfully for ${targetEmail}.`,
+      user: result.user,
+      token: result.token,
+    });
+  } catch (error: any) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password.' });
   }
 });
 

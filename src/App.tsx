@@ -497,6 +497,17 @@ export default function App() {
     }
   });
 
+  const [selectedStudyRoomAreaId, setSelectedStudyRoomAreaId] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const hub = params.get('hub');
+      if (hub) return hub.trim().toUpperCase();
+      return localStorage.getItem('az900_collab_room_id_v1') || 'AZ900-CONCEPTS';
+    } catch {
+      return 'AZ900-CONCEPTS';
+    }
+  });
+
   // Weak Areas Review modal state
   const [showWeakAreasReview, setShowWeakAreasReview] = useState<boolean>(false);
 
@@ -1280,7 +1291,10 @@ export default function App() {
                       setCurrentQuestionIndex(0);
                     }}
                     onOpenWeakAreasReview={() => setShowWeakAreasReview(true)}
-                    onOpenStudyRoom={() => setShowStudyRoom(true)}
+                    onOpenStudyRoom={(areaId) => {
+                      if (areaId) setSelectedStudyRoomAreaId(areaId);
+                      setShowStudyRoom(true);
+                    }}
                     onOpenUserGuide={() => setShowUserGuideModal(true)}
                   />
 
@@ -2955,6 +2969,7 @@ export default function App() {
         isOpen={showStudyRoom}
         onClose={() => setShowStudyRoom(false)}
         onSelectSharedQuestion={(qId) => setPendingJumpQuestionId(qId)}
+        initialRoomAreaId={selectedStudyRoomAreaId}
       />
 
       {/* Weak Areas Review Mode Modal */}

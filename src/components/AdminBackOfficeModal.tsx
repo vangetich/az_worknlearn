@@ -74,8 +74,69 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
   const [isSessionLocked, setIsSessionLocked] = useState<boolean>(false);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
 
+  // Admin password management state for vangetich@gmail.com
+  const [newAdminPassword, setNewAdminPassword] = useState<string>('');
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState<string>('');
+  const [passwordNotice, setPasswordNotice] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState<boolean>(false);
+
   const isSoleAuthorizedAdmin =
     !isSessionLocked && verifiedAdminEmail.trim().toLowerCase() === SOLE_ADMIN_EMAIL;
+
+  const handleUpdateAdminPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordNotice(null);
+    if (newAdminPassword.length < 6) {
+      setPasswordNotice({
+        type: 'error',
+        message: 'New admin password must be at least 6 characters long.',
+      });
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword) {
+      setPasswordNotice({
+        type: 'error',
+        message: 'Passwords do not match. Please ensure both fields are identical.',
+      });
+      return;
+    }
+    setIsUpdatingPassword(true);
+    try {
+      await authService.setAdminPassword(SOLE_ADMIN_EMAIL, newAdminPassword);
+      setPasswordNotice({
+        type: 'success',
+        message: `Admin sign-in password updated for ${SOLE_ADMIN_EMAIL}! Session privileges renewed.`,
+      });
+      setNewAdminPassword('');
+      setConfirmAdminPassword('');
+    } catch (err: any) {
+      setPasswordNotice({
+        type: 'error',
+        message: err.message || 'Failed to update admin password.',
+      });
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
+  const handleSendAdminResetEmail = async () => {
+    setPasswordNotice(null);
+    setIsUpdatingPassword(true);
+    try {
+      const res = await authService.sendPasswordReset(SOLE_ADMIN_EMAIL);
+      setPasswordNotice({ type: 'success', message: res.message });
+    } catch (err: any) {
+      setPasswordNotice({
+        type: 'error',
+        message: err.message || 'Failed to dispatch reset email.',
+      });
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
 
   useEffect(() => {
     if (initialTab) {
@@ -422,6 +483,99 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
                           </div>
                         ))}
                       </div>
+                    </div>
+
+                    {/* Admin Sign-In Password Reset & Credentials Section */}
+                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border border-amber-300/80 space-y-3.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold">
+                            <KeyRound className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs sm:text-sm font-black text-slate-900">
+                              Admin Sign-In Password Reset &amp; Credentials
+                            </h4>
+                            <p className="text-[11px] text-slate-600">
+                              Manage or reset password credentials for sole administrator account ({SOLE_ADMIN_EMAIL})
+                            </p>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase">
+                          Single-User Admin Gateway
+                        </span>
+                      </div>
+
+                      {passwordNotice && (
+                        <div
+                          className={`p-3 rounded-xl border text-xs font-bold flex items-start gap-2 ${
+                            passwordNotice.type === 'success'
+                              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                              : 'bg-rose-50 border-rose-300 text-rose-900'
+                          }`}
+                        >
+                          {passwordNotice.type === 'success' ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          ) : (
+                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          )}
+                          <span>{passwordNotice.message}</span>
+                        </div>
+                      )}
+
+                      <form onSubmit={handleUpdateAdminPassword} className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              New Admin Password
+                            </label>
+                            <input
+                              type="password"
+                              value={newAdminPassword}
+                              onChange={(e) => setNewAdminPassword(e.target.value)}
+                              placeholder="Min. 6 characters"
+                              className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500"
+                              required
+                              minLength={6}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              Confirm Password
+                            </label>
+                            <input
+                              type="password"
+                              value={confirmAdminPassword}
+                              onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                              placeholder="Re-enter password"
+                              className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500"
+                              required
+                              minLength={6}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                          <button
+                            type="submit"
+                            disabled={isUpdatingPassword}
+                            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>{isUpdatingPassword ? 'Saving Password...' : 'Save New Admin Password'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleSendAdminResetEmail}
+                            disabled={isUpdatingPassword}
+                            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Send Firebase Cloud Reset Email</span>
+                          </button>
+                        </div>
+                      </form>
                     </div>
                   </div>
                 </div>
