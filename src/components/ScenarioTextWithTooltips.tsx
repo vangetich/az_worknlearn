@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BookOpen, Info, Check, ChevronRight } from 'lucide-react';
+import { BookOpen, Zap, Sparkles, ChevronRight } from 'lucide-react';
 import { ConceptDefinition } from './KeyConceptSidePanel';
 
 interface ScenarioTextWithTooltipsProps {
@@ -8,6 +8,7 @@ interface ScenarioTextWithTooltipsProps {
   onSelectConcept: (conceptId: string) => void;
   isKnowledgeCheckActive: boolean;
   onActivateKnowledgeCheck: () => void;
+  textClassName?: string;
 }
 
 export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> = ({
@@ -16,13 +17,30 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
   onSelectConcept,
   isKnowledgeCheckActive,
   onActivateKnowledgeCheck,
+  textClassName = 'text-slate-700 text-sm sm:text-base leading-relaxed font-normal',
 }) => {
   const [activeTooltipTerm, setActiveTooltipTerm] = useState<{
     concept: ConceptDefinition;
     rect: DOMRect;
+    pinnedByClick?: boolean;
   } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const hoverCloseTimeoutRef = useRef<number | null>(null);
+
+  const clearHoverCloseTimeout = () => {
+    if (hoverCloseTimeoutRef.current !== null) {
+      window.clearTimeout(hoverCloseTimeoutRef.current);
+      hoverCloseTimeoutRef.current = null;
+    }
+  };
+
+  const scheduleHoverClose = () => {
+    clearHoverCloseTimeout();
+    hoverCloseTimeoutRef.current = window.setTimeout(() => {
+      setActiveTooltipTerm((prev) => (prev?.pinnedByClick ? prev : null));
+    }, 220);
+  };
 
   // Close tooltip on outside click
   useEffect(() => {
@@ -42,9 +60,13 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
     };
   }, [activeTooltipTerm]);
 
+  useEffect(() => {
+    return () => clearHoverCloseTimeout();
+  }, []);
+
   // If no concepts available, just return raw text
   if (!concepts || concepts.length === 0) {
-    return <p className="text-slate-700 text-sm sm:text-base leading-relaxed font-normal">{text}</p>;
+    return <p className={textClassName}>{text}</p>;
   }
 
   // Create regex pattern matching key terms or acronyms
@@ -56,11 +78,6 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
     }))
     .filter((t) => t.name.length >= 3);
 
-  // Highlight words
-  const parts: (string | { matchedText: string; concept: ConceptDefinition })[] = [];
-  let remainingText = text;
-
-  // Simple token matching
   const regexPatterns = termMatches
     .flatMap((t) => [
       { pattern: t.name, concept: t.concept },
@@ -68,16 +85,18 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
     ])
     .filter((p) => p.pattern && p.pattern.length >= 3);
 
-  // Build sorted regex pattern
-  const escapedPatterns = regexPatterns
-    .sort((a, b) => b.pattern.length - a.pattern.length);
+  const escapedPatterns = regexPatterns.sort(
+    (a, b) => b.pattern.length - a.pattern.length
+  );
 
   if (escapedPatterns.length === 0) {
-    return <p className="text-slate-700 text-sm sm:text-base leading-relaxed font-normal">{text}</p>;
+    return <p className={textClassName}>{text}</p>;
   }
 
   const combinedRegex = new RegExp(
-    `\\b(${escapedPatterns.map((p) => p.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`,
+    `\\b(${escapedPatterns
+      .map((p) => p.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|')})\\b`,
     'gi'
   );
 
@@ -85,7 +104,7 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
 
   return (
     <div className="relative" ref={containerRef}>
-      <p className="text-slate-700 text-sm sm:text-base leading-relaxed font-normal">
+      <p className={textClassName}>
         {splitParts.map((chunk, index) => {
           const matched = escapedPatterns.find(
             (p) => p.pattern.toLowerCase() === chunk.toLowerCase()
@@ -95,18 +114,35 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
             return (
               <span
                 key={index}
-                onClick={(e) => {
+                onMouseEnter={(e) => {
+                  clearHoverCloseTimeout();
                   const rect = e.currentTarget.getBoundingClientRect();
-                  setActiveTooltipTerm({ concept: matched.concept, rect });
+                  setActiveTooltipTerm((prev) => ({
+                    concept: matched.concept,
+                    rect,
+                    pinnedByClick: prev?.pinnedByClick || false,
+                  }));
+                }}
+                onMouseLeave={scheduleHoverClose}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  clearHoverCloseTimeout();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setActiveTooltipTerm({
+                    concept: matched.concept,
+                    rect,
+                    pinnedByClick: true,
+                  });
                   onSelectConcept(matched.concept.id);
                   if (!isKnowledgeCheckActive) {
                     onActivateKnowledgeCheck();
                   }
                 }}
-                className="cursor-pointer font-medium text-blue-900 bg-blue-50/70 hover:bg-blue-100/90 border-b-2 border-dashed border-[#0078D4] px-0.5 rounded transition-colors inline-block"
-                title={`Knowledge Check: Click to view definition for ${matched.concept.term}`}
+                className="cursor-pointer font-semibold text-[#005A9E] bg-sky-50/90 hover:bg-sky-100 border-b-2 border-dashed border-[#0078D4] px-1 py-0.2 rounded-md transition-all duration-150 inline-flex items-center gap-0.5 hover:shadow-2xs"
+                title={`Azure Concept Snap: Hover or click to view definition for ${matched.concept.term}`}
               >
-                {chunk}
+                <Zap className="w-3 h-3 text-[#0078D4] fill-sky-200 shrink-0 inline" />
+                <span>{chunk}</span>
               </span>
             );
           }
@@ -115,53 +151,72 @@ export const ScenarioTextWithTooltips: React.FC<ScenarioTextWithTooltipsProps> =
         })}
       </p>
 
-      {/* Floating Concept Definition Tooltip */}
+      {/* Floating Animated Azure Concept Snap Definition Card */}
       {activeTooltipTerm && (
         <div
-          className="fixed z-50 w-72 sm:w-80 bg-white rounded-xl border border-sky-300 shadow-xl p-3.5 space-y-2 text-left animate-in fade-in zoom-in-95 duration-150"
+          onMouseEnter={clearHoverCloseTimeout}
+          onMouseLeave={scheduleHoverClose}
+          className="fixed z-50 w-76 sm:w-88 bg-white rounded-2xl border-2 border-[#0078D4]/40 shadow-2xl p-4 space-y-2.5 text-left animate-in fade-in zoom-in-95 slide-in-from-bottom-1 duration-200"
           style={{
-            top: Math.min(window.innerHeight - 220, activeTooltipTerm.rect.bottom + 8),
-            left: Math.max(16, Math.min(window.innerWidth - 336, activeTooltipTerm.rect.left - 20)),
+            top: Math.min(window.innerHeight - 250, activeTooltipTerm.rect.bottom + 8),
+            left: Math.max(
+              16,
+              Math.min(window.innerWidth - 360, activeTooltipTerm.rect.left - 20)
+            ),
           }}
         >
-          <div className="flex items-center justify-between gap-2 border-b border-sky-100 pb-1.5">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#0078D4] flex items-center gap-1">
-              <BookOpen className="w-3 h-3" />
-              <span>Key Concept Definition</span>
+          <div className="flex items-center justify-between gap-2 border-b border-sky-100 pb-2">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-[#0078D4] to-[#005A9E] text-white text-[10px] font-black uppercase tracking-wider shadow-2xs">
+              <Sparkles className="w-3 h-3 text-amber-300" />
+              <span>Azure Concept Snap</span>
             </span>
             <button
+              type="button"
               onClick={() => setActiveTooltipTerm(null)}
-              className="text-slate-400 hover:text-slate-700 text-xs font-bold px-1"
+              className="text-slate-400 hover:text-slate-700 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-slate-100 cursor-pointer"
+              aria-label="Close Azure Concept Snap"
             >
               ✕
             </button>
           </div>
 
-          <div>
-            <h5 className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
-              <span>{activeTooltipTerm.concept.term}</span>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+              <h5 className="font-extrabold text-xs sm:text-sm text-slate-900 flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+                <span>{activeTooltipTerm.concept.term}</span>
+              </h5>
               {activeTooltipTerm.concept.acronym && (
-                <span className="text-[10px] bg-slate-100 px-1 py-0.5 rounded text-slate-600">
+                <span className="text-[10px] font-black bg-sky-100 text-[#005A9E] px-2 py-0.5 rounded-md border border-sky-200">
                   {activeTooltipTerm.concept.acronym}
                 </span>
               )}
-            </h5>
-            <p className="text-xs text-slate-700 mt-1 leading-relaxed bg-slate-50 p-2 rounded-lg border border-slate-100">
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
               {activeTooltipTerm.concept.officialDefinition}
             </p>
+            {activeTooltipTerm.concept.scenarioRelevance && (
+              <div className="text-[11px] text-amber-950 bg-amber-50/90 px-2.5 py-1.5 rounded-lg border border-amber-200/80 leading-snug">
+                <strong className="font-extrabold text-amber-800">Exam Role: </strong>
+                {activeTooltipTerm.concept.scenarioRelevance}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between pt-1 text-[11px]">
-            <span className="text-slate-400">In-situ definition</span>
+            <span className="text-slate-400 font-semibold">
+              Hover or click service keywords
+            </span>
             <button
+              type="button"
               onClick={() => {
                 onSelectConcept(activeTooltipTerm.concept.id);
                 onActivateKnowledgeCheck();
                 setActiveTooltipTerm(null);
               }}
-              className="font-bold text-[#0078D4] hover:underline flex items-center gap-0.5 cursor-pointer"
+              className="font-extrabold text-[#0078D4] hover:underline flex items-center gap-0.5 cursor-pointer"
             >
-              <span>Inspect in side-panel</span>
+              <span>Pin to Side-Panel</span>
               <ChevronRight className="w-3 h-3" />
             </button>
           </div>

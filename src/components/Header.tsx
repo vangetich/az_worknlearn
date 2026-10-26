@@ -22,6 +22,7 @@ import {
   RefreshCw,
   WifiOff,
   LogOut,
+  LogOut as ArrowLeftOnRectangle,
 } from 'lucide-react';
 import {
   MaasaiMedallion,
@@ -38,6 +39,90 @@ import { ThemeToggle } from './ThemeToggle';
 import { GlobalSearchBar } from './GlobalSearchBar';
 import { FocusSessionWidget } from './FocusSessionWidget';
 import { SupabaseRealtimeStatus } from '../hooks/usePostgresDatabase';
+
+/**
+ * Animated Daily Study Goal Circular Progress Ring
+ * Animates stroke-dashoffset smoothly as users answer questions throughout the day.
+ */
+const DailyStudyGoalRing: React.FC<{
+  todayAnsweredCount: number;
+  dailyGoal: number;
+  onClick: () => void;
+  compact?: boolean;
+}> = ({ todayAnsweredCount, dailyGoal, onClick, compact = false }) => {
+  const safeGoal = Math.max(1, dailyGoal);
+  const progressRatio = Math.min(1, todayAnsweredCount / safeGoal);
+  const percentage = Math.round(progressRatio * 100);
+  const isGoalReached = todayAnsweredCount >= safeGoal;
+
+  const size = compact ? 26 : 30;
+  const strokeWidth = compact ? 3 : 3.2;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - progressRatio * circumference;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group relative flex items-center gap-1.5 ${
+        compact ? 'px-2 py-1' : 'px-2.5 py-1'
+      } rounded-xl border text-xs font-extrabold transition-all duration-300 shadow-2xs cursor-pointer shrink-0 ${
+        isGoalReached
+          ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300 ring-1 ring-emerald-400/40'
+          : 'bg-orange-50/90 hover:bg-orange-100 text-orange-900 border-orange-200/90'
+      }`}
+      title={`Daily Study Goal: ${todayAnsweredCount}/${safeGoal} questions solved today (${percentage}%) • Click to configure daily session target`}
+      aria-label={`Daily Study Goal progress: ${todayAnsweredCount} of ${safeGoal} questions (${percentage}%)`}
+    >
+      <div className="relative flex items-center justify-center shrink-0" style={{ width: size, height: size }}>
+        <svg
+          width={size}
+          height={size}
+          viewBox={`0 0 ${size} ${size}`}
+          className="-rotate-90 transform overflow-visible"
+        >
+          {/* Background Track Ring */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="transparent"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            className={isGoalReached ? 'text-emerald-200' : 'text-orange-200/80'}
+          />
+          {/* Animated Progress Ring */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="transparent"
+            stroke={isGoalReached ? '#059669' : '#ea580c'}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            style={{
+              transition: 'stroke-dashoffset 0.75s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.3s ease',
+            }}
+          />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-[8px] font-black tracking-tighter">
+          {isGoalReached ? '✓' : `${percentage}%`}
+        </span>
+      </div>
+      <div className="flex flex-col items-start leading-none">
+        <span className="text-[9px] uppercase tracking-wider font-black opacity-75 hidden sm:inline">
+          Daily Goal
+        </span>
+        <span className="text-[11px] font-black tabular-nums">
+          {todayAnsweredCount}/{safeGoal}
+        </span>
+      </div>
+    </button>
+  );
+};
 
 export type AppTab =
   | 'quiz'
@@ -418,6 +503,13 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden sm:inline">{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
             </button>
 
+            <DailyStudyGoalRing
+              todayAnsweredCount={todayAnsweredCount}
+              dailyGoal={dailyGoal}
+              onClick={() => setShowGoalAlertsModal(true)}
+              compact={true}
+            />
+
             <button
               type="button"
               onClick={() => setIsMobileDetailsOpen((prev) => !prev)}
@@ -435,15 +527,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <SlidersHorizontal className="w-3.5 h-3.5 text-[#0078D4]" />
               )}
               <span>Tools &amp; Goal</span>
-              <span
-                className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                  isMobileDetailsOpen
-                    ? 'bg-white/20 text-white'
-                    : 'bg-orange-100 text-orange-900'
-                }`}
-              >
-                {todayAnsweredCount}/{dailyGoal}
-              </span>
               <ChevronDown
                 className={`w-3.5 h-3.5 transition-transform duration-200 ${
                   isMobileDetailsOpen ? 'rotate-180' : ''
@@ -451,17 +534,19 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </button>
 
-            {/* Mobile & Tablet Visible Larger Sign Out Button with Interactive Hover Features */}
+            {/* Mobile & Tablet Compact Red Sign Out Button with Smooth Width Expansion on Hover */}
             {onLogout && (
               <button
                 type="button"
                 onClick={onLogout}
-                className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-50 via-red-50 to-rose-100 hover:from-rose-600 hover:via-red-600 hover:to-rose-700 text-rose-700 hover:text-white border border-rose-300 hover:border-rose-600 text-xs font-black transition-all duration-200 shadow-2xs hover:shadow-md hover:scale-105 active:scale-95 cursor-pointer shrink-0"
-                title={userEmail ? `Signed in as ${userEmail} • Click to open 17s Secure Exit & WhatsApp Study Report` : 'Sign Out & Save Progress'}
-                aria-label="Sign out of study session"
+                className="group relative flex items-center justify-center hover:justify-start gap-0 hover:gap-2 px-2.5 hover:px-3.5 py-1.5 max-w-[38px] hover:max-w-[132px] overflow-hidden rounded-xl bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
+                title={userEmail ? `Signed in as ${userEmail} • Click to open 17s Secure Exit & WhatsApp Study Report` : 'Sign out & Save Progress'}
+                aria-label="Sign out"
               >
-                <LogOut className="w-3.5 h-3.5 transition-transform duration-200 group-hover:-translate-x-0.5 group-hover:scale-110" />
-                <span className="font-extrabold tracking-tight">Sign Out</span>
+                <ArrowLeftOnRectangle className="w-4 h-4 shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
+                <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 max-w-0 group-hover:max-w-[80px] transition-all duration-300 ease-in-out font-extrabold tracking-tight">
+                  Sign out
+                </span>
               </button>
             )}
           </div>
@@ -667,15 +752,12 @@ export const Header: React.FC<HeaderProps> = ({
 
             <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
 
-            <button
-              type="button"
+            <DailyStudyGoalRing
+              todayAnsweredCount={todayAnsweredCount}
+              dailyGoal={dailyGoal}
               onClick={() => setShowGoalAlertsModal(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200/80 text-xs font-bold transition-all shadow-2xs cursor-pointer group shrink-0"
-              title="Set daily quiz question goal and custom alert preferences"
-            >
-              <Target className="w-3.5 h-3.5 text-orange-600 group-hover:scale-110 transition-transform" />
-              <span className="hidden xl:inline">Goal</span>
-            </button>
+              compact={false}
+            />
 
             {onOpenReviewSession && (
               <button
@@ -699,10 +781,10 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={onOpenUserGuide}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-[#0078D4] border border-sky-200/80 text-xs font-bold transition-all shadow-2xs cursor-pointer group shrink-0"
-                title="AZ-900 Studio User Guide & FAQ: Comprehensive features breakdown and printable PDF"
+                title="AZ-900 Studio User Guide, README & Build History: Comprehensive features breakdown and printable PDF"
               >
                 <BookOpen className="w-3.5 h-3.5 text-[#0078D4] group-hover:scale-110 transition-transform" />
-                <span className="hidden xl:inline">Guide &amp; PDF</span>
+                <span className="hidden xl:inline">Guide &amp; README</span>
               </button>
             )}
 
@@ -713,12 +795,14 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onLogout}
-                className="group relative flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-50 via-red-50 to-rose-100 hover:from-rose-600 hover:via-red-600 hover:to-rose-700 text-rose-700 hover:text-white border border-rose-300 hover:border-rose-600 text-xs font-black transition-all duration-200 shadow-2xs hover:shadow-md hover:scale-105 active:scale-95 cursor-pointer shrink-0"
-                title={userEmail ? `Signed in as ${userEmail} • Click to open 17s Secure Exit & WhatsApp Study Report` : 'Sign Out & Save Progress'}
-                aria-label="Sign out of study session"
+                className="group relative flex items-center justify-center hover:justify-start gap-0 hover:gap-2 px-2.5 hover:px-3.5 py-1.5 max-w-[38px] hover:max-w-[136px] overflow-hidden rounded-xl bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
+                title={userEmail ? `Signed in as ${userEmail} • Click to open 17s Secure Exit & WhatsApp Study Report` : 'Sign out & Save Progress'}
+                aria-label="Sign out"
               >
-                <LogOut className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5 group-hover:scale-110" />
-                <span className="font-extrabold tracking-wide">Sign Out</span>
+                <ArrowLeftOnRectangle className="w-4 h-4 shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
+                <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 max-w-0 group-hover:max-w-[85px] transition-all duration-300 ease-in-out font-extrabold tracking-wide">
+                  Sign out
+                </span>
               </button>
             )}
 
@@ -1023,9 +1107,10 @@ export const Header: React.FC<HeaderProps> = ({
                   ? 'bg-amber-600 text-white shadow-md ring-1 ring-amber-200 font-black scale-102'
                   : 'bg-white/45 dark:bg-slate-900/45 text-slate-900 dark:text-white hover:bg-white/80 dark:hover:bg-white/20'
               }`}
+              title="Global Peer Leaderboard: Top performers from the Global Harambee Azure Cohort ranked by total questions solved"
             >
               {activeTab === 'leaderboard' ? <WarriorSpearBadge size={14} /> : <Users className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />}
-              <span>Ranks</span>
+              <span>Global Peer Leaderboard</span>
             </button>
 
             <button

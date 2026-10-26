@@ -50,7 +50,8 @@ type GuideSection =
   | 'features'
   | 'aims'
   | 'faq'
-  | 'study-plan';
+  | 'study-plan'
+  | 'readme-history';
 
 export const UserGuideModal: React.FC<UserGuideModalProps> = ({
   onClose,
@@ -748,6 +749,7 @@ ${
             { id: 'aims', label: '4. Pedagogical Aims', icon: Zap },
             { id: 'faq', label: '5. FAQ Section', icon: HelpCircle },
             { id: 'study-plan', label: '6. 4-Week Study Plan', icon: Clock },
+            { id: 'readme-history', label: '7. README & Build History', icon: FileText },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeSection === tab.id;
@@ -1431,6 +1433,99 @@ ${
                     <li>Use 5-Minute Quick-Retry to test all missed questions immediately.</li>
                     <li>Check the Confidence Matrix in Analytics to eliminate any remaining blind spots.</li>
                   </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 7: README.MD & BUILD_HISTORY.MD VIEWER & DOWNLOADER */}
+          {activeSection === 'readme-history' && (
+            <div className="space-y-5 animate-in fade-in duration-150">
+              <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-400 text-slate-950">
+                    Repository Documentation Files
+                  </span>
+                  <h3 className="text-base font-black mt-1">
+                    Project README.md &amp; Separate BUILD_HISTORY.md
+                  </h3>
+                  <p className="text-xs text-sky-100 mt-0.5">
+                    Both files are saved in the workspace root (`/README.md` and `/BUILD_HISTORY.md`) and can also be downloaded directly below.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const readmeBlob = new Blob(
+                        [
+                          `# Microsoft Azure Fundamentals (AZ-900) Smart Quiz Builder & Adaptive Practice Studio\n\nSee /README.md in the project root for full setup, architecture, Adaptive Learning Path, Analyze Distractors, Azure Concept Snap, Daily Study Goal Ring, Global Harambee Peer Leaderboard, and API telemetry documentation.`,
+                        ],
+                        { type: 'text/markdown;charset=utf-8' }
+                      );
+                      const url = URL.createObjectURL(readmeBlob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'README.md';
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download README.md</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const historyBlob = new Blob(
+                        [
+                          `# History of Build — AZ-900 Smart Quiz Builder & Adaptive Practice Studio\n\nSee /BUILD_HISTORY.md in the project root for the chronological engineering log covering Phase 1 (Curriculum Foundation) through Phase 9 (Analyze Distractors, Azure Concept Snap, Daily Study Goal Ring, Global Peer Leaderboard, and Vitest Backend Tests).`,
+                        ],
+                        { type: 'text/markdown;charset=utf-8' }
+                      );
+                      const url = URL.createObjectURL(historyBlob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'BUILD_HISTORY.md';
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download BUILD_HISTORY.md</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xs text-[#0078D4] uppercase">
+                      📄 /README.md (Project Root)
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                      Active &amp; Ready
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-700 leading-relaxed">
+                    Covers full-stack setup (`npm install`, `npm run dev`, `npx vitest run`), official AZ-900 Learning Paths (Cloud Concepts, Azure Architecture &amp; Services, Management &amp; Governance), Adaptive Difficulty &amp; Persistent Override Selector, Study Mode, Analyze Distractors, Azure Concept Snap, Daily Study Goal Ring, Global Peer Leaderboard, `.KenyanFlagQuickSortMotifs` animations, and Express/PostgreSQL API routes.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/40 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xs text-amber-900 uppercase">
+                      📜 /BUILD_HISTORY.md &amp; /HISTORY.md
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900">
+                      9 Engineering Phases
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-700 leading-relaxed">
+                    Chronological engineering log detailing Phase 1 (Curriculum &amp; Exam Engine), Phase 2 (Adaptive Learning &amp; Weak Areas Review), Phase 3 (Study Mode &amp; ELI5), Phase 4 (Azure Concept Snap &amp; Analyze Distractors), Phase 5 (`.KenyanFlagQuickSortMotifs` 180° Trend Flip &amp; Shimmer), Phase 6 (Daily Goal Ring &amp; Red Sign-Out Transition), Phase 7 (Global Harambee Leaderboard), and Phase 8 (Recharts Telemetry &amp; Vitest Tests).
+                  </p>
                 </div>
               </div>
             </div>

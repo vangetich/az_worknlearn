@@ -187,12 +187,43 @@ export default function App() {
     };
   }, []);
 
-  // Filter selections for Practice Mode
+  // Filter selections for Practice Mode (Difficulty filter persisted in localStorage to override dynamic difficulty)
   const [selectedPathId, setSelectedPathId] = useState<number | 'all'>('all');
   const [selectedModuleId, setSelectedModuleId] = useState<number | 'all'>('all');
-  const [selectedDifficultyFilter, setSelectedDifficultyFilter] = useState<
+  const [selectedDifficultyFilter, setSelectedDifficultyFilterState] = useState<
     'all' | 'Fundamental' | 'Intermediate' | 'Advanced'
-  >('all');
+  >(() => {
+    try {
+      const saved = localStorage.getItem('az900_persistent_difficulty_filter_v1');
+      if (
+        saved === 'Fundamental' ||
+        saved === 'Intermediate' ||
+        saved === 'Advanced' ||
+        saved === 'all'
+      ) {
+        return saved;
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return 'all';
+  });
+
+  const [isMotifShimmering, setIsMotifShimmering] = useState<boolean>(false);
+  const [trendScoreFlipParity, setTrendScoreFlipParity] = useState<boolean>(false);
+
+  const setSelectedDifficultyFilter = (
+    nextFilter: 'all' | 'Fundamental' | 'Intermediate' | 'Advanced'
+  ) => {
+    setSelectedDifficultyFilterState(nextFilter);
+    try {
+      localStorage.setItem('az900_persistent_difficulty_filter_v1', nextFilter);
+    } catch {
+      // ignore storage errors
+    }
+    setIsMotifShimmering(true);
+    setTimeout(() => setIsMotifShimmering(false), 650);
+  };
   const [onlyBookmarks, setOnlyBookmarks] = useState<boolean>(false);
   const [onlyAiGenerated, setOnlyAiGenerated] = useState<boolean>(false);
   const [onlyUnresolvedMistakes, setOnlyUnresolvedMistakes] = useState<boolean>(false);
@@ -1200,12 +1231,20 @@ export default function App() {
               const trendDelta = currentPerf - referenceScore;
               const isImproved = trendDelta >= 0;
 
+              const isFetchingState = realtimeStatus === 'syncing' || isMotifShimmering;
+              const shouldFlipTrendArrow = !isImproved || trendScoreFlipParity;
+
               return (
-              <div className="KenyanFlagQuickSortMotifs group relative overflow-hidden bg-white rounded-2xl border border-slate-200/90 hover:border-[#006600]/40 card-elevation p-3.5 sm:px-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 transition-all duration-300 ease-out hover:scale-[1.01] hover:animate-pulse hover:animate-kenyan-pulse hover:shadow-md">
+              <div
+                data-fetching={isFetchingState ? 'true' : 'false'}
+                className={`KenyanFlagQuickSortMotifs ${
+                  isFetchingState ? 'is-fetching' : ''
+                } group relative overflow-hidden bg-white rounded-2xl border border-slate-200/90 hover:border-[#006600]/40 card-elevation p-3.5 sm:px-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 transition-all duration-300 ease-out hover:scale-[1.01] hover:animate-pulse hover:animate-kenyan-pulse hover:shadow-md`}
+              >
                 {/* Random & Partially Animated Kenyan Motifs in Kenyan Flag Colours (Black, Red #BB0000, Green #006600, White) */}
                 <KenyanFlagQuickSortMotifs />
 
-                {/* Left: Quick-Sort Toggle Buttons */}
+                {/* Left: Quick-Sort Toggle Buttons & Persistent Difficulty Level Dropdown Selector */}
                 <div className="relative z-10 flex flex-wrap items-center gap-1.5">
                   <span
                     className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5 mr-1 px-2.5 py-1 rounded-xl bg-white/90 border border-slate-200/80 shadow-2xs backdrop-blur-xs"
@@ -1244,28 +1283,81 @@ export default function App() {
                       </button>
                     );
                   })}
+
+                  {/* Persistent Difficulty Level Dropdown Selector (Overrides Dynamic Difficulty Adjustment) */}
+                  <div className="inline-flex items-center gap-1.5 ml-0.5 px-2.5 py-1 rounded-xl bg-white/95 border border-slate-300 shadow-2xs backdrop-blur-xs">
+                    <Filter className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+                    <label
+                      htmlFor="persistent-difficulty-selector"
+                      className="text-[11px] font-black uppercase tracking-wider text-slate-700 whitespace-nowrap"
+                    >
+                      Difficulty:
+                    </label>
+                    <select
+                      id="persistent-difficulty-selector"
+                      aria-label="Persistent difficulty level filter"
+                      value={selectedDifficultyFilter}
+                      onChange={(e) => {
+                        const val = e.target.value as
+                          | 'all'
+                          | 'Fundamental'
+                          | 'Intermediate'
+                          | 'Advanced';
+                        setSelectedDifficultyFilter(val);
+                        handleChangeLockedDifficulty(val === 'all' ? null : val);
+                        setCurrentQuestionIndex(0);
+                      }}
+                      className="text-xs font-extrabold text-slate-900 bg-transparent focus:outline-none cursor-pointer pr-1"
+                      title="Manually filter question bank by difficulty (Fundamental, Intermediate, Advanced), overriding automatic dynamic difficulty adjustment"
+                    >
+                      <option value="all">All Levels (Adaptive Auto)</option>
+                      <option value="Fundamental">Fundamental (Override)</option>
+                      <option value="Intermediate">Intermediate (Override)</option>
+                      <option value="Advanced">Advanced (Override)</option>
+                    </select>
+                    {selectedDifficultyFilter !== 'all' && (
+                      <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black uppercase tracking-wider">
+                        Override
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Right: Dynamic Session Performance Trend Indicator, Download Report PDF Button & Study Zone Controls */}
                 <div className="relative z-10 flex flex-wrap items-center gap-2">
-                  {/* Dynamic Trend Indicator (Up/Down Arrow) vs Last Session */}
+                  {/* Dynamic Trend Indicator with Smooth 180-Degree CSS Transform Flip Transition */}
                   <div
-                    className={`px-2.5 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 backdrop-blur-xs shadow-2xs transition-all ${
+                    onClick={() => setTrendScoreFlipParity((prev) => !prev)}
+                    className={`px-2.5 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 backdrop-blur-xs shadow-2xs transition-all cursor-pointer select-none ${
                       isImproved
                         ? 'bg-emerald-50/95 text-[#006600] border-emerald-300'
                         : 'bg-red-50/95 text-[#BB0000] border-red-300'
                     }`}
                     title={`Performance Trend: Current ${currentPerf}% vs Last Session ${referenceScore}% (${
                       isImproved ? `+${trendDelta}% Improved` : `${trendDelta}% Declined`
-                    })`}
+                    }) • Smooth 180° flip on score update`}
                   >
-                    {isImproved ? (
-                      <TrendingUp className="w-3.5 h-3.5 text-[#006600] shrink-0" />
-                    ) : (
-                      <TrendingDown className="w-3.5 h-3.5 text-[#BB0000] shrink-0" />
-                    )}
+                    <span
+                      className={`trend-arrow-indicator ${
+                        shouldFlipTrendArrow ? 'rotate-180 is-flipped' : ''
+                      }`}
+                    >
+                      <TrendingUp
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isImproved ? 'text-[#006600]' : 'text-[#BB0000]'
+                        }`}
+                      />
+                    </span>
+                    <span
+                      className={`trend-arrow-indicator font-black ${
+                        shouldFlipTrendArrow ? 'rotate-180 is-flipped' : ''
+                      }`}
+                      aria-hidden="true"
+                    >
+                      ▲
+                    </span>
                     <span>
-                      {isImproved ? '▲' : '▼'} {isImproved ? `+${trendDelta}%` : `${trendDelta}%`}{' '}
+                      {isImproved ? `+${trendDelta}%` : `${trendDelta}%`}{' '}
                       <span className="hidden sm:inline font-bold opacity-85">
                         ({isImproved ? 'Improved' : 'Declined'} vs Last)
                       </span>

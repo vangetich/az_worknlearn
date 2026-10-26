@@ -500,6 +500,7 @@ body {
 }
 
 .KenyanFlagQuickSortMotifs {
+  position: relative;
   transition: opacity 0.3s ease, filter 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -507,6 +508,49 @@ body {
 .KenyanFlagQuickSortMotifs:hover {
   animation: kenyanQuickSortPulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   filter: drop-shadow(0 0 6px rgba(187, 0, 0, 0.18)) drop-shadow(0 0 8px rgba(0, 102, 0, 0.18));
+}
+
+/* CSS-only shimmer loading animation for .KenyanFlagQuickSortMotifs during Supabase/Postgres data fetching */
+@keyframes kenyanMotifShimmer {
+  0% {
+    transform: translateX(-100%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(220%) skewX(-18deg);
+  }
+}
+
+.KenyanFlagQuickSortMotifs.is-fetching::after,
+.KenyanFlagQuickSortMotifs[data-fetching="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(0, 102, 0, 0.08) 25%,
+    rgba(255, 255, 255, 0.65) 50%,
+    rgba(187, 0, 0, 0.08) 75%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: kenyanMotifShimmer 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Smooth 180-degree CSS transform transition for the .KenyanFlagQuickSortMotifs trend arrow indicator */
+.KenyanFlagQuickSortMotifs .trend-arrow-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.KenyanFlagQuickSortMotifs .trend-arrow-indicator.is-flipped,
+.KenyanFlagQuickSortMotifs .trend-arrow-indicator.rotate-180 {
+  transform: rotate(180deg);
 }
 
 @keyframes azureBorderGlow {

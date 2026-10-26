@@ -233,19 +233,19 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-2">
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#0078D4] text-white uppercase tracking-wider">
                 Azure Curriculum
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-400/20 text-amber-300 border border-amber-300/30">
-                Global Harambee Circle
+                Global Harambee Azure Cohort
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Global Learning Leaderboard
+              Global Peer Leaderboard
             </h1>
             <p className="text-sm text-slate-200 max-w-xl">
-              Celebrate collective momentum across East Africa and worldwide Azure learners. Keep up your daily streak and answer questions to climb ranks.
+              Top performers from the <strong>Global Harambee Azure Cohort</strong> ranked by total questions solved, active streak, and exam accuracy.
             </p>
           </div>
 

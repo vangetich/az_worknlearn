@@ -182,6 +182,128 @@ function getFoundationalConceptSentence(question: Question): string {
   return `${serviceLabel} — ${coreSentence}`;
 }
 
+// Map each incorrect option (distractor) to a specific common Azure architectural misconception & counter-rule
+function getArchitecturalMisconceptionForDistractor(
+  question: Question,
+  distractorLetter: string,
+  distractorReason: string
+): {
+  misconceptionName: string;
+  domainTag: string;
+  counterRule: string;
+} {
+  const optText =
+    question.options.find((o) => o.letter === distractorLetter)?.text || '';
+  const combined = `${optText} ${distractorReason} ${question.moduleTitle}`.toLowerCase();
+
+  if (
+    combined.includes('iaas') ||
+    combined.includes('paas') ||
+    combined.includes('saas') ||
+    combined.includes('shared responsibility') ||
+    combined.includes('operating system') ||
+    combined.includes('physical')
+  ) {
+    return {
+      misconceptionName: 'IaaS / PaaS / SaaS Shared Responsibility Boundary Confusion',
+      domainTag: 'Cloud Concepts • Responsibility Matrix',
+      counterRule:
+        'Microsoft always manages physical hosts/datacenter; customers always manage Data, Endpoints & Identities. OS patching belongs to the customer only in IaaS.',
+    };
+  }
+  if (
+    combined.includes('availability zone') ||
+    combined.includes('region pair') ||
+    combined.includes('geography') ||
+    combined.includes('sovereign')
+  ) {
+    return {
+      misconceptionName: 'Availability Zone vs. Region Pair Blast-Radius Misconception',
+      domainTag: 'Azure Architecture • High Availability & DR',
+      counterRule:
+        'Availability Zones protect against single-datacenter failures within 1 region (99.99% SLA); Region Pairs protect against wide-scale regional disasters 300+ miles apart.',
+    };
+  }
+  if (
+    combined.includes('expressroute') ||
+    combined.includes('vpn') ||
+    combined.includes('peering') ||
+    combined.includes('bastion')
+  ) {
+    return {
+      misconceptionName: 'Hybrid Connectivity & Network Transport Misconception',
+      domainTag: 'Azure Networking • Hybrid Topology',
+      counterRule:
+        'VPN Gateway encrypts traffic over the public internet (IPsec/IKE); ExpressRoute uses a dedicated private fiber circuit bypassing the public internet.',
+    };
+  }
+  if (
+    combined.includes('lrs') ||
+    combined.includes('zrs') ||
+    combined.includes('grs') ||
+    combined.includes('gzrs') ||
+    combined.includes('archive') ||
+    combined.includes('cool') ||
+    combined.includes('hot')
+  ) {
+    return {
+      misconceptionName: 'Storage Redundancy Scope vs. Access Tier Lifecycle Trap',
+      domainTag: 'Azure Storage • Durability & Tiers',
+      counterRule:
+        'LRS (1 datacenter), ZRS (3 zones in 1 region), and GRS (2 regions) govern durability; Hot/Cool/Cold/Archive govern cost vs. retrieval latency.',
+    };
+  }
+  if (
+    combined.includes('policy') ||
+    combined.includes('rbac') ||
+    combined.includes('lock') ||
+    combined.includes('entra') ||
+    combined.includes('conditional access')
+  ) {
+    return {
+      misconceptionName: 'RBAC Authorization vs. Azure Policy & Resource Lock Conflation',
+      domainTag: 'Identity & Governance • Control Plane',
+      counterRule:
+        'Entra ID authenticates who you are; RBAC controls what actions a user can perform; Azure Policy enforces resource compliance properties; Locks block deletion/modification even for Owners.',
+    };
+  }
+  if (
+    combined.includes('capex') ||
+    combined.includes('opex') ||
+    combined.includes('pricing calculator') ||
+    combined.includes('tco') ||
+    combined.includes('cost management')
+  ) {
+    return {
+      misconceptionName: 'Cloud Economics & Cost Estimation Tool Misconception',
+      domainTag: 'Cost Management • FinOps',
+      counterRule:
+        'Pricing Calculator estimates new Azure workload costs; TCO Calculator compares on-premises migration savings; Cost Management tracks actual billed spend & budgets.',
+    };
+  }
+  if (
+    combined.includes('monitor') ||
+    combined.includes('advisor') ||
+    combined.includes('service health') ||
+    combined.includes('sentinel') ||
+    combined.includes('defender')
+  ) {
+    return {
+      misconceptionName: 'Observability vs. Proactive Advisory & Security Posture Confusion',
+      domainTag: 'Monitoring & Security • Operations',
+      counterRule:
+        'Azure Monitor collects metrics/logs; Service Health tracks Microsoft platform outages; Azure Advisor gives personalized best-practice recommendations.',
+    };
+  }
+
+  return {
+    misconceptionName: `Module ${question.moduleId} Architectural Constraint Mismatch`,
+    domainTag: `${question.moduleTitle} • Exam Trap`,
+    counterRule:
+      'Always verify whether the scenario requires high availability, lowest operational overhead (PaaS/Serverless), or strict governance boundaries before selecting an option.',
+  };
+}
+
 // Predefined child-friendly, non-technical ELI5 Azure analogies mapped to question concepts & modules
 function getEli5AnalogyForQuestion(question: Question): {
   title: string;
@@ -2441,9 +2563,46 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 {difficultyBadgeConfig.subLabel}
               </span>
             </div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
-              {question.question}
-            </h2>
+            <div className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+              <ScenarioTextWithTooltips
+                text={question.question}
+                concepts={scenarioConcepts}
+                onSelectConcept={setSelectedConceptId}
+                isKnowledgeCheckActive={showKnowledgeCheck}
+                onActivateKnowledgeCheck={() => setShowKnowledgeCheck(true)}
+                textClassName="text-base sm:text-lg font-bold text-slate-900 leading-snug"
+              />
+            </div>
+
+            {/* Azure Concept Snap Interactive Service Pills */}
+            {!isExamMode && scenarioConcepts.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-[#0078D4] bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200/80">
+                  <Zap className="w-3 h-3 text-[#0078D4] fill-sky-200" />
+                  <span>Azure Concept Snap:</span>
+                </span>
+                {scenarioConcepts.slice(0, 4).map((concept) => (
+                  <button
+                    key={concept.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedConceptId(concept.id);
+                      setShowKnowledgeCheck(true);
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white hover:bg-sky-50 text-slate-700 hover:text-[#0078D4] border border-slate-200 hover:border-sky-300 text-[11px] font-bold transition-all shadow-2xs cursor-pointer"
+                    title={`${concept.term}: ${concept.officialDefinition}`}
+                  >
+                    <span>{concept.term.split('(')[0].trim()}</span>
+                    {concept.acronym && (
+                      <span className="text-[9px] font-black text-[#005A9E] bg-sky-100 px-1 rounded">
+                        {concept.acronym}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <p className="text-xs text-slate-500">
               Choose the single best answer that meets all architectural criteria (or click <strong>Skip</strong> to defer for Weak Areas review without penalty):
             </p>
@@ -2864,10 +3023,10 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               </p>
             </div>
 
-            {/* Why Other Options Are Incorrect (Distractor Breakdown) OR 1-Sentence Concept Summary Toggle */}
+            {/* Analyze Distractors (Azure Architectural Misconception Mapper) OR 1-Sentence Concept Summary Toggle */}
             <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 animate-cascade-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3.5">
+                <div className="flex items-center gap-2 text-slate-900 font-extrabold text-sm">
                   {showConceptSummaryOnly ? (
                     <>
                       <BookOpen className="w-4 h-4 text-[#0078D4]" />
@@ -2875,37 +3034,50 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                     </>
                   ) : (
                     <>
-                      <XCircle className="w-4 h-4 text-slate-500" />
-                      <span>Why Other Options Are Incorrect (Exam Distractors):</span>
+                      <ShieldAlert className="w-4 h-4 text-rose-600" />
+                      <span>Analyze Distractors • Azure Architectural Misconception Mapper:</span>
                     </>
                   )}
                 </div>
 
-                {/* Concept Summary Toggle Button */}
-                <button
-                  type="button"
-                  onClick={handleToggleConceptSummary}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
-                    showConceptSummaryOnly
-                      ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-2xs'
-                      : 'bg-white hover:bg-blue-50 text-[#0078D4] border-sky-200 shadow-2xs'
-                  }`}
-                  title="Toggle Concept Summary: Replace distractor explanations with a 1-sentence foundational principle of the Azure service in this question"
-                >
-                  <Sparkles className={`w-3.5 h-3.5 ${showConceptSummaryOnly ? 'text-amber-300' : 'text-[#0078D4]'}`} />
-                  <span>Concept Summary</span>
-                  <div
-                    className={`w-6 h-3.5 rounded-full transition-colors flex items-center p-0.5 ${
-                      showConceptSummaryOnly ? 'bg-amber-400' : 'bg-slate-300'
+                <div className="flex items-center gap-2 flex-wrap">
+                  {showConceptSummaryOnly && (
+                    <button
+                      type="button"
+                      onClick={() => setShowConceptSummaryOnly(false)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-extrabold bg-rose-600 text-white border border-rose-700 shadow-2xs cursor-pointer"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      <span>Analyze Distractors</span>
+                    </button>
+                  )}
+
+                  {/* Concept Summary Toggle Button */}
+                  <button
+                    type="button"
+                    onClick={handleToggleConceptSummary}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                      showConceptSummaryOnly
+                        ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-2xs'
+                        : 'bg-white hover:bg-blue-50 text-[#0078D4] border-sky-200 shadow-2xs'
                     }`}
+                    title="Toggle between Analyze Distractors (Architectural Misconceptions) and 1-Sentence Concept Summary"
                   >
+                    <Sparkles className={`w-3.5 h-3.5 ${showConceptSummaryOnly ? 'text-amber-300' : 'text-[#0078D4]'}`} />
+                    <span>{showConceptSummaryOnly ? 'Showing Summary' : 'Concept Summary'}</span>
                     <div
-                      className={`w-2.5 h-2.5 rounded-full bg-white shadow-xs transition-transform duration-200 ${
-                        showConceptSummaryOnly ? 'translate-x-2.5' : 'translate-x-0'
+                      className={`w-6 h-3.5 rounded-full transition-colors flex items-center p-0.5 ${
+                        showConceptSummaryOnly ? 'bg-amber-400' : 'bg-slate-300'
                       }`}
-                    />
-                  </div>
-                </button>
+                    >
+                      <div
+                        className={`w-2.5 h-2.5 rounded-full bg-white shadow-xs transition-transform duration-200 ${
+                          showConceptSummaryOnly ? 'translate-x-2.5' : 'translate-x-0'
+                        }`}
+                      />
+                    </div>
+                  </button>
+                </div>
               </div>
 
               {showConceptSummaryOnly ? (
@@ -2913,18 +3085,66 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   {getFoundationalConceptSentence(question)}
                 </div>
               ) : (
-                <div className="space-y-2.5">
-                  {question.distractorBreakdown.map((distractor) => (
-                    <div
-                      key={distractor.letter}
-                      className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700 p-2.5 rounded-lg bg-white border border-slate-200/70"
-                    >
-                      <span className="font-bold text-red-600 shrink-0 px-1.5 py-0.5 bg-red-50 rounded border border-red-200 text-xs">
-                        Option {distractor.letter}
-                      </span>
-                      <p className="leading-relaxed font-normal">{distractor.reason}</p>
-                    </div>
-                  ))}
+                <div className="space-y-3">
+                  {question.distractorBreakdown.map((distractor) => {
+                    const misconception = getArchitecturalMisconceptionForDistractor(
+                      question,
+                      distractor.letter,
+                      distractor.reason
+                    );
+                    const distractorOptionText =
+                      question.options.find((o) => o.letter === distractor.letter)?.text || '';
+                    const wasChosenByUser = selectedOption === distractor.letter;
+
+                    return (
+                      <div
+                        key={distractor.letter}
+                        className={`p-3.5 rounded-xl bg-white border transition-all space-y-2 ${
+                          wasChosenByUser
+                            ? 'border-red-300 ring-2 ring-red-500/15 bg-red-50/20'
+                            : 'border-slate-200/80 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-red-700 shrink-0 px-2 py-0.5 bg-red-50 rounded-md border border-red-200 text-xs">
+                              Option {distractor.letter}
+                            </span>
+                            {distractorOptionText && (
+                              <span className="text-xs font-extrabold text-slate-900">
+                                {distractorOptionText}
+                              </span>
+                            )}
+                            {wasChosenByUser && (
+                              <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-wider">
+                                Your Choice
+                              </span>
+                            )}
+                          </div>
+
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 text-[10px] font-extrabold">
+                            <ShieldAlert className="w-3 h-3 text-amber-600 shrink-0" />
+                            <span>Misconception: {misconception.misconceptionName}</span>
+                          </span>
+                        </div>
+
+                        <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-normal">
+                          <strong className="font-bold text-slate-900">Why It Is Wrong: </strong>
+                          {distractor.reason}
+                        </p>
+
+                        <div className="px-3 py-2 rounded-lg bg-sky-50/70 border border-sky-200/70 text-[11px] text-slate-700 flex items-start gap-2">
+                          <CheckCircle className="w-3.5 h-3.5 text-[#0078D4] shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="font-extrabold text-[#005A9E]">
+                              Azure Architectural Rule ({misconception.domainTag}):{' '}
+                            </strong>
+                            <span>{misconception.counterRule}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
