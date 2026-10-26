@@ -16,18 +16,27 @@ import {
   Layers,
   Copy,
   Check,
+  CreditCard,
+  Cloud,
+  Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { ResponsiveModalContainer } from './ResponsiveModalContainer';
-import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { KitengeRibbon } from './MotifDecorations';
 import { AdminDashboard } from './AdminDashboard';
 import { ApiDocumentationModal } from './ApiDocumentationModal';
 import { Question } from '../types/quiz';
 import { authService } from '../services/authService';
-
-const SOLE_ADMIN_EMAIL = 'vangetich@gmail.com';
+import {
+  ADMIN_EMAIL_WHITELIST,
+  PRIMARY_ADMIN_EMAIL,
+  isWhitelistedAdminEmail,
+  verifyAdminRouteCredentials,
+} from '../utils/adminSecurity';
 
 export type AdminOfficeTab =
   | 'question-bank-crud'
+  | 'cloud-mpesa-readiness'
   | 'security-access-rbac'
   | 'telemetry-migrations'
   | 'api-docs';
@@ -39,6 +48,7 @@ export interface AdminBackOfficeModalProps {
   initialTab?: AdminOfficeTab;
   onQuestionSaved?: (newOrUpdatedQuestion: Question) => void;
   onOpenCurriculumReadiness?: () => void;
+  onOpenCloudSyncPortal?: () => void;
 }
 
 export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
@@ -48,31 +58,40 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
   initialTab = 'question-bank-crud',
   onQuestionSaved,
   onOpenCurriculumReadiness,
+  onOpenCloudSyncPortal,
 }) => {
   const [activeTab, setActiveTab] = useState<AdminOfficeTab>(initialTab);
   const [securityReport, setSecurityReport] = useState<any>(null);
   const [telemetryData, setTelemetryData] = useState<any>(null);
   const [supabaseBundle, setSupabaseBundle] = useState<any>(null);
+  const [paymentsOverview, setPaymentsOverview] = useState<any>(null);
+  const [readinessOverview, setReadinessOverview] = useState<any>(null);
   const [activeMigrationIndex, setActiveMigrationIndex] = useState<number>(0);
   const [copiedSql, setCopiedSql] = useState<boolean>(false);
   const [isLoadingSecurity, setIsLoadingSecurity] = useState<boolean>(false);
   const [showFullApiModal, setShowFullApiModal] = useState<boolean>(false);
 
-  // Single-user security gate state (exclusively allocated to vangetich@gmail.com)
+  // Route Protection Layer State (Validates against ADMIN_EMAIL_WHITELIST)
   const storedBackendUser = authService.getStoredBackendUser();
-  const effectiveEmail = (
+  const candidateSessionEmail = (
     userEmail ||
     authService.getCurrentFirebaseUser()?.email ||
     storedBackendUser?.email ||
-    SOLE_ADMIN_EMAIL
+    ''
   )
     .trim()
     .toLowerCase();
 
-  const [verifiedAdminEmail, setVerifiedAdminEmail] = useState<string>(effectiveEmail);
-  const [adminEmailInput, setAdminEmailInput] = useState<string>(SOLE_ADMIN_EMAIL);
+  const [verifiedAdminEmail, setVerifiedAdminEmail] = useState<string>(
+    isWhitelistedAdminEmail(candidateSessionEmail) ? candidateSessionEmail : PRIMARY_ADMIN_EMAIL
+  );
+  const [adminEmailInput, setAdminEmailInput] = useState<string>(
+    isWhitelistedAdminEmail(candidateSessionEmail) ? candidateSessionEmail : PRIMARY_ADMIN_EMAIL
+  );
+  const [adminPasswordInput, setAdminPasswordInput] = useState<string>('');
   const [isSessionLocked, setIsSessionLocked] = useState<boolean>(false);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [isVerifyingRouteGuard, setIsVerifyingRouteGuard] = useState<boolean>(false);
 
   // Admin password management state for vangetich@gmail.com
   const [newAdminPassword, setNewAdminPassword] = useState<string>('');
@@ -84,7 +103,7 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
   const [isUpdatingPassword, setIsUpdatingPassword] = useState<boolean>(false);
 
   const isSoleAuthorizedAdmin =
-    !isSessionLocked && verifiedAdminEmail.trim().toLowerCase() === SOLE_ADMIN_EMAIL;
+    !isSessionLocked && isWhitelistedAdminEmail(verifiedAdminEmail);
 
   const handleUpdateAdminPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,10 +124,10 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
     }
     setIsUpdatingPassword(true);
     try {
-      await authService.setAdminPassword(SOLE_ADMIN_EMAIL, newAdminPassword);
+      await authService.setAdminPassword(PRIMARY_ADMIN_EMAIL, newAdminPassword);
       setPasswordNotice({
         type: 'success',
-        message: `Admin sign-in password updated for ${SOLE_ADMIN_EMAIL}! Session privileges renewed.`,
+        message: `Admin sign-in password updated for ${PRIMARY_ADMIN_EMAIL}! Session privileges renewed.`,
       });
       setNewAdminPassword('');
       setConfirmAdminPassword('');
@@ -126,7 +145,7 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
     setPasswordNotice(null);
     setIsUpdatingPassword(true);
     try {
-      const res = await authService.sendPasswordReset(SOLE_ADMIN_EMAIL);
+      const res = await authService.sendPasswordReset(PRIMARY_ADMIN_EMAIL);
       setPasswordNotice({ type: 'success', message: res.message });
     } catch (err: any) {
       setPasswordNotice({
@@ -147,12 +166,14 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
   const loadBackOfficeData = useCallback(async () => {
     setIsLoadingSecurity(true);
     try {
-      const [secRes, teleRes, supaRes] = await Promise.all([
+      const [secRes, teleRes, supaRes, payRes, readyRes] = await Promise.all([
         fetch('/api/admin/security-status', {
           headers: { 'x-admin-email': verifiedAdminEmail },
         }),
         fetch('/api/telemetry'),
         fetch('/api/supabase/migrations'),
+        fetch('/api/admin/payments-ledger'),
+        fetch('/api/curriculum/readiness-check'),
       ]);
 
       if (secRes.ok) {
@@ -163,6 +184,12 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
       }
       if (supaRes.ok) {
         setSupabaseBundle(await supaRes.json());
+      }
+      if (payRes.ok) {
+        setPaymentsOverview(await payRes.json());
+      }
+      if (readyRes.ok) {
+        setReadinessOverview(await readyRes.json());
       }
     } catch (err) {
       console.error('Error loading Admin Back-Office data:', err);
@@ -177,20 +204,29 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
     }
   }, [isOpen, loadBackOfficeData]);
 
-  const handleVerifySingleAdminIdentity = (e: React.FormEvent) => {
+  const handleVerifySingleAdminIdentity = async (e: React.FormEvent) => {
     e.preventDefault();
-    const candidate = adminEmailInput.trim().toLowerCase();
-    if (candidate === SOLE_ADMIN_EMAIL) {
-      setVerifiedAdminEmail(SOLE_ADMIN_EMAIL);
-      setIsSessionLocked(false);
-      setAuthNotice(
-        `Verified sole administrator session for ${SOLE_ADMIN_EMAIL}. Full Back-Office access granted.`
-      );
-      setTimeout(() => setAuthNotice(null), 4000);
-    } else {
-      setAuthNotice(
-        `Access Denied: This Admin Back-Office is exclusively allocated to ${SOLE_ADMIN_EMAIL}.`
-      );
+    setIsVerifyingRouteGuard(true);
+    setAuthNotice(null);
+    try {
+      const verification = await verifyAdminRouteCredentials({
+        email: adminEmailInput,
+        password: adminPasswordInput || undefined,
+      });
+
+      if (verification.authorized) {
+        setVerifiedAdminEmail(verification.email);
+        setIsSessionLocked(false);
+        setAdminPasswordInput('');
+        setAuthNotice(
+          `Route Protection Verified: ${verification.email} matched against ADMIN_EMAIL_WHITELIST. Full Admin Console unlocked.`
+        );
+        setTimeout(() => setAuthNotice(null), 4000);
+      } else {
+        setAuthNotice(verification.reason || 'Access denied by Admin Route Protection Layer.');
+      }
+    } finally {
+      setIsVerifyingRouteGuard(false);
     }
   };
 
@@ -202,7 +238,7 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
         isOpen={isOpen}
         onClose={onClose}
         maxWidth="4xl"
-        ariaLabel="Admin Back-Office & Single-User Security Console"
+        ariaLabel="Admin Back-Office, Cloud Sync, M-Pesa & Curriculum Control Console"
       >
         <div className="shrink-0">
           <KitengeRibbon height={4} />
@@ -217,15 +253,15 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-extrabold text-base sm:text-lg tracking-tight">
-                  Admin Back-Office &amp; Curriculum Control Center
+                  Admin Dashboard &amp; Back-Office Control Center
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 flex items-center gap-1">
                   <Lock className="w-2.5 h-2.5" />
-                  <span>Exclusive Owner: {SOLE_ADMIN_EMAIL}</span>
+                  <span>Whitelist Protected: {PRIMARY_ADMIN_EMAIL}</span>
                 </span>
               </div>
               <p className="text-xs text-sky-200/85 truncate">
-                Centralized administrative hub for Question Bank CRUD, RBAC Security Rules, SQL Migrations &amp; API Schemas
+                Admin DB, User Accounts, Password Resets, Cloud Sync, M-Pesa Daraja Ledger &amp; Curriculum Readiness
               </p>
             </div>
           </div>
@@ -239,17 +275,17 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
                   ? 'bg-rose-600 text-white border-rose-500'
                   : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/40'
               }`}
-              title="Lock or unlock the single-user Admin Back-Office session"
+              title="Lock or unlock the whitelist-protected Admin Console session"
             >
               {isSessionLocked ? (
                 <>
                   <Lock className="w-3.5 h-3.5" />
-                  <span>Locked</span>
+                  <span>Guard Locked</span>
                 </>
               ) : (
                 <>
                   <Unlock className="w-3.5 h-3.5" />
-                  <span>Admin Verified</span>
+                  <span>Whitelist Verified</span>
                 </>
               )}
             </button>
@@ -264,20 +300,30 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
           </div>
         </div>
 
-        {/* Single-User Security Allocation Banner */}
+        {/* Single-User Whitelist Security Allocation Banner */}
         <div className="px-6 py-2.5 bg-slate-900 text-slate-200 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
               <UserCheck className="w-3 h-3" />
-              <span>Single-User Allocation: {SOLE_ADMIN_EMAIL}</span>
+              <span>Whitelist Route Guard: [{ADMIN_EMAIL_WHITELIST.join(', ')}]</span>
             </span>
             <span className="text-slate-400">•</span>
             <span className="font-mono text-amber-300">
-              firestore.rules: request.auth.token.email == &apos;{SOLE_ADMIN_EMAIL}&apos;
+              Hidden from standard student views
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {onOpenCloudSyncPortal && (
+              <button
+                type="button"
+                onClick={onOpenCloudSyncPortal}
+                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+              >
+                <Cloud className="w-3 h-3" />
+                <span>Open Cloud Sync &amp; M-Pesa Portal</span>
+              </button>
+            )}
             {onOpenCurriculumReadiness && (
               <button
                 type="button"
@@ -285,7 +331,7 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
                 className="px-2.5 py-1 rounded-lg bg-[#0078D4] hover:bg-blue-600 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer"
               >
                 <RefreshCw className="w-3 h-3" />
-                <span>Curriculum &amp; Readiness Check</span>
+                <span>Curriculum Readiness Modal</span>
               </button>
             )}
             <button
@@ -300,44 +346,57 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="px-6 pt-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-2 shrink-0">
+        <div className="px-6 pt-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('question-bank-crud')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
               activeTab === 'question-bank-crud'
                 ? 'bg-white text-amber-800 border-amber-600 shadow-2xs'
                 : 'text-slate-600 border-transparent hover:text-slate-900'
             }`}
           >
             <Database className="w-4 h-4 text-amber-600" />
-            <span>1. Question Bank DB &amp; Curriculum Manager</span>
+            <span>1. Admin Dashboard (Users, Passwords &amp; DB CRUD)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('cloud-mpesa-readiness')}
+            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'cloud-mpesa-readiness'
+                ? 'bg-white text-sky-800 border-sky-600 shadow-2xs'
+                : 'text-slate-600 border-transparent hover:text-slate-900'
+            }`}
+          >
+            <CreditCard className="w-4 h-4 text-sky-600" />
+            <span>2. Cloud Sync, M-Pesa &amp; Curriculum Readiness</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('security-access-rbac')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
               activeTab === 'security-access-rbac'
                 ? 'bg-white text-emerald-800 border-emerald-600 shadow-2xs'
                 : 'text-slate-600 border-transparent hover:text-slate-900'
             }`}
           >
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>2. Single-User Security &amp; Access Control</span>
+            <span>3. Whitelist Route Guard &amp; Admin Password</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('telemetry-migrations')}
-            className={`px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
               activeTab === 'telemetry-migrations'
                 ? 'bg-white text-[#0078D4] border-[#0078D4] shadow-2xs'
                 : 'text-slate-600 border-transparent hover:text-slate-900'
             }`}
           >
             <Activity className="w-4 h-4 text-[#0078D4]" />
-            <span>3. Server Telemetry &amp; SQL Migrations</span>
+            <span>4. Telemetry &amp; SQL Migrations</span>
           </button>
         </div>
 
@@ -350,7 +409,7 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
             </div>
           )}
 
-          {/* Security Gate if Session is Locked or Unverified */}
+          {/* Route Protection Layer Gate if Session is Locked or Unverified */}
           {!isSoleAuthorizedAdmin ? (
             <div className="max-w-lg mx-auto my-6 bg-white rounded-2xl border-2 border-amber-300 p-6 shadow-md space-y-4">
               <div className="flex items-center gap-3">
@@ -359,48 +418,243 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
                 </div>
                 <div>
                   <span className="text-[10px] font-black uppercase tracking-wider text-amber-700">
-                    Restricted Back-Office Area
+                    Admin Route Protection Layer
                   </span>
                   <h3 className="text-base font-extrabold text-slate-900">
-                    Single-User Administrator Verification
+                    Whitelist Email &amp; Credential Verification
                   </h3>
                 </div>
               </div>
 
               <p className="text-xs text-slate-600 leading-relaxed">
-                All administrative curriculum tasks, PostgreSQL question bank writes, and security configurations are exclusively allocated to the sole administrator account (<strong>{SOLE_ADMIN_EMAIL}</strong>).
+                Access to Cloud Sync, M-Pesa Management, Curriculum Readiness, User Account Management, and Question Bank CRUD is restricted by the administrative route protection whitelist (<strong>{PRIMARY_ADMIN_EMAIL}</strong>).
               </p>
 
               <form onSubmit={handleVerifySingleAdminIdentity} className="space-y-3">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Confirm Authorized Administrator Email
+                    Whitelisted Administrator Email
                   </label>
                   <input
                     type="email"
                     value={adminEmailInput}
                     onChange={(e) => setAdminEmailInput(e.target.value)}
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#0078D4]"
-                    placeholder={SOLE_ADMIN_EMAIL}
+                    placeholder={PRIMARY_ADMIN_EMAIL}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Admin Password (Default: AdminAzure2026!)
+                  </label>
+                  <input
+                    type="password"
+                    value={adminPasswordInput}
+                    onChange={(e) => setAdminPasswordInput(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#0078D4]"
+                    placeholder="Enter admin password..."
                   />
                 </div>
                 <button
                   type="submit"
+                  disabled={isVerifyingRouteGuard}
                   className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                 >
                   <Unlock className="w-4 h-4" />
-                  <span>Unlock Admin Back-Office ({SOLE_ADMIN_EMAIL})</span>
+                  <span>
+                    {isVerifyingRouteGuard
+                      ? 'Verifying Whitelist Credentials...'
+                      : `Verify & Unlock Admin Console (${PRIMARY_ADMIN_EMAIL})`}
+                  </span>
                 </button>
               </form>
             </div>
           ) : (
             <>
-              {/* TAB 1: QUESTION BANK CRUD & MODULE STATS */}
+              {/* TAB 1: ADMIN DASHBOARD (USER ACCOUNTS, PASSWORD RESETS & QUESTION BANK CRUD) */}
               {activeTab === 'question-bank-crud' && (
                 <AdminDashboard onQuestionSaved={onQuestionSaved} />
               )}
 
-              {/* TAB 2: SINGLE-USER SECURITY & ACCESS CONTROL */}
+              {/* TAB 2: CLOUD SYNC, M-PESA MANAGEMENT & CURRICULUM READINESS */}
+              {activeTab === 'cloud-mpesa-readiness' && (
+                <div className="space-y-5">
+                  {/* Top KPI Summary Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                        M-Pesa Daraja STK Revenue
+                      </span>
+                      <div className="text-2xl font-black text-slate-900">
+                        KES {paymentsOverview?.total_mpesa_kes ?? 250}
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {paymentsOverview?.completed_transactions ?? 1} confirmed STK callbacks
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-[#0078D4]">
+                        Cloud Sync &amp; Auth Profiles
+                      </span>
+                      <div className="text-2xl font-black text-slate-900">
+                        {paymentsOverview?.cloud_sync_status?.synced_profiles ?? 3} Synced Users
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {paymentsOverview?.cloud_sync_status?.firebase_project || 'Firebase + PostgreSQL'}
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-700">
+                        Curriculum Readiness Version
+                      </span>
+                      <div className="text-lg font-black text-slate-900 truncate">
+                        {readinessOverview?.curriculum_version || '2026.10-AZ900-MSLearn'}
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {readinessOverview?.total_modules ?? 12} Modules • {readinessOverview?.total_questions ?? 27} Verified Qs
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Cloud Sync & M-Pesa Daraja Ledger Card */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <CreditCard className="w-5 h-5 text-emerald-600" />
+                        <div>
+                          <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
+                            M-Pesa Daraja STK Push &amp; Cloud Sync Ledger
+                          </h3>
+                          <p className="text-xs text-slate-500">
+                            Stored administrative transaction records, STK callback receipts, and Cloud Sync state
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={loadBackOfficeData}
+                          className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 flex items-center gap-1 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Refresh Ledger</span>
+                        </button>
+                        {onOpenCloudSyncPortal && (
+                          <button
+                            type="button"
+                            onClick={onOpenCloudSyncPortal}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>Launch Interactive M-Pesa &amp; Cloud Sync Modal</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 bg-slate-50">
+                            <th className="py-2.5 px-3">Receipt / Checkout ID</th>
+                            <th className="py-2.5 px-3">Gateway</th>
+                            <th className="py-2.5 px-3">Phone / Account</th>
+                            <th className="py-2.5 px-3">Amount</th>
+                            <th className="py-2.5 px-3">Unlocked Scope</th>
+                            <th className="py-2.5 px-3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {(paymentsOverview?.transactions || []).map((tx: any) => (
+                            <tr key={tx.id} className="hover:bg-slate-50">
+                              <td className="py-2.5 px-3 font-mono font-bold text-slate-800">
+                                {tx.receipt_number || tx.checkout_request_id}
+                              </td>
+                              <td className="py-2.5 px-3 uppercase font-extrabold text-emerald-700">
+                                {tx.gateway}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-slate-700">
+                                {tx.phone_number}
+                              </td>
+                              <td className="py-2.5 px-3 font-black text-slate-900">
+                                {tx.currency} {tx.amount}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600">
+                                {tx.module_id === 'all' ? 'All 12 Modules' : `Module ${tx.module_id}`}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                    tx.status === 'completed'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}
+                                >
+                                  {tx.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Official Curriculum Readiness Duties Section */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-[#0078D4]" />
+                        <div>
+                          <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
+                            Official Curriculum Readiness &amp; Microsoft Learn Alignment
+                          </h3>
+                          <p className="text-xs text-slate-500">
+                            Restricted administrative audit of AZ-900 domain weights and 2026 syllabus updates
+                          </p>
+                        </div>
+                      </div>
+                      {onOpenCurriculumReadiness && (
+                        <button
+                          type="button"
+                          onClick={onOpenCurriculumReadiness}
+                          className="px-3 py-1.5 rounded-xl bg-[#0078D4] hover:bg-blue-700 text-white text-xs font-extrabold flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Open Full Curriculum Readiness Inspector</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(readinessOverview?.curriculum_updates || []).map((upd: any) => (
+                        <div
+                          key={upd.id}
+                          className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-extrabold text-slate-900">
+                              Mod {upd.moduleId}: {upd.title}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">
+                              {upd.status}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 leading-relaxed">
+                            {upd.summary}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: SINGLE-USER SECURITY & ACCESS CONTROL */}
               {activeTab === 'security-access-rbac' && (
                 <div className="space-y-4">
                   <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">
@@ -409,28 +663,28 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
                         <ShieldCheck className="w-5 h-5 text-emerald-600" />
                         <div>
                           <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
-                            Single-User Admin Access &amp; Zero-Trust Security Policy
+                            Admin Route Protection Layer &amp; Whitelist Security Policy
                           </h3>
                           <p className="text-xs text-slate-500">
-                            All administrative capabilities are relocated here and bound strictly to one administrator identity
+                            Validates user email credentials against ADMIN_EMAIL_WHITELIST before exposing Cloud Sync, M-Pesa, or Curriculum tools
                           </p>
                         </div>
                       </div>
                       <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-black">
-                        Active Principal: {SOLE_ADMIN_EMAIL}
+                        Whitelisted Principal: {PRIMARY_ADMIN_EMAIL}
                       </span>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                         <span className="text-[10px] font-black uppercase text-slate-500">
-                          Sole Authorized Administrator
+                          Hardcoded Email Whitelist
                         </span>
                         <div className="font-extrabold text-sm text-slate-900">
-                          {securityReport?.sole_authorized_admin || SOLE_ADMIN_EMAIL}
+                          {ADMIN_EMAIL_WHITELIST.join(', ')}
                         </div>
                         <p className="text-[11px] text-emerald-700 font-semibold">
-                          Verified Owner &amp; Bootcamp Admin
+                          Verified in src/utils/adminSecurity.ts
                         </p>
                       </div>
 
@@ -449,39 +703,14 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
 
                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                         <span className="text-[10px] font-black uppercase text-slate-500">
-                          Relocated Admin Modules
+                          Protected Admin Features
                         </span>
                         <div className="font-extrabold text-sm text-slate-900">
-                          5 Protected Back-Office Systems
+                          Cloud Sync, M-Pesa, Readiness &amp; DB
                         </div>
                         <p className="text-[11px] text-slate-600">
-                          Hidden from standard learner workspace
+                          Hidden from standard student views
                         </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 pt-2">
-                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">
-                        Protected Administrative Tasks &amp; Allocations
-                      </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {(
-                          securityReport?.protected_resources || [
-                            'PostgreSQL / Supabase Question Bank CRUD (/api/admin/questions)',
-                            'Curriculum Module & Difficulty Distribution (/api/admin/module-stats)',
-                            'Server Latency & Error Rate Telemetry (/api/telemetry)',
-                            'M-Pesa Daraja & Stripe Webhook Ledger (/api/payments/webhook)',
-                            'Supabase SQL Schema & Migrations (/api/supabase/migrations)',
-                          ]
-                        ).map((item: string, idx: number) => (
-                          <div
-                            key={idx}
-                            className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-200 text-xs font-bold text-slate-800 flex items-center gap-2"
-                          >
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <span>{item}</span>
-                          </div>
-                        ))}
                       </div>
                     </div>
 
@@ -497,7 +726,7 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
                               Admin Sign-In Password Reset &amp; Credentials
                             </h4>
                             <p className="text-[11px] text-slate-600">
-                              Manage or reset password credentials for sole administrator account ({SOLE_ADMIN_EMAIL})
+                              Manage or reset password credentials for sole administrator account ({PRIMARY_ADMIN_EMAIL})
                             </p>
                           </div>
                         </div>
@@ -581,10 +810,9 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 3: SERVER TELEMETRY & SUPABASE SQL MIGRATIONS */}
+              {/* TAB 4: SERVER TELEMETRY & SUPABASE SQL MIGRATIONS */}
               {activeTab === 'telemetry-migrations' && (
                 <div className="space-y-5">
-                  {/* Server Endpoint Telemetry */}
                   <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -650,7 +878,6 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Supabase SQL Migrations Inspector */}
                   {supabaseBundle?.migrations && supabaseBundle.migrations.length > 0 && (
                     <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">

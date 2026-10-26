@@ -434,6 +434,65 @@ export class FirebaseBackendAuthService {
   }
 
   /**
+   * Verifies the user's current password and updates their account credentials
+   * with a new secure password (specifically for email-based authentication).
+   */
+  public async changePasswordWithVerification(params: {
+    email: string;
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    user?: BackendUserProfile;
+    token?: string;
+  }> {
+    const cleanEmail = params.email.trim().toLowerCase();
+    const currentPassword = params.currentPassword.trim();
+    const newPassword = params.newPassword.trim();
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('Please provide a valid email address.');
+    }
+    if (!currentPassword) {
+      throw new Error('Please enter your current password to verify your identity.');
+    }
+    if (newPassword.length < 6) {
+      throw new Error('Your new password must be at least 6 characters long.');
+    }
+    if (currentPassword === newPassword) {
+      throw new Error('Your new password must be different from your current password.');
+    }
+
+    const headers = await this.getAuthHeaders();
+    const response = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email: cleanEmail,
+        currentPassword,
+        newPassword,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Current password verification failed.');
+    }
+
+    if (data.token && data.user) {
+      this.persistSession(data.token, data.user);
+    }
+
+    return {
+      success: true,
+      message: data.message || `Password updated successfully for ${cleanEmail}.`,
+      user: data.user,
+      token: data.token,
+    };
+  }
+
+  /**
    * Dispatches a password recovery request for the given email via Firebase Auth
    * and the backend recovery ledger.
    */

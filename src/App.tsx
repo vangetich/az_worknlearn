@@ -78,6 +78,7 @@ import { ExitStudySessionModal } from './components/ExitStudySessionModal';
 import { ProtectedRoute, AuthenticatedSupabaseUser } from './components/ProtectedRoute';
 import { usePostgresDatabase } from './hooks/usePostgresDatabase';
 import { authService } from './services/authService';
+import { isWhitelistedAdminEmail } from './utils/adminSecurity';
 import {
   getStoredReminderSettings,
   saveReminderSettings,
@@ -1544,16 +1545,18 @@ export default function App() {
                         <span className="hidden sm:inline text-[11px]">Report</span>
                       </button>
 
-                      {/* Readiness Check Button (Compact) */}
-                      <button
-                        type="button"
-                        onClick={() => setShowCurriculumReadinessModal(true)}
-                        className="px-2 py-1 rounded-xl bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
-                        title="Check Preparation Readiness Techniques & Sync Live AZ-900 Updates"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[#006600]" />
-                        <span className="hidden sm:inline text-[11px]">Readiness</span>
-                      </button>
+                      {/* Readiness Check Button (Compact - Whitelisted Admin Only) */}
+                      {isWhitelistedAdminEmail(authenticatedUser?.email) && (
+                        <button
+                          type="button"
+                          onClick={() => setShowCurriculumReadinessModal(true)}
+                          className="px-2 py-1 rounded-xl bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                          title="Check Preparation Readiness Techniques & Sync Live AZ-900 Updates"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#006600]" />
+                          <span className="hidden sm:inline text-[11px]">Readiness</span>
+                        </button>
+                      )}
 
                       {/* Domain Heatmap Toggle (Compact) */}
                       <button
@@ -1784,16 +1787,18 @@ export default function App() {
                         <span>Download Report</span>
                       </button>
 
-                      {/* Readiness Check Button */}
-                      <button
-                        type="button"
-                        onClick={() => setShowCurriculumReadinessModal(true)}
-                        className="px-3 py-1.5 rounded-xl bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer backdrop-blur-xs"
-                        title="Check Preparation Readiness Techniques & Sync AZ-900 Curriculum Updates"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[#006600]" />
-                        <span>Readiness Check</span>
-                      </button>
+                      {/* Readiness Check Button (Whitelisted Admin Only) */}
+                      {isWhitelistedAdminEmail(authenticatedUser?.email) && (
+                        <button
+                          type="button"
+                          onClick={() => setShowCurriculumReadinessModal(true)}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer backdrop-blur-xs"
+                          title="Check Preparation Readiness Techniques & Sync AZ-900 Curriculum Updates"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#006600]" />
+                          <span>Readiness Check</span>
+                        </button>
+                      )}
 
                       {/* Domain Accuracy Heatmap Toggle */}
                       <button
@@ -3056,6 +3061,8 @@ export default function App() {
         isOpen={showAdminBackOfficeModal}
         onClose={() => setShowAdminBackOfficeModal(false)}
         userEmail={authenticatedUser?.email || null}
+        onOpenCurriculumReadiness={() => setShowCurriculumReadinessModal(true)}
+        onOpenCloudSyncPortal={() => setShowBackendCloudModal(true)}
         onQuestionSaved={(savedQ) => {
           setQuestions((prev) => {
             const exists = prev.some((q) => q.id === savedQ.id);
@@ -3139,9 +3146,14 @@ export default function App() {
                 Kenyan Heritage Edition 🇰🇪
               </span>
               <span className="text-slate-300">|</span>
-              <span className="text-slate-500">
-                Global Harambee Azure Cohort
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowAdminBackOfficeModal(true)}
+                className="text-slate-500 hover:text-slate-900 font-bold underline decoration-dotted cursor-pointer"
+                title="Authorized Admin Console (Route Guard Protected: vangetich@gmail.com)"
+              >
+                Admin Console
+              </button>
             </div>
           </div>
         </footer>

@@ -26,6 +26,10 @@ import {
   Layers,
   ShieldCheck,
   ChevronRight,
+  PenTool,
+  Plus,
+  Trash2,
+  Move,
 } from 'lucide-react';
 import { Question } from '../types/quiz';
 import { BUILTIN_QUESTIONS } from '../data/questionBank';
@@ -77,6 +81,25 @@ interface SharedQuestionSnapshot {
   examTip: string;
 }
 
+interface WhiteboardNode {
+  id: string;
+  title: string;
+  category: 'compute' | 'networking' | 'storage' | 'identity' | 'governance';
+  notes: string;
+  x: number;
+  y: number;
+  authorName: string;
+  updatedAt: number;
+}
+
+interface WhiteboardStroke {
+  id: string;
+  color: string;
+  width: number;
+  points: { x: number; y: number }[];
+  authorName: string;
+}
+
 interface StudyHubRoomState {
   roomId: string;
   createdAt: number;
@@ -85,6 +108,8 @@ interface StudyHubRoomState {
   isAnswerRevealed: boolean;
   sharedScratchpad: string;
   eliminatedOptions: string[];
+  whiteboardNodes?: WhiteboardNode[];
+  whiteboardStrokes?: WhiteboardStroke[];
   coopStats: {
     questionsSolved: number;
     consensusCorrect: number;
@@ -167,8 +192,19 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
   onSelectSharedQuestion,
   initialRoomAreaId,
 }) => {
-  // Mode tab: 'hub' (Live 2-User Collaborative Study Hub) vs 'chat' (Community Peer Circle)
-  const [activeMode, setActiveMode] = useState<'hub' | 'chat'>('hub');
+  // Mode tab: 'hub' (Live Co-Op Hub), 'whiteboard' (Shared Azure Concept Whiteboard), 'chat' (Peer Collaboration Chat)
+  const [activeMode, setActiveMode] = useState<'hub' | 'whiteboard' | 'chat'>('hub');
+
+  // Shared Whiteboard state
+  const [newNodeTitle, setNewNodeTitle] = useState<string>('');
+  const [newNodeCategory, setNewNodeCategory] = useState<WhiteboardNode['category']>('compute');
+  const [newNodeNotes, setNewNodeNotes] = useState<string>('');
+  const [strokeColor, setStrokeColor] = useState<string>('#0078D4');
+  const [isDrawing, setIsDrawing] = useState<boolean>(false);
+  const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const whiteboardCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const whiteboardContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Unique persistent session user ID per tab so two tabs or two devices have distinct identities
   const [myUserId] = useState<string>(() => {
@@ -656,6 +692,116 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
     dispatchHubEvent('question:set', { question: snapshot });
   };
 
+  // Render Whiteboard Canvas strokes whenever hubState.whiteboardStrokes or currentPoints change
+  useEffect(() => {
+    const canvas = whiteboardCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const strokes = hubState?.whiteboardStrokes || [];
+
+    const drawPath = (pts: { x: number; y: number }[], color: string, width: number) => {
+      if (pts.length < 2) return;
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo((pts[0].x / 100) * canvas.width, (pts[0].y / 100) * canvas.height);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo((pts[i].x / 100) * canvas.width, (pts[i].y / 100) * canvas.height);
+      }
+      ctx.stroke();
+    };
+
+    strokes.forEach((s) => drawPath(s.points, s.color, s.width || 3));
+    if (currentPoints.length >= 2) {
+      drawPath(currentPoints, strokeColor, 3);
+    }
+  }, [hubState?.whiteboardStrokes, currentPoints, strokeColor, activeMode]);
+
+  const handleCanvasPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (draggingNodeId) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    setIsDrawing(true);
+    setCurrentPoints([{ x, y }]);
+  };
+
+  const handleCanvasPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    setCurrentPoints((prev) => [...prev, { x, y }]);
+  };
+
+  const handleCanvasPointerUp = () => {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    if (currentPoints.length >= 2) {
+      dispatchHubEvent('whiteboard:stroke:add', {
+        stroke: {
+          id: `stroke-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          color: strokeColor,
+          width: 3,
+          points: currentPoints,
+          authorName: myName,
+        },
+      });
+    }
+    setCurrentPoints([]);
+  };
+
+  const handleAddWhiteboardNode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNodeTitle.trim()) return;
+    const node: WhiteboardNode = {
+      id: `wb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      title: newNodeTitle.trim(),
+      category: newNodeCategory,
+      notes:
+        newNodeNotes.trim() ||
+        'Shared AZ-900 concept node added for cohort architectural brainstorming.',
+      x: Math.floor(10 + Math.random() * 55),
+      y: Math.floor(12 + Math.random() * 55),
+      authorName: myName,
+      updatedAt: Date.now(),
+    };
+    dispatchHubEvent('whiteboard:node:add', { node });
+    setNewNodeTitle('');
+    setNewNodeNotes('');
+  };
+
+  const handleAddQuickTemplateNode = (
+    title: string,
+    category: WhiteboardNode['category'],
+    notes: string
+  ) => {
+    const node: WhiteboardNode = {
+      id: `wb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      title,
+      category,
+      notes,
+      x: Math.floor(8 + Math.random() * 58),
+      y: Math.floor(10 + Math.random() * 58),
+      authorName: myName,
+      updatedAt: Date.now(),
+    };
+    dispatchHubEvent('whiteboard:node:add', { node });
+  };
+
+  const handleWhiteboardContainerMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!draggingNodeId || !whiteboardContainerRef.current) return;
+    const rect = whiteboardContainerRef.current.getBoundingClientRect();
+    const x = Math.max(2, Math.min(72, ((e.clientX - rect.left - 60) / rect.width) * 100));
+    const y = Math.max(4, Math.min(75, ((e.clientY - rect.top - 25) / rect.height) * 100));
+    dispatchHubEvent('whiteboard:node:move', { nodeId: draggingNodeId, x, y });
+  };
+
   if (!isOpen) return null;
 
   const activeHubQuestion =
@@ -667,13 +813,14 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
   );
   const myParticipant = hubState?.participants?.[myUserId];
   const partnerParticipants = participantList.filter((p) => p.userId !== myUserId);
+  const otherCohortMembersInAreaCount = activeArea.onlineCount + partnerParticipants.length;
 
   const timerMinutes = Math.floor(timerSecondsLeft / 60);
   const timerSecs = timerSecondsLeft % 60;
   const formattedTimer = `${String(timerMinutes).padStart(2, '0')}:${String(timerSecs).padStart(2, '0')}`;
 
   return (
-    <div className="fixed inset-y-0 right-0 z-[120] w-full max-w-[100vw] sm:w-[480px] md:w-[560px] h-[100dvh] max-h-[100dvh] bg-white/98 backdrop-blur-xl border-l border-slate-200 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 font-sans">
+    <div className="fixed inset-y-0 right-0 z-[120] w-full max-w-[100vw] sm:w-[500px] md:w-[600px] h-[100dvh] max-h-[100dvh] bg-white/98 backdrop-blur-xl border-l border-slate-200 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 font-sans">
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
@@ -687,7 +834,7 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
               </h3>
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>{wsConnected ? 'Live Sync' : 'Synced'}</span>
+                <span>{otherCohortMembersInAreaCount} Cohort Members in Area</span>
               </span>
             </div>
             <p className="text-[11px] text-sky-100/80 truncate max-w-[280px]">
@@ -713,8 +860,12 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
             <Compass className="w-3 h-3 text-sky-400" />
             <span>Select Study Room Area:</span>
           </span>
-          <span className="text-[10px] text-emerald-400 font-bold">
-            {activeArea.onlineCount} peers active in this room
+          <span
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] text-emerald-300 font-extrabold"
+            title="Live count of other cohort members currently active in this study area"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+            <span>{otherCohortMembersInAreaCount} other cohort members in this area</span>
           </span>
         </div>
 
@@ -865,35 +1016,48 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
         )}
       </div>
 
-      {/* Mode Switcher Tabs */}
-      <div className="px-4 py-2 bg-slate-100 border-b border-slate-200 grid grid-cols-2 gap-1.5 shrink-0">
+      {/* Mode Switcher Tabs: Co-Op Hub | Shared Whiteboard | Peer Chat */}
+      <div className="px-3.5 py-2 bg-slate-100 border-b border-slate-200 grid grid-cols-3 gap-1.5 shrink-0">
         <button
           type="button"
           onClick={() => setActiveMode('hub')}
-          className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`py-2 px-2 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1 transition-all cursor-pointer ${
             activeMode === 'hub'
               ? 'bg-[#0078D4] text-white shadow-2xs'
               : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200/80'
           }`}
         >
-          <Radio className="w-3.5 h-3.5" />
-          <span>Live Study Hub (Co-Op)</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
-            {Math.max(1, participantList.length)}
+          <Radio className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">Co-Op Hub</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMode('whiteboard')}
+          className={`py-2 px-2 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+            activeMode === 'whiteboard'
+              ? 'bg-[#0078D4] text-white shadow-2xs'
+              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200/80'
+          }`}
+        >
+          <PenTool className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">Shared Whiteboard</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-black/15">
+            {(hubState?.whiteboardNodes || []).length}
           </span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveMode('chat')}
-          className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`py-2 px-2 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1 transition-all cursor-pointer ${
             activeMode === 'chat'
               ? 'bg-[#0078D4] text-white shadow-2xs'
               : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200/80'
           }`}
         >
-          <MessageSquare className="w-3.5 h-3.5" />
-          <span>Community Study Circle</span>
+          <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">Peer Chat</span>
         </button>
       </div>
 
@@ -1290,9 +1454,272 @@ export const VirtualStudyRoom: React.FC<VirtualStudyRoomProps> = ({
             </div>
           </div>
         </div>
+      ) : activeMode === 'whiteboard' ? (
+        /* ===================================================================
+           MODE 2: SHARED WHITEBOARD FOR BRAINSTORMING AZURE CONCEPTS
+           =================================================================== */
+        <div className="flex-1 flex flex-col overflow-y-auto p-3.5 space-y-3 bg-slate-50/70">
+          {/* Whiteboard Toolbar & Quick Concept Blueprints */}
+          <div className="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-sky-50 text-[#0078D4] border border-sky-200">
+                  <PenTool className="w-4 h-4" />
+                </span>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900">
+                    Shared Azure Concept Whiteboard ({roomId})
+                  </h4>
+                  <p className="text-[10px] text-slate-500">
+                    Sketch diagrams &amp; drag Azure architecture cards with{' '}
+                    <strong className="text-emerald-700">
+                      {otherCohortMembersInAreaCount} cohort peers
+                    </strong>
+                  </p>
+                </div>
+              </div>
+
+              {/* Pen Color & Clear Controls */}
+              <div className="flex items-center gap-1.5">
+                {[
+                  { color: '#0078D4', label: 'Azure Blue' },
+                  { color: '#10b981', label: 'Emerald' },
+                  { color: '#f59e0b', label: 'Amber' },
+                  { color: '#f43f5e', label: 'Rose' },
+                ].map((pen) => (
+                  <button
+                    key={pen.color}
+                    type="button"
+                    onClick={() => setStrokeColor(pen.color)}
+                    style={{ backgroundColor: pen.color }}
+                    className={`w-5 h-5 rounded-full cursor-pointer transition-transform ${
+                      strokeColor === pen.color ? 'scale-125 ring-2 ring-slate-900' : 'opacity-75'
+                    }`}
+                    title={`Sketch with ${pen.label}`}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => dispatchHubEvent('whiteboard:clear', { resetNodes: false })}
+                  className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold cursor-pointer"
+                  title="Clear freehand ink strokes"
+                >
+                  Clear Ink
+                </button>
+                <button
+                  type="button"
+                  onClick={() => dispatchHubEvent('whiteboard:clear', { resetNodes: true })}
+                  className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-bold cursor-pointer"
+                  title="Reset whiteboard cards to area defaults"
+                >
+                  Reset Board
+                </button>
+              </div>
+            </div>
+
+            {/* 1-Click Quick Concept Blueprint Stampers */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-100">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Quick Add:
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  handleAddQuickTemplateNode(
+                    'Zero Trust Identity Flow',
+                    'identity',
+                    'Entra ID -> Conditional Access -> MFA -> Least Privilege RBAC'
+                  )
+                }
+                className="px-2 py-0.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-[10px] font-bold cursor-pointer"
+              >
+                + Zero Trust Flow
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleAddQuickTemplateNode(
+                    'Storage Redundancy Matrix',
+                    'storage',
+                    'LRS (11 9s) -> ZRS (12 9s, 3 AZs) -> GRS/GZRS (16 9s, Cross-Region >= 300mi)'
+                  )
+                }
+                className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold cursor-pointer"
+              >
+                + Storage Redundancy
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleAddQuickTemplateNode(
+                    'Governance Precedence',
+                    'governance',
+                    'Management Group -> Subscription -> Resource Group -> Resource (Locks override Owner RBAC)'
+                  )
+                }
+                className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold cursor-pointer"
+              >
+                + Governance Hierarchy
+              </button>
+            </div>
+          </div>
+
+          {/* Interactive Shared Whiteboard Canvas + Concept Cards Surface */}
+          <div
+            ref={whiteboardContainerRef}
+            onMouseMove={handleWhiteboardContainerMouseMove}
+            onMouseUp={() => setDraggingNodeId(null)}
+            className="relative w-full h-[310px] rounded-2xl bg-slate-950 border-2 border-slate-800 shadow-inner overflow-hidden select-none"
+            style={{
+              backgroundImage:
+                'radial-gradient(rgba(56, 189, 248, 0.18) 1px, transparent 1px)',
+              backgroundSize: '18px 18px',
+            }}
+          >
+            {/* Freehand HTML5 Drawing Layer */}
+            <canvas
+              ref={whiteboardCanvasRef}
+              width={640}
+              height={340}
+              onPointerDown={handleCanvasPointerDown}
+              onPointerMove={handleCanvasPointerMove}
+              onPointerUp={handleCanvasPointerUp}
+              onPointerLeave={handleCanvasPointerUp}
+              className="absolute inset-0 w-full h-full cursor-crosshair"
+            />
+
+            {/* Floating Draggable Azure Concept Cards */}
+            {(hubState?.whiteboardNodes || []).map((node) => {
+              const categoryStyles: Record<
+                WhiteboardNode['category'],
+                { badge: string; border: string }
+              > = {
+                compute: {
+                  badge: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+                  border: 'border-sky-500/50',
+                },
+                networking: {
+                  badge: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+                  border: 'border-indigo-500/50',
+                },
+                storage: {
+                  badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+                  border: 'border-amber-500/50',
+                },
+                identity: {
+                  badge: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+                  border: 'border-purple-500/50',
+                },
+                governance: {
+                  badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+                  border: 'border-emerald-500/50',
+                },
+              };
+              const style = categoryStyles[node.category] || categoryStyles.compute;
+
+              return (
+                <div
+                  key={node.id}
+                  style={{
+                    left: `${node.x}%`,
+                    top: `${node.y}%`,
+                  }}
+                  className={`absolute z-10 w-48 p-2.5 rounded-xl bg-slate-900/95 backdrop-blur-md border ${style.border} text-slate-100 shadow-xl transition-shadow`}
+                >
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setDraggingNodeId(node.id);
+                      }}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 cursor-grab active:cursor-grabbing ${style.badge}`}
+                      title="Drag to reposition concept card on shared whiteboard"
+                    >
+                      <Move className="w-2.5 h-2.5" />
+                      <span>{node.category}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        dispatchHubEvent('whiteboard:node:delete', { nodeId: node.id })
+                      }
+                      className="text-slate-400 hover:text-rose-400 p-0.5 cursor-pointer"
+                      title="Remove concept card"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <h5 className="text-[11px] font-black text-white leading-snug">
+                    {node.title}
+                  </h5>
+                  <p className="text-[10px] text-slate-300 leading-relaxed mt-1">
+                    {node.notes}
+                  </p>
+                  <div className="mt-1.5 pt-1 border-t border-slate-800 flex items-center justify-between text-[9px] text-slate-400">
+                    <span>By {node.authorName}</span>
+                    <span>Live</span>
+                  </div>
+                </div>
+              );
+            })}
+
+            <div className="absolute bottom-2 right-2.5 px-2 py-0.5 rounded bg-slate-900/80 border border-slate-700 text-[10px] text-slate-300 pointer-events-none">
+              Draw directly on canvas or drag cards to brainstorm
+            </div>
+          </div>
+
+          {/* Add Custom Concept Card Form */}
+          <form
+            onSubmit={handleAddWhiteboardNode}
+            className="p-3 rounded-2xl bg-white border border-slate-200 space-y-2"
+          >
+            <div className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Plus className="w-3.5 h-3.5 text-[#0078D4]" />
+              <span>Pin New Azure Concept Card to Shared Whiteboard</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <input
+                type="text"
+                value={newNodeTitle}
+                onChange={(e) => setNewNodeTitle(e.target.value)}
+                placeholder="Concept title (e.g., ExpressRoute)"
+                className="sm:col-span-2 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-[#0078D4]"
+              />
+              <select
+                value={newNodeCategory}
+                onChange={(e) =>
+                  setNewNodeCategory(e.target.value as WhiteboardNode['category'])
+                }
+                className="px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white focus:outline-none focus:border-[#0078D4]"
+              >
+                <option value="compute">Compute</option>
+                <option value="networking">Networking</option>
+                <option value="storage">Storage</option>
+                <option value="identity">Identity</option>
+                <option value="governance">Governance</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newNodeNotes}
+                onChange={(e) => setNewNodeNotes(e.target.value)}
+                placeholder="Key exam anchor or architecture note..."
+                className="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-[#0078D4]"
+              />
+              <button
+                type="submit"
+                disabled={!newNodeTitle.trim()}
+                className="px-3 py-1.5 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] disabled:opacity-40 text-white text-xs font-black shrink-0 cursor-pointer"
+              >
+                Add Card
+              </button>
+            </div>
+          </form>
+        </div>
       ) : (
         /* ===================================================================
-           MODE 2: COMMUNITY PEER STUDY CIRCLE CHAT
+           MODE 3: COMMUNITY PEER STUDY CIRCLE CHAT
            =================================================================== */
         <>
           {/* Peer Avatars Bar */}

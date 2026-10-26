@@ -194,6 +194,50 @@ class Az900BackendDatabase {
     this.users.set(defaultUser.id, defaultUser);
     this.usersByEmail.set(defaultUser.email.toLowerCase(), defaultUser.id);
     this.passwordsByEmail.set('vangetich@gmail.com', 'Az900Admin!2026');
+
+    const demoStudent: DbUser = {
+      id: 'usr-demo-student-ke',
+      email: 'student@az900.ke',
+      full_name: 'Nairobi Cloud Scholar',
+      role: 'student',
+      is_premium: false,
+      unlocked_modules: [1, 2, 3, 4],
+      created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
+    };
+    this.users.set(demoStudent.id, demoStudent);
+    this.usersByEmail.set(demoStudent.email.toLowerCase(), demoStudent.id);
+    this.passwordsByEmail.set('student@az900.ke', 'Az900Cloud!2025');
+
+    const cohortScholar: DbUser = {
+      id: 'usr-amara-nairobi',
+      email: 'amara.nairobi@az900.ke',
+      full_name: 'Amara Wanjiku (Silicon Savannah)',
+      role: 'enterprise_user',
+      is_premium: true,
+      unlocked_modules: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      created_at: new Date(Date.now() - 86400000 * 12).toISOString(),
+    };
+    this.users.set(cohortScholar.id, cohortScholar);
+    this.usersByEmail.set(cohortScholar.email.toLowerCase(), cohortScholar.id);
+    this.passwordsByEmail.set('amara.nairobi@az900.ke', 'HarambeeCloud!26');
+
+    // Seed sample M-Pesa Daraja & Stripe transactions for Admin Back-Office visibility
+    const sampleMpesaTx: DbPaymentTransaction = {
+      id: 'tx-mpesa-seed-001',
+      user_id: cohortScholar.id,
+      gateway: 'mpesa',
+      phone_number: '254712345678',
+      amount: 1500,
+      currency: 'KES',
+      module_id: 'all',
+      checkout_request_id: 'ws_CO_2610202609150012345',
+      merchant_request_id: '29115-34620561-1',
+      receipt_number: 'QJK89M2LPQ',
+      status: 'completed',
+      created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+      completed_at: new Date(Date.now() - 86400000 * 2 + 12000).toISOString(),
+    };
+    this.paymentTransactions.set(sampleMpesaTx.checkout_request_id, sampleMpesaTx);
   }
 
   public upsertUser(params: {
@@ -346,6 +390,127 @@ class Az900BackendDatabase {
     }
 
     return { isValid: false };
+  }
+
+  public changeUserPassword(params: {
+    email: string;
+    currentPassword?: string;
+    newPassword: string;
+  }): { success: boolean; message: string; user?: DbUser; token?: string } {
+    const cleanEmail = params.email.trim().toLowerCase();
+    const cleanNew = params.newPassword.trim();
+    if (cleanNew.length < 6) {
+      return {
+        success: false,
+        message: 'New password must be at least 6 characters long.',
+      };
+    }
+
+    const storedPw = this.passwordsByEmail.get(cleanEmail);
+    if (storedPw && params.currentPassword !== undefined) {
+      if (params.currentPassword.trim() !== storedPw) {
+        return {
+          success: false,
+          message: 'Current password verification failed. Please enter your existing password accurately.',
+        };
+      }
+    }
+
+    this.passwordsByEmail.set(cleanEmail, cleanNew);
+    const { user, token } = this.upsertUser({
+      email: cleanEmail,
+      role: cleanEmail === 'vangetich@gmail.com' ? 'bootcamp_admin' : undefined,
+    });
+
+    if (cleanEmail === 'vangetich@gmail.com') {
+      user.role = 'bootcamp_admin';
+      user.is_premium = true;
+      user.unlocked_modules = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+      this.users.set(user.id, user);
+    }
+
+    return {
+      success: true,
+      message: `Password successfully updated after verifying credentials for ${cleanEmail}.`,
+      user,
+      token,
+    };
+  }
+
+  public getAllUsersForAdmin() {
+    const list = Array.from(this.users.values()).map((u) => {
+      const cleanEmail = u.email.toLowerCase();
+      return {
+        ...u,
+        has_password_set: this.passwordsByEmail.has(cleanEmail),
+        is_whitelisted_admin: cleanEmail === 'vangetich@gmail.com',
+      };
+    });
+    return list.sort((a, b) => (a.is_whitelisted_admin ? -1 : b.is_whitelisted_admin ? 1 : 0));
+  }
+
+  public adminManageUser(params: {
+    email: string;
+    full_name?: string;
+    role?: UserRole;
+    is_premium?: boolean;
+    new_password?: string;
+  }) {
+    const cleanEmail = params.email.trim().toLowerCase();
+    const { user } = this.upsertUser({
+      email: cleanEmail,
+      full_name: params.full_name,
+      role: params.role,
+    });
+
+    if (params.role) {
+      user.role = params.role;
+    }
+    if (typeof params.is_premium === 'boolean') {
+      user.is_premium = params.is_premium;
+      user.unlocked_modules = params.is_premium
+        ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        : [1, 2, 3, 4];
+    }
+    if (params.new_password && params.new_password.trim().length >= 6) {
+      this.passwordsByEmail.set(cleanEmail, params.new_password.trim());
+    }
+    this.users.set(user.id, user);
+
+    return {
+      ...user,
+      has_password_set: this.passwordsByEmail.has(cleanEmail),
+      is_whitelisted_admin: cleanEmail === 'vangetich@gmail.com',
+    };
+  }
+
+  public getAdminPaymentsAndSyncOverview() {
+    const transactions = Array.from(this.paymentTransactions.values()).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    const totalKesRevenue = transactions
+      .filter((t) => t.status === 'completed' && t.currency === 'KES')
+      .reduce((acc, t) => acc + t.amount, 0);
+    const totalUsdRevenue = transactions
+      .filter((t) => t.status === 'completed' && t.currency === 'USD')
+      .reduce((acc, t) => acc + t.amount, 0);
+
+    return {
+      total_transactions: transactions.length,
+      completed_transactions: transactions.filter((t) => t.status === 'completed').length,
+      pending_transactions: transactions.filter((t) => t.status === 'pending').length,
+      total_kes_revenue: totalKesRevenue,
+      total_usd_revenue: totalUsdRevenue,
+      transactions,
+      cloud_sync_status: {
+        firestore_db_id: 'ai-studio-az900smartquizbu-893ceaa1-c5e9-4b01-8e95-40d6f9321fe3',
+        postgres_schema: 'supabase/migrations/20261025000001_az900_initial_schema.sql',
+        daraja_webhook_endpoint: '/api/payments/webhook',
+        stk_push_endpoint: '/api/payments/mpesa/stkpush',
+        total_synced_users: this.users.size,
+        total_synced_questions: this.questions.size,
+      },
+    };
   }
 
   public recordAnswerSubmission(params: {

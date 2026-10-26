@@ -167,6 +167,28 @@ export interface SharedQuestionSnapshot {
   examTip: string;
 }
 
+export interface WhiteboardNode {
+  id: string;
+  title: string;
+  category: 'compute' | 'networking' | 'storage' | 'identity' | 'governance' | 'network' | 'security' | 'note';
+  notes?: string;
+  text?: string;
+  x: number;
+  y: number;
+  author?: string;
+  authorName?: string;
+  updatedAt: number;
+}
+
+export interface WhiteboardStroke {
+  id: string;
+  color: string;
+  width: number;
+  points: { x: number; y: number }[];
+  author?: string;
+  authorName?: string;
+}
+
 export interface StudyHubRoomState {
   roomId: string;
   createdAt: number;
@@ -182,9 +204,53 @@ export interface StudyHubRoomState {
   };
   participants: Record<string, CollabParticipant>;
   messages: CollabChatMessage[];
+  whiteboardNodes: WhiteboardNode[];
+  whiteboardStrokes: WhiteboardStroke[];
 }
 
 const studyHubRooms = new Map<string, StudyHubRoomState>();
+
+function getDefaultWhiteboardNodes(roomId: string): WhiteboardNode[] {
+  const now = Date.now();
+  return [
+    {
+      id: `wb-entra-${roomId}`,
+      title: 'Microsoft Entra ID (Zero Trust)',
+      category: 'identity',
+      notes: 'Signals (User, IP, Device) -> Conditional Access -> MFA Enforcement',
+      text: 'Signals (User, IP, Device) -> Conditional Access -> MFA Enforcement',
+      x: 8,
+      y: 12,
+      author: 'Amara (Nairobi)',
+      authorName: 'Amara (Nairobi)',
+      updatedAt: now,
+    },
+    {
+      id: `wb-vnet-${roomId}`,
+      title: 'Azure VNet & ExpressRoute',
+      category: 'networking',
+      notes: 'Private dedicated fiber connection (does NOT traverse public internet)',
+      text: 'Private dedicated fiber connection (does NOT traverse public internet)',
+      x: 48,
+      y: 14,
+      author: 'Tariq (Lagos)',
+      authorName: 'Tariq (Lagos)',
+      updatedAt: now,
+    },
+    {
+      id: `wb-locks-${roomId}`,
+      title: 'Resource Locks vs RBAC',
+      category: 'governance',
+      notes: 'CanNotDelete lock overrides even Subscription Owner delete rights!',
+      text: 'CanNotDelete lock overrides even Subscription Owner delete rights!',
+      x: 16,
+      y: 52,
+      author: 'Kofi (Accra)',
+      authorName: 'Kofi (Accra)',
+      updatedAt: now,
+    },
+  ];
+}
 
 function getOrCreateRoom(roomId: string): StudyHubRoomState {
   const normalizedId = roomId.trim().toUpperCase();
@@ -211,10 +277,12 @@ function getOrCreateRoom(roomId: string): StudyHubRoomState {
           sender: 'Study Hub Host',
           avatar: '🤝',
           location: 'Live Hub',
-          text: `Welcome to Collaborative Study Hub #${normalizedId}! Share this room code with a study partner to solve scenario-based AZ-900 questions together in real-time.`,
+          text: `Welcome to Collaborative Study Hub #${normalizedId}! Share this room code with a study partner to solve scenario-based AZ-900 questions and brainstorm on the Shared Whiteboard in real-time.`,
           timestamp: Date.now(),
         },
       ],
+      whiteboardNodes: getDefaultWhiteboardNodes(normalizedId),
+      whiteboardStrokes: [],
     };
     studyHubRooms.set(normalizedId, room);
   }
@@ -399,6 +467,91 @@ function applyRoomEvent(roomId: string, event: any): StudyHubRoomState {
             room.messages = room.messages.slice(-80);
           }
         }
+      }
+      break;
+    }
+
+    case 'whiteboard:node:add': {
+      if (payload?.node && payload.node.id) {
+        const exists = room.whiteboardNodes.some((n) => n.id === payload.node.id);
+        if (!exists) {
+          const noteText = String(payload.node.notes || payload.node.text || '').slice(0, 240);
+          const authorVal = String(payload.node.authorName || payload.node.author || 'Cohort Peer');
+          room.whiteboardNodes.push({
+            id: String(payload.node.id),
+            title: String(payload.node.title || 'Azure Concept').slice(0, 60),
+            category: payload.node.category || 'compute',
+            notes: noteText,
+            text: noteText,
+            x: Math.max(2, Math.min(88, Number(payload.node.x) || 20)),
+            y: Math.max(4, Math.min(84, Number(payload.node.y) || 20)),
+            author: authorVal,
+            authorName: authorVal,
+            updatedAt: now,
+          });
+          if (room.whiteboardNodes.length > 24) {
+            room.whiteboardNodes = room.whiteboardNodes.slice(-24);
+          }
+        }
+      }
+      break;
+    }
+
+    case 'whiteboard:node:move': {
+      if (payload?.nodeId) {
+        const target = room.whiteboardNodes.find((n) => n.id === payload.nodeId);
+        if (target) {
+          if (typeof payload.x === 'number') {
+            target.x = Math.max(2, Math.min(88, payload.x));
+          }
+          if (typeof payload.y === 'number') {
+            target.y = Math.max(4, Math.min(84, payload.y));
+          }
+          if (typeof payload.title === 'string') {
+            target.title = payload.title.slice(0, 60);
+          }
+          if (typeof payload.notes === 'string') {
+            target.notes = payload.notes.slice(0, 240);
+            target.text = target.notes;
+          }
+          target.updatedAt = now;
+        }
+      }
+      break;
+    }
+
+    case 'whiteboard:node:delete': {
+      if (payload?.nodeId) {
+        room.whiteboardNodes = room.whiteboardNodes.filter((n) => n.id !== payload.nodeId);
+      }
+      break;
+    }
+
+    case 'whiteboard:stroke:add': {
+      if (payload?.stroke && payload.stroke.id && Array.isArray(payload.stroke.points)) {
+        const exists = room.whiteboardStrokes.some((s) => s.id === payload.stroke.id);
+        if (!exists) {
+          const authorVal = String(payload.stroke.authorName || payload.stroke.author || 'Cohort Peer');
+          room.whiteboardStrokes.push({
+            id: String(payload.stroke.id),
+            color: String(payload.stroke.color || '#38bdf8'),
+            width: Number(payload.stroke.width) || 3,
+            points: payload.stroke.points.slice(0, 250),
+            author: authorVal,
+            authorName: authorVal,
+          });
+          if (room.whiteboardStrokes.length > 60) {
+            room.whiteboardStrokes = room.whiteboardStrokes.slice(-60);
+          }
+        }
+      }
+      break;
+    }
+
+    case 'whiteboard:clear': {
+      room.whiteboardStrokes = [];
+      if (payload?.resetNodes) {
+        room.whiteboardNodes = getDefaultWhiteboardNodes(room.roomId);
       }
       break;
     }
@@ -703,6 +856,49 @@ app.post('/api/auth/reset-password', (req, res) => {
   } catch (error: any) {
     console.error('Reset password error:', error);
     res.status(500).json({ error: 'Failed to reset password.' });
+  }
+});
+
+// Change Password with Current Password Verification (for Settings Reset Password Modal)
+app.post('/api/auth/change-password', (req, res) => {
+  try {
+    const { email, currentPassword, newPassword } = req.body || {};
+    const userId = resolveRequestUserId(req);
+    const activeUser = backendDb.getUserByIdOrDefault(userId);
+    const targetEmail = String(email || activeUser?.email || '').trim().toLowerCase();
+
+    if (!targetEmail || !targetEmail.includes('@')) {
+      return res.status(400).json({ error: 'A valid email address is required.' });
+    }
+    if (!currentPassword || String(currentPassword).trim().length === 0) {
+      return res.status(400).json({ error: 'Your current password is required for verification.' });
+    }
+    if (!newPassword || String(newPassword).trim().length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+    }
+
+    const result = backendDb.changeUserPassword({
+      email: targetEmail,
+      currentPassword: String(currentPassword),
+      newPassword: String(newPassword),
+    });
+
+    if (!result.success) {
+      return res.status(401).json({
+        success: false,
+        error: result.message,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: result.message,
+      user: result.user,
+      token: result.token,
+    });
+  } catch (error: any) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Failed to verify and update account password.' });
   }
 });
 
@@ -1376,6 +1572,99 @@ app.get('/api/admin/module-stats', (_req, res) => {
   } catch (error: any) {
     console.error('Admin module stats error:', error);
     res.status(500).json({ error: 'Failed to retrieve admin module statistics.' });
+  }
+});
+
+// Admin Route Protection Verification Endpoint (Whitelist + Credential Check)
+app.post('/api/admin/verify-access', (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+
+    if (normalizedEmail !== SOLE_AUTHORIZED_ADMIN_EMAIL) {
+      return res.status(403).json({
+        authorized: false,
+        reason: `Access denied: '${normalizedEmail || 'anonymous'}' is not on the authorized administrative whitelist (${SOLE_AUTHORIZED_ADMIN_EMAIL}).`,
+      });
+    }
+
+    if (password !== undefined && String(password).trim().length > 0) {
+      const check = backendDb.verifyCredentials(normalizedEmail, String(password));
+      if (!check.isValid) {
+        return res.status(401).json({
+          authorized: false,
+          reason: 'Invalid administrative password for vangetich@gmail.com.',
+        });
+      }
+      return res.json({
+        authorized: true,
+        email: SOLE_AUTHORIZED_ADMIN_EMAIL,
+        user: check.user,
+        token: check.token,
+        verifiedAt: new Date().toISOString(),
+      });
+    }
+
+    const adminUser = backendDb.getUserByIdOrDefault('usr-admin-vangetich');
+    res.json({
+      authorized: true,
+      email: SOLE_AUTHORIZED_ADMIN_EMAIL,
+      user: adminUser,
+      verifiedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('Admin verify access error:', error);
+    res.status(500).json({ authorized: false, reason: 'Failed to verify administrative access.' });
+  }
+});
+
+// Admin User Accounts Management Endpoints
+app.get('/api/admin/users', (_req, res) => {
+  try {
+    const users = backendDb.getAllUsersForAdmin();
+    res.json({
+      total_users: users.length,
+      users,
+      whitelist: [SOLE_AUTHORIZED_ADMIN_EMAIL],
+    });
+  } catch (error: any) {
+    console.error('Fetch admin users error:', error);
+    res.status(500).json({ error: 'Failed to retrieve user accounts.' });
+  }
+});
+
+app.post('/api/admin/users/manage', (req, res) => {
+  try {
+    const { userId, email, full_name, role, is_premium, newPassword, new_password } = req.body || {};
+    if (!email && !userId) {
+      return res.status(400).json({ error: 'User email or userId is required.' });
+    }
+    const updatedUser = backendDb.adminManageUser({
+      email: String(email || ''),
+      full_name,
+      role,
+      is_premium,
+      new_password: newPassword || new_password,
+    });
+    res.json({
+      message: `User account ${updatedUser.email} updated successfully.`,
+      user: updatedUser,
+      users: backendDb.getAllUsersForAdmin(),
+    });
+  } catch (error: any) {
+    console.error('Admin manage user error:', error);
+    res.status(500).json({ error: 'Failed to update user account.' });
+  }
+});
+
+// Admin Cloud Sync & M-Pesa / Stripe Ledger Overview Endpoint
+app.get('/api/admin/payments-ledger', (_req, res) => {
+  try {
+    const overview = backendDb.getAdminPaymentsAndSyncOverview();
+    res.json(overview);
+  } catch (error: any) {
+    console.error('Admin payments ledger error:', error);
+    res.status(500).json({ error: 'Failed to retrieve M-Pesa and Cloud Sync ledger.' });
   }
 });
 

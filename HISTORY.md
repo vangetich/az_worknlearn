@@ -36,3 +36,17 @@
 8. **Backend Telemetry Visualization & Vitest Unit Tests**
    - Recharts line chart in `ApiDocumentationModal` visualizing `/api/quiz/submit` and `/api/payments/webhook` latency and error rates.
    - Vitest unit test suite in `src/services/__tests__/quizBackend.test.ts` testing `submitQuestionAnswer` and `writeModuleProgress` latency and sync error handling.
+
+9. **Virtual Study Room Areas, Shared Whiteboard & Cohort Presence Indicator (`Study Hub`)**
+   - 6 detailed Virtual Study Room Areas (`AZ900-CONCEPTS`, `AZ900-SERVICES`, `AZ900-SECURITY`, `AZ900-GOVERNANCE`, `AZ900-WAR-ROOM`, `AZ900-CLINIC`) accessible inside the Study Hub dropdown and Virtual Study Room side-panel.
+   - Real-time **Shared Whiteboard** view (`VirtualStudyRoom.tsx` & `server.ts`) with HTML5 freehand sketching and draggable Azure architecture concept cards (`whiteboard:node:add`, `whiteboard:node:move`, `whiteboard:stroke:add`, `whiteboard:clear`).
+   - Prominent **Cohort Presence Indicator** showing how many other cohort members are currently active in the same study area, alongside live peer collaboration chat.
+
+10. **Settings Panel 'Reset Password' Modal (`ResetPasswordModal.tsx` & `AccessibilityFontSizeControl.tsx`)**
+    - Dedicated **Reset Password** modal accessible from the Settings & Accessibility panel (header popover, inline footer bar, and full settings card).
+    - Allows email-authenticated users to verify their current password (`POST /api/auth/change-password`) and set a new, secure password with real-time strength validation.
+
+11. **Admin Route Protection Layer & Consolidated Admin Dashboard (`vangetich@gmail.com`)**
+    - Route protection layer (`src/utils/adminSecurity.ts` & `POST /api/admin/verify-access`) validating user email credentials against `ADMIN_EMAIL_WHITELIST = ['vangetich@gmail.com']` to restrict access to Cloud Sync, M-Pesa management, Curriculum Readiness, User Account Management, and Question Bank CRUD.
+    - Consolidated `AdminDashboard.tsx` and `AdminBackOfficeModal.tsx` storing and surfacing Admin DB CRUD, User Accounts & Password Resets (`GET /api/admin/users`, `POST /api/admin/users/manage`), Cloud Sync & M-Pesa Daraja Ledger (`GET /api/admin/payments-ledger`), and Curriculum Readiness while hiding these sensitive tools from standard student views.
+

@@ -15,6 +15,10 @@ import {
   Check,
   FileText,
   HelpCircle,
+  Users,
+  KeyRound,
+  ShieldCheck,
+  Unlock,
 } from 'lucide-react';
 import {
   fetchSupabaseAdminModuleStats,
@@ -53,6 +57,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     type: 'success' | 'info' | 'error';
     message: string;
   } | null>(null);
+
+  // Sub-view switcher inside AdminDashboard: 'curriculum' vs 'users'
+  const [dashboardSection, setDashboardSection] = useState<'curriculum' | 'users'>('curriculum');
+
+  // User accounts & password reset management state
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(false);
+  const [selectedUserEmail, setSelectedUserEmail] = useState<string>('vangetich@gmail.com');
+  const [manageFullName, setManageFullName] = useState<string>('V. Ngetich (Bootcamp Admin)');
+  const [manageRole, setManageRole] = useState<'student' | 'bootcamp_admin' | 'enterprise_user'>('bootcamp_admin');
+  const [managePremium, setManagePremium] = useState<boolean>(true);
+  const [manageNewPassword, setManageNewPassword] = useState<string>('');
+  const [isUpdatingUser, setIsUpdatingUser] = useState<boolean>(false);
 
   // Form state for Add / Edit Question
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
@@ -119,13 +136,80 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     [notifyBanner]
   );
 
+  const loadAdminUsers = useCallback(async () => {
+    setIsLoadingUsers(true);
+    try {
+      const res = await fetch('/api/admin/users');
+      if (res.ok) {
+        const data = await res.json();
+        setAdminUsers(data.users || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadModuleStats();
-  }, [loadModuleStats]);
+    loadAdminUsers();
+  }, [loadModuleStats, loadAdminUsers]);
 
   useEffect(() => {
     loadQuestionsForModule(selectedModuleId);
   }, [selectedModuleId, loadQuestionsForModule]);
+
+  const handleSelectUserForManage = (u: any) => {
+    setSelectedUserEmail(u.email);
+    setManageFullName(u.full_name || '');
+    setManageRole(u.role || 'student');
+    setManagePremium(Boolean(u.is_premium));
+    setManageNewPassword('');
+  };
+
+  const handleSaveUserAccountChanges = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUserEmail.trim()) return;
+    setIsUpdatingUser(true);
+    try {
+      const res = await fetch('/api/admin/users/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: selectedUserEmail.trim(),
+          full_name: manageFullName.trim(),
+          role: manageRole,
+          is_premium: managePremium,
+          unlockAllModules: managePremium,
+          newPassword: manageNewPassword.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update user account.');
+      }
+      if (data.users) {
+        setAdminUsers(data.users);
+      } else {
+        await loadAdminUsers();
+      }
+      setManageNewPassword('');
+      notifyBanner({
+        type: 'success',
+        message: manageNewPassword.trim()
+          ? `Updated account & reset password for ${selectedUserEmail.trim()}.`
+          : `Updated account role & privileges for ${selectedUserEmail.trim()}.`,
+      });
+    } catch (err: any) {
+      notifyBanner({
+        type: 'error',
+        message: err.message || 'Failed to update user account.',
+      });
+    } finally {
+      setIsUpdatingUser(false);
+    }
+  };
 
   const handleResetToCreate = (targetModule = selectedModuleId) => {
     setFormMode('create');
@@ -400,6 +484,224 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             Dismiss
           </button>
+        </div>
+      )}
+
+      {/* Admin Dashboard Mode Switcher: Curriculum Content Edits vs User Accounts & Password Resets */}
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setDashboardSection('curriculum')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+              dashboardSection === 'curriculum'
+                ? 'bg-[#0078D4] text-white shadow-xs'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Curriculum Content Edits &amp; Question Bank ({statsPayload?.total_questions ?? 27} Qs)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDashboardSection('users')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+              dashboardSection === 'users'
+                ? 'bg-[#0078D4] text-white shadow-xs'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>User Accounts &amp; Password Resets ({adminUsers.length})</span>
+          </button>
+        </div>
+
+        <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>Authorized Whitelist Admin View</span>
+        </span>
+      </div>
+
+      {/* SECTION A: USER ACCOUNTS, ROLES & PASSWORD RESETS */}
+      {dashboardSection === 'users' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* Left: Registered User Directory */}
+          <div className="lg:col-span-7 rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-sky-400" />
+                <h4 className="text-xs sm:text-sm font-extrabold">
+                  Registered Learner &amp; Admin Accounts ({adminUsers.length})
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={loadAdminUsers}
+                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <RefreshCw className={`w-3 h-3 ${isLoadingUsers ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {adminUsers.map((u) => {
+                const isSelected = u.email.toLowerCase() === selectedUserEmail.toLowerCase();
+                return (
+                  <div
+                    key={u.id}
+                    onClick={() => handleSelectUserForManage(u)}
+                    className={`p-3.5 flex flex-wrap items-center justify-between gap-3 cursor-pointer transition-colors ${
+                      isSelected ? 'bg-sky-50/90 border-l-4 border-[#0078D4]' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-extrabold text-xs sm:text-sm text-slate-900">
+                          {u.full_name}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            u.role === 'bootcamp_admin'
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                              : u.role === 'enterprise_user'
+                              ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                              : 'bg-blue-100 text-blue-800 border border-blue-200'
+                          }`}
+                        >
+                          {u.role}
+                        </span>
+                        {u.is_premium && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            Premium (12 Modules)
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs font-mono text-slate-600">{u.email}</div>
+                      <div className="text-[10px] text-slate-500">
+                        Unlocked Modules: {(u.unlocked_modules || []).length}/12 • Sessions:{' '}
+                        {u.sessions_completed ?? 0}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectUserForManage(u);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <KeyRound className="w-3 h-3 text-amber-300" />
+                      <span>Manage / Reset Password</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Account Editor & Direct Password Reset Form */}
+          <div className="lg:col-span-5 rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="p-3.5 bg-slate-900 text-white flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-amber-400" />
+              <div>
+                <h4 className="text-xs sm:text-sm font-extrabold">
+                  Manage Account &amp; Password Reset
+                </h4>
+                <p className="text-[10px] text-slate-300">
+                  Update credentials, role, or module access for any user
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveUserAccountChanges} className="p-4 space-y-3">
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase text-slate-600 mb-1">
+                  Target Account Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={selectedUserEmail}
+                  onChange={(e) => setSelectedUserEmail(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono font-bold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase text-slate-600 mb-1">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={manageFullName}
+                  onChange={(e) => setManageFullName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase text-slate-600 mb-1">
+                    Account Role
+                  </label>
+                  <select
+                    value={manageRole}
+                    onChange={(e) => setManageRole(e.target.value as any)}
+                    className="w-full px-2.5 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white"
+                  >
+                    <option value="student">student</option>
+                    <option value="enterprise_user">enterprise_user</option>
+                    <option value="bootcamp_admin">bootcamp_admin</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase text-slate-600 mb-1">
+                    Curriculum Access
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setManagePremium((p) => !p)}
+                    className={`w-full px-2.5 py-2 rounded-lg border text-xs font-black flex items-center justify-center gap-1 cursor-pointer ${
+                      managePremium
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-800'
+                        : 'bg-slate-50 border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <Unlock className="w-3.5 h-3.5" />
+                    <span>{managePremium ? 'All 12 Unlocked' : 'Standard (1–4)'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase text-slate-600 mb-1">
+                  Reset / Set New Password (Optional)
+                </label>
+                <input
+                  type="password"
+                  value={manageNewPassword}
+                  onChange={(e) => setManageNewPassword(e.target.value)}
+                  placeholder="Enter new password (min 6 chars) to reset..."
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-900"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isUpdatingUser}
+                className="w-full py-2.5 rounded-xl bg-[#0078D4] hover:bg-blue-700 disabled:opacity-50 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>
+                  {isUpdatingUser ? 'Updating Account...' : 'Save Account & Password Changes'}
+                </span>
+              </button>
+            </form>
+          </div>
         </div>
       )}
 

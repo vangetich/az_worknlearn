@@ -85,3 +85,32 @@ This document provides the complete chronological engineering history, architect
 ## 📅 Phase 9: Comprehensive Documentation & In-App Reader
 - Created `/README.md`, `/BUILD_HISTORY.md`, and `/HISTORY.md` in the repository root.
 - Integrated an interactive **README & Build History Viewer + Downloader** inside the application's `UserGuideModal` so learners and reviewers can read, copy, or download the full project documentation directly from the UI.
+
+---
+
+## 📅 Phase 10: Virtual Study Room Areas, Shared Whiteboard & Cohort Presence Indicator
+- **6 Specialized Virtual Study Room Areas (`src/data/virtualStudyAreas.ts`, `GlassyStudyHubDropdown.tsx`, `VirtualStudyRoom.tsx`)**:
+  - Engineered six domain-aligned Virtual Study Room Areas inside the Study Hub: `AZ900-CONCEPTS`, `AZ900-SERVICES`, `AZ900-SECURITY`, `AZ900-GOVERNANCE`, `AZ900-WAR-ROOM`, and `AZ900-CLINIC`.
+- **Shared Whiteboard View (`VirtualStudyRoom.tsx` & `server.ts`)**:
+  - Added a real-time **Shared Whiteboard** tab inside the Virtual Study Room featuring an interactive HTML5 freehand sketching canvas (multi-color Azure pens) and draggable Azure Architecture Concept Cards (`Compute`, `Networking`, `Storage`, `Identity`, `Governance`).
+  - Synchronized whiteboard nodes and freehand strokes across connected cohort members via WebSockets (`/api/collab-ws`) and `/api/study-hub/:roomId/event` (`whiteboard:node:add`, `whiteboard:node:move`, `whiteboard:node:delete`, `whiteboard:stroke:add`, `whiteboard:clear`).
+- **Live Cohort Member Presence Indicator**:
+  - Added prominent live cohort presence badges in the Virtual Study Room header and area selector bar showing how many other cohort members are currently active in the same study area.
+
+---
+
+## 📅 Phase 11: Settings Panel 'Reset Password' Modal (Current Password Verification)
+- **Email Credential Verification & Password Update (`ResetPasswordModal.tsx`, `AccessibilityFontSizeControl.tsx`, `authService.ts`, `server.ts`)**:
+  - Created a dedicated **Reset Password** modal accessible directly from all variants of the Settings & Accessibility panel (header popover, inline footer bar, and full settings card).
+  - Implemented `POST /api/auth/change-password` and `backendDb.changeUserPassword()` to verify the user's `currentPassword` before updating their account credentials to `newPassword`, complete with real-time password strength checks (`8+ chars`, `Uppercase`, `Number/Symbol`, `Match confirmation`).
+
+---
+
+## 📅 Phase 12: Admin Route Protection Layer & Consolidated Admin Dashboard (`vangetich@gmail.com`)
+- **Whitelist Route Protection Layer (`src/utils/adminSecurity.ts` & `POST /api/admin/verify-access`)**:
+  - Implemented `ADMIN_EMAIL_WHITELIST = ['vangetich@gmail.com']`, `isWhitelistedAdminEmail()`, and `verifyAdminRouteCredentials()` to guard access to Cloud Sync, M-Pesa management, Curriculum Readiness, User Account Management, and Question Bank CRUD.
+  - Hid administrative and curriculum readiness controls from standard student toolbars (`src/App.tsx`) so sensitive administrative tools are only accessible via authorized administrative login.
+- **Consolidated Admin Dashboard (`AdminDashboard.tsx` & `AdminBackOfficeModal.tsx`)**:
+  - Added **User Accounts & Password Resets** management (`GET /api/admin/users`, `POST /api/admin/users/manage`) alongside **PostgreSQL/Supabase Question Bank CRUD**.
+  - Added a dedicated **Cloud Sync, M-Pesa & Curriculum Readiness** tab in `AdminBackOfficeModal.tsx` (`GET /api/admin/payments-ledger`, `GET /api/curriculum/readiness-check`) storing and displaying M-Pesa Daraja STK Push transactions, Cloud Sync status, and official Microsoft Learn readiness audits.
+

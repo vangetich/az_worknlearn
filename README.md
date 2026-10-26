@@ -75,13 +75,44 @@ An interactive, full-stack **Microsoft Certified: Azure Fundamentals (AZ-900)** 
 
 ---
 
+### 9. 🏛️ Virtual Study Room Areas, Shared Whiteboard & Cohort Presence Indicator (`Study Hub`)
+- Located directly inside the **Study Hub** menu (`GlassyStudyHubDropdown.tsx`) and **Virtual Study Room** (`VirtualStudyRoom.tsx`), featuring **6 specialized Study Room Areas**:
+  1. `AZ900-CONCEPTS` — Path 1 Cloud Concepts & Economics Lounge (`25–30%`)
+  2. `AZ900-SERVICES` — Path 2 Core Architecture, Compute & Storage Lab (`35–40%`)
+  3. `AZ900-SECURITY` — Path 2 Entra ID, Zero Trust & Defense-in-Depth Vault (`35–40%`)
+  4. `AZ900-GOVERNANCE` — Path 3 Cost, Policy, Locks & Monitoring Command (`30–35%`)
+  5. `AZ900-WAR-ROOM` — 700+ Score Timed Mock Exam War Room (`100% Full Syllabus`)
+  6. `AZ900-CLINIC` — Harambee Distractor & Misconception Clinic (`High-Yield Traps`)
+- **Shared Whiteboard View**: Interactive HTML5 freehand sketching canvas + draggable Azure Concept Cards (`Compute`, `Networking`, `Storage`, `Identity`, `Governance`) synchronized in real time via WebSockets (`/api/collab-ws`) and `/api/study-hub/:roomId/event`.
+- **Cohort Member Presence Indicator**: Real-time badge in the Study Room header and area selector showing how many other cohort members are currently active in the same study area.
+- **Peer Collaboration Chat & Co-Op Solver**: Real-time chat interface, shared scratchpad, and synchronized multi-user option voting.
+
+---
+
+### 10. 🔐 Settings Panel 'Reset Password' Modal (Current Password Verification)
+- Accessible directly from the **Settings & Accessibility Panel** (`AccessibilityFontSizeControl.tsx` & `ResetPasswordModal.tsx`).
+- Allows users with email-based authentication (`student@az900.ke`, `vangetich@gmail.com`, etc.) to update their account credentials by verifying their **current password** and providing a **new, secure password** via `POST /api/auth/change-password`.
+
+---
+
+### 11. 🛡️ Admin Route Protection Layer & Consolidated Admin Dashboard (`vangetich@gmail.com`)
+- **Whitelist Route Protection Layer (`src/utils/adminSecurity.ts`)**:
+  - Validates user email credentials against `ADMIN_EMAIL_WHITELIST = ['vangetich@gmail.com']` (`POST /api/admin/verify-access`) to restrict access to **Cloud Sync**, **M-Pesa Daraja STK Push Management**, **Curriculum Readiness**, **User Account Management**, and **Question Bank CRUD**.
+  - All sensitive administrative tools are hidden from standard student views and accessible exclusively via authorized administrative login.
+- **Consolidated Admin Dashboard (`AdminDashboard.tsx` & `AdminBackOfficeModal.tsx`)**:
+  - **User Accounts & Password Resets**: View all registered accounts (`GET /api/admin/users`), manage roles (`student`, `enterprise_user`, `bootcamp_admin`), toggle 12-module premium access, and reset user/admin passwords (`POST /api/admin/users/manage`).
+  - **Cloud Sync & M-Pesa Information**: Inspect live M-Pesa Daraja STK Push & Stripe transaction ledgers (`GET /api/admin/payments-ledger`), Cloud Sync status, and launch the full Cloud Sync & M-Pesa portal.
+  - **Curriculum Content Edits & Readiness**: Full PostgreSQL/Supabase Question Bank CRUD (`POST/PUT /api/admin/questions`) and Microsoft Learn Curriculum Readiness audits (`GET /api/curriculum/readiness-check`).
+
+---
+
 ## 🏗️ Technical Architecture & Stack
 
 | Layer | Technology | Purpose |
 | :--- | :--- | :--- |
 | **Frontend Framework** | React 19 + TypeScript + Vite 6 | Modular SPA with responsive Tailwind CSS v4 styling |
-| **Data Visualization** | Recharts 3.10 + Custom SVG Gauges | Domain Radar, Accuracy Trajectory, and `/api/quiz/submit` & `/api/payments/webhook` Telemetry Line Charts |
-| **Backend Server** | Express.js (`server.ts`) + `tsx` | REST API proxy, Gemini AI scenario generation, telemetry aggregation, and PostgreSQL/Supabase persistence |
+| **Data Visualization** | Recharts 3.10 + D3.js + HTML5 Canvas | Domain Radar, D3 Heatmaps, Shared Whiteboard Canvas, and Telemetry Line Charts |
+| **Backend Server** | Express.js (`server.ts`) + WebSocket (`ws`) | REST API proxy, real-time Study Hub WebSockets, M-Pesa/Stripe ledger, and RBAC admin routes |
 | **Cloud Databases** | PostgreSQL + Supabase + Firebase Firestore | Multi-cloud progress sync, RBAC security rules (`firestore.rules`), and offline-first `localStorage` fallback |
 | **Audio & Speech** | Web Audio API + Web Speech API | Synthesized answer chimes, hands-free TTS question reader, and SpeechRecognition voice answering/notes |
 | **Unit Testing** | Vitest 5 (`npm test`) | Automated unit tests for authentication, PostgreSQL backend latency, and sync error resilience |
@@ -104,11 +135,6 @@ Copy `.env.example` to `.env` and populate any optional cloud credentials (the a
 ```bash
 cp .env.example .env
 ```
-
-Key environment variables (`.env.example`):
-- `GEMINI_API_KEY` — Server-side Google Gemini API key for dynamic AZ-900 scenario generation and AI Tutor explanations.
-- `DATABASE_URL` — PostgreSQL connection string for persistent module progress and quiz telemetry.
-- `VITE_SUPABASE_URL` & `VITE_SUPABASE_ANON_KEY` — Optional Supabase real-time client configuration.
 
 ### 3. Start the Full-Stack Development Server
 Runs the Express + Vite middleware server on `http://localhost:3000`:
@@ -135,54 +161,21 @@ npm run build
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/api/health` | Returns server status, database connectivity, and uptime telemetry |
+| `POST` | `/api/auth/login` | Authenticates learner or admin credentials and returns session JWT |
+| `POST` | `/api/auth/change-password` | Verifies `currentPassword` and updates to `newPassword` for email-authenticated users |
+| `POST` | `/api/admin/set-password` | Sets or resets the administrative sign-in password for `vangetich@gmail.com` |
+| `POST` | `/api/admin/verify-access` | Validates user email against `ADMIN_EMAIL_WHITELIST` and verifies admin password |
+| `GET` | `/api/admin/users` | Returns all user accounts and role/premium metadata for the Admin Dashboard |
+| `POST` | `/api/admin/users/manage` | Updates user roles, premium module unlocks, and password resets |
+| `GET` | `/api/admin/payments-ledger` | Returns M-Pesa Daraja STK Push & Stripe transaction ledger and Cloud Sync status |
+| `GET/POST` | `/api/study-hub/:roomId/event` | Real-time Virtual Study Room state, Shared Whiteboard nodes/strokes, and chat sync |
 | `POST` | `/api/quiz/submit` | Records question attempt, latency telemetry, and updates user module progress |
-| `POST` | `/api/progress/module` | Persists module-level accuracy, completion state, and study streak to PostgreSQL |
-| `POST` | `/api/payments/webhook` | Processes premium cohort unlock webhooks with signature verification & latency tracking |
-| `GET` | `/api/telemetry/endpoints` | Returns time-series latency (`ms`) and error rate (`%`) telemetry for `/api/quiz/submit` and `/api/payments/webhook` |
-| `POST` | `/api/ai/generate-scenario` | Server-side Gemini API route that generates custom AZ-900 exam scenarios with distractor breakdowns |
-
----
-
-## 📂 Project Directory Structure
-
-```text
-├── README.md                                 # Project documentation & setup guide
-├── BUILD_HISTORY.md                          # Chronological engineering & feature build history
-├── server.ts                                 # Express full-stack backend & API routes
-├── firestore.rules                           # Firebase Firestore security rules
-├── package.json                              # Dependencies & scripts
-└── src/
-    ├── App.tsx                               # Main application state, routing & Practice toolbar
-    ├── index.css                             # Tailwind CSS v4 + custom Kenyan motif & shimmer animations
-    ├── components/
-    │   ├── Header.tsx                        # Navigation, Daily Study Goal Ring & compact red Sign-Out button
-    │   ├── QuizCard.tsx                      # Scenario reader, Analyze Distractors & Azure Concept Snap
-    │   ├── ScenarioTextWithTooltips.tsx      # Hover/Click Azure Concept Snap floating card engine
-    │   ├── GlobalLeaderboard.tsx             # Global Harambee Azure Cohort Peer Leaderboard
-    │   ├── AdaptiveQuizView.tsx              # Adaptive Learning Path & weak-module prioritization engine
-    │   ├── StudyDeck.tsx                     # Interactive Study Mode & Microsoft Learn topic explorer
-    │   ├── PostSessionWeakAreaReview.tsx     # End-of-session weak area diagnostics & retry launcher
-    │   ├── BackendTelemetryLineChart.tsx     # Recharts latency & error-rate visualization
-    │   ├── ApiDocumentationModal.tsx         # Live API documentation & telemetry dashboard
-    │   ├── ExitStudySessionModal.tsx         # 17s African Heritage Exit screen & WhatsApp handoff
-    │   ├── MotifDecorations.tsx              # KenyanFlagQuickSortMotifs, MoranShield & MaasaiMedallion
-    │   └── UserGuideModal.tsx                # Printable User Manual, FAQ & README/Build History viewer
-    ├── data/
-    │   ├── curriculum.ts                     # Official AZ-900 Learning Paths, Modules & Question Bank
-    │   └── faqHelpData.ts                    # Structured FAQ & architectural trap reference
-    ├── hooks/
-    │   └── usePostgresDatabase.ts            # Real-time PostgreSQL/Supabase synchronization hook
-    ├── services/
-    │   ├── postgresBackendService.ts         # Backend client with retry, latency tracking & offline queue
-    │   ├── authService.ts                    # Authentication & session lifecycle service
-    │   └── __tests__/
-    │       └── quizBackend.test.ts           # Vitest unit tests for submitQuestionAnswer & writeModuleProgress
-    └── utils/
-        ├── storage.ts                        # LocalStorage persistence, streak & weak-area calculations
-        └── pdfGenerator.ts                   # Printable PDF report & study certificate generator
-```
+| `POST` | `/api/payments/mpesa/stk-push` | Initiates Safaricom Daraja M-Pesa STK Push transaction |
+| `POST` | `/api/payments/webhook` | Processes M-Pesa Daraja & Stripe payment webhooks |
+| `GET` | `/api/curriculum/readiness-check` | Audits AZ-900 curriculum alignment and official domain weights |
 
 ---
 
 ## 📜 Build History
-For a complete chronological log of architectural phases, feature implementations, UI/UX refinements, and testing milestones, see **[BUILD_HISTORY.md](./BUILD_HISTORY.md)**.
+For a complete chronological log of architectural phases, feature implementations, UI/UX refinements, and testing milestones, see **[BUILD_HISTORY.md](./BUILD_HISTORY.md)**, **[HISTORY.md](./HISTORY.md)**, and **[BUILD.md](./BUILD.md)**.
+
