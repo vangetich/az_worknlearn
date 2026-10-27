@@ -47,6 +47,9 @@ import { StreakActivityGraph } from './StreakActivityGraph';
 import { DailyStudyReminder } from './DailyStudyReminder';
 import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
 import { SubscriptionPanel } from './SubscriptionPanel';
+import { MfaSecuritySetupModal } from './MfaSecuritySetupModal';
+import { getUserMfaSettings, UserMfaSettings } from '../utils/totpSecurity';
+import { authService } from '../services/authService';
 import { getUnresolvedMistakesMap } from '../utils/storage';
 import { BUILTIN_QUESTIONS } from '../data/questionBank';
 
@@ -158,6 +161,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [tempUsername, setTempUsername] = useState<string>(candidateUsername);
   const [tempRole, setTempRole] = useState<string>(candidateRole);
   const [profileSaveFeedback, setProfileSaveFeedback] = useState<boolean>(false);
+
+  // Personal Account TOTP MFA Security Setup Modal state (Independent of Admin Console 2FA)
+  const [showMfaSetupModal, setShowMfaSetupModal] = useState<boolean>(false);
+  const [userMfaState, setUserMfaState] = useState<UserMfaSettings>(() => {
+    const storedUser = authService.getStoredBackendUser();
+    const uid = storedUser?.email || storedUser?.id || candidateUsername || 'default-learner';
+    return getUserMfaSettings(uid, storedUser?.email || `${candidateUsername}@az900.cloud`);
+  });
 
   // Top-level ProfileView Tab ('overview' | 'gaps')
   const [profileMainTab, setProfileMainTab] = useState<'overview' | 'gaps'>('overview');
@@ -615,6 +626,53 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           USER SETTINGS PANEL: APPLICATION-WIDE ACCESSIBILITY FONT SIZE CONTROL
          ===================================================================== */}
       <AccessibilityFontSizeControl variant="panel" />
+
+      {/* =====================================================================
+          PERSONAL ACCOUNT MFA SECURITY SETUP PANEL (INDEPENDENT OF ADMIN 2FA)
+         ===================================================================== */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <div
+            className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border ${
+              userMfaState.enabled
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-sky-50 text-[#0078D4] border-sky-200'
+            }`}
+          >
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm sm:text-base font-extrabold text-slate-900">
+                Personal Account TOTP Multi-Factor Authentication (MFA)
+              </h3>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                  userMfaState.enabled
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    : 'bg-amber-50 text-amber-800 border-amber-300'
+                }`}
+              >
+                {userMfaState.enabled ? 'TOTP MFA Enabled' : 'TOTP MFA Disabled'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Configure a 6-digit Time-Based One-Time Password (TOTP) authenticator and backup recovery codes for your personal learner account (<strong>@{candidateUsername}</strong>), independent of the Admin Console 2FA requirement.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowMfaSetupModal(true)}
+            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 text-xs font-extrabold inline-flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>MFA Security Setup</span>
+          </button>
+        </div>
+      </div>
 
       {/* =====================================================================
           SUBSCRIPTION PANEL: STRIPE ELEMENTS PAYMENT & PREMIUM MODULE UNLOCK
@@ -1174,8 +1232,24 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </div>
               </div>
 
-              {/* Right: Edit Profile & Open Glossary Action Buttons */}
+              {/* Right: Edit Profile, MFA Security Setup & Open Glossary Action Buttons */}
               <div className="flex flex-wrap items-center gap-2 self-start lg:self-center shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowMfaSetupModal(true)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-extrabold inline-flex items-center gap-1.5 border shadow-xs transition-all cursor-pointer ${
+                    userMfaState.enabled
+                      ? 'bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-100 border-emerald-300/50'
+                      : 'bg-slate-950/60 hover:bg-slate-950/80 text-amber-300 border-amber-400/40'
+                  }`}
+                  title="Open MFA Security Setup modal to configure personal account TOTP Multi-Factor Authentication"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>
+                    {userMfaState.enabled ? 'MFA Security (Active)' : 'MFA Security Setup'}
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -2824,6 +2898,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           })}
         </div>
       </div>
+
+      {/* Personal Learner Account TOTP MFA Security Setup Modal */}
+      <MfaSecuritySetupModal
+        isOpen={showMfaSetupModal}
+        onClose={() => setShowMfaSetupModal(false)}
+        candidateName={candidateName}
+        candidateUsername={candidateUsername}
+        onMfaStateChanged={(updated) => setUserMfaState(updated)}
+      />
     </div>
   );
 };

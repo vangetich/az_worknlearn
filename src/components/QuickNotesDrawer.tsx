@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   FileText,
@@ -13,16 +13,25 @@ import {
   BookmarkCheck,
   Loader2,
   CloudCheck,
+  Download,
+  Anchor,
 } from 'lucide-react';
 import { Question } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
 import { useDebouncedNotes } from '../hooks/useDebouncedNotes';
+import { BUILTIN_QUESTIONS } from '../data/questionBank';
+import {
+  downloadNotesAndMemoryAnchorsMarkdown,
+  saveMemoryAnchor,
+  isMemoryAnchorSaved,
+} from '../utils/exportNotesMarkdown';
 
 interface QuickNotesDrawerProps {
   question: Question;
   isOpen: boolean;
   onClose: () => void;
   onNoteSaved?: (text: string) => void;
+  allQuestions?: Question[];
 }
 
 export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
@@ -30,6 +39,7 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
   isOpen,
   onClose,
   onNoteSaved,
+  allQuestions,
 }) => {
   const {
     noteText,
@@ -44,6 +54,44 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
     delayMs: 450,
     onSaved: onNoteSaved,
   });
+
+  const [anchorPinned, setAnchorPinned] = useState<boolean>(() =>
+    question ? isMemoryAnchorSaved(`anchor-${question.id}`) : false
+  );
+  const [markdownExportToast, setMarkdownExportToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (question) {
+      setAnchorPinned(isMemoryAnchorSaved(`anchor-${question.id}`));
+    }
+  }, [question, isOpen]);
+
+  const handlePinMemoryAnchor = () => {
+    if (!question) return;
+    saveMemoryAnchor({
+      id: `anchor-${question.id}`,
+      questionId: question.id,
+      moduleId: question.moduleId,
+      moduleTitle: question.moduleTitle,
+      title: `${question.id.toUpperCase()}: ${question.moduleTitle}`,
+      anchorText:
+        noteText.trim() ||
+        question.examTip ||
+        question.whyCorrect,
+      examTrap: question.examTip,
+    });
+    setAnchorPinned(true);
+  };
+
+  const handleExportMarkdown = () => {
+    forceSave();
+    const pool = allQuestions && allQuestions.length > 0 ? allQuestions : BUILTIN_QUESTIONS;
+    const result = downloadNotesAndMemoryAnchorsMarkdown(pool);
+    setMarkdownExportToast(
+      `Exported ${result.notesCount} notes & ${result.anchorsCount} memory anchors to ${result.filename}!`
+    );
+    setTimeout(() => setMarkdownExportToast(null), 4000);
+  };
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -215,14 +263,55 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
             />
           </div>
 
-          {/* Exam Anchor Reference Tip */}
+          {/* Exam Anchor Reference Tip & Pin Memory Anchor */}
           {question.examTip && (
-            <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-xs text-amber-950 space-y-1">
-              <span className="font-extrabold text-amber-900 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span>Curriculum Anchor Reference</span>
-              </span>
+            <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-xs text-amber-950 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-extrabold text-amber-900 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Curriculum Memory Anchor</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handlePinMemoryAnchor}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border flex items-center gap-1 transition-colors cursor-pointer ${
+                    anchorPinned
+                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                      : 'bg-white hover:bg-amber-100 text-amber-900 border-amber-300'
+                  }`}
+                >
+                  <Anchor className="w-3 h-3" />
+                  <span>{anchorPinned ? 'Memory Anchor Pinned ✓' : 'Pin Memory Anchor'}</span>
+                </button>
+              </div>
               <p className="leading-relaxed text-amber-900">{question.examTip}</p>
+            </div>
+          )}
+
+          {/* Offline Markdown Export Card */}
+          <div className="p-3.5 rounded-xl bg-gradient-to-r from-sky-50 via-white to-emerald-50/60 border border-sky-200/90 flex items-center justify-between gap-3">
+            <div className="space-y-0.5 min-w-0">
+              <span className="text-xs font-extrabold text-slate-900 block">
+                Export All Saved Question Notes &amp; Memory Anchors (.MD)
+              </span>
+              <span className="text-[11px] text-slate-600 block">
+                Download a formatted Markdown study file for offline revision.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleExportMarkdown}
+              className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold text-xs flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer shrink-0"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export .MD</span>
+            </button>
+          </div>
+
+          {markdownExportToast && (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{markdownExportToast}</span>
             </div>
           )}
 
@@ -242,20 +331,29 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-5 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between gap-3">
-          {hasExistingNote ? (
+        <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            {hasExistingNote && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Delete this note"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+            )}
             <button
               type="button"
-              onClick={handleDelete}
-              className="px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Delete this note"
+              onClick={handleExportMarkdown}
+              className="px-3 py-2 rounded-xl bg-white hover:bg-sky-50 text-[#0078D4] border border-sky-200 text-xs font-extrabold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Export all saved question notes and memory anchors as a formatted Markdown (.md) file"
             >
-              <Trash2 className="w-4 h-4" />
-              <span>Delete</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>Export .MD</span>
             </button>
-          ) : (
-            <div />
-          )}
+          </div>
 
           <div className="flex items-center gap-2">
             <button

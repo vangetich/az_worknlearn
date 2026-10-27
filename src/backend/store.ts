@@ -80,9 +80,11 @@ export interface DbPaymentTransaction {
   user_id: string; // FK -> users.id
   gateway: PaymentGateway;
   phone_number: string;
+  masked_account?: string;
   amount: number;
   currency: 'KES' | 'USD';
   module_id: number | 'all';
+  module_ids?: number[];
   checkout_request_id: string;
   merchant_request_id: string;
   receipt_number: string | null;
@@ -683,9 +685,11 @@ class Az900BackendDatabase {
     user_id: string;
     gateway: PaymentGateway;
     phone_number: string;
+    masked_account?: string;
     amount: number;
     currency: 'KES' | 'USD';
     module_id: number | 'all';
+    module_ids?: number[];
     checkout_request_id?: string;
     merchant_request_id?: string;
   }): DbPaymentTransaction {
@@ -706,9 +710,11 @@ class Az900BackendDatabase {
       user_id: user.id,
       gateway: params.gateway,
       phone_number: params.phone_number,
+      masked_account: params.masked_account || params.phone_number,
       amount: params.amount,
       currency: params.currency,
       module_id: params.module_id,
+      module_ids: params.module_ids,
       checkout_request_id: checkoutId,
       merchant_request_id: merchantId,
       receipt_number: null,
@@ -747,6 +753,14 @@ class Az900BackendDatabase {
       if (tx.module_id === 'all') {
         user.is_premium = true;
         user.unlocked_modules = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+      } else if (Array.isArray(tx.module_ids) && tx.module_ids.length > 0) {
+        const merged = Array.from(
+          new Set([...user.unlocked_modules, ...tx.module_ids.map(Number)])
+        ).sort((a, b) => a - b);
+        user.unlocked_modules = merged;
+        if (user.unlocked_modules.length >= 12) {
+          user.is_premium = true;
+        }
       } else if (typeof tx.module_id === 'number') {
         if (!user.unlocked_modules.includes(tx.module_id)) {
           user.unlocked_modules = [...user.unlocked_modules, tx.module_id].sort((a, b) => a - b);

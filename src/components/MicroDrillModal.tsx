@@ -23,6 +23,7 @@ interface MicroDrillProps {
   targetModuleName: string;
   onAnswer: (questionId: string, selectedAnswer: string, isCorrect: boolean) => void;
   onCompleteDrill?: (moduleId: number, score: number, total: number) => void;
+  onLaunchPeerChallenge?: (moduleId: number) => void;
   onClose: () => void;
 }
 
@@ -32,6 +33,7 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
   targetModuleName,
   onAnswer,
   onCompleteDrill,
+  onLaunchPeerChallenge,
   onClose,
 }) => {
   // Take up to 5 questions for the Daily Harambee Weakness Drill
@@ -355,6 +357,19 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
                 >
                   <RotateCcw className="w-4 h-4" />
                   <span>Retry 5-Question Drill for Badge</span>
+                </button>
+              )}
+              {onLaunchPeerChallenge && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onLaunchPeerChallenge(targetModuleId);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-slate-900 to-[#006600] hover:opacity-95 text-white font-extrabold text-xs sm:text-sm inline-flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                >
+                  <Zap className="w-4 h-4 text-amber-300" />
+                  <span>Invite Cohort to Peer Challenge</span>
                 </button>
               )}
               <button

@@ -25,6 +25,7 @@ export interface CohortPerformanceViewProps {
   onSelectPathForPractice?: (pathId: number) => void;
   onSelectModuleForPractice?: (moduleId: number, pathId?: number) => void;
   onNavigateToPractice?: () => void;
+  onOpenPeerChallenge?: (moduleId?: number | 'all') => void;
 }
 
 interface PathCohortComparison {
@@ -78,6 +79,7 @@ export const CohortPerformanceView: React.FC<CohortPerformanceViewProps> = ({
   onSelectPathForPractice,
   onSelectModuleForPractice,
   onNavigateToPractice,
+  onOpenPeerChallenge,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -817,16 +819,28 @@ export const CohortPerformanceView: React.FC<CohortPerformanceViewProps> = ({
           </div>
         </div>
 
-        {onNavigateToPractice && (
-          <button
-            type="button"
-            onClick={onNavigateToPractice}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs shadow-md transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
-          >
-            <span>Resume Studio Practice</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {onOpenPeerChallenge && (
+            <button
+              type="button"
+              onClick={() => onOpenPeerChallenge('all')}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#0078D4] to-[#006600] hover:opacity-95 text-white font-black text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5 border border-white/20"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-300" />
+              <span>Launch 5-Q Peer Challenge</span>
+            </button>
+          )}
+          {onNavigateToPractice && (
+            <button
+              type="button"
+              onClick={onNavigateToPractice}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs shadow-md transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
+            >
+              <span>Resume Studio Practice</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

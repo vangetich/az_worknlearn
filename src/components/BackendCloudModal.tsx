@@ -691,6 +691,81 @@ export const BackendCloudModal: React.FC<BackendCloudModalProps> = ({
                       )}
                     </button>
                   </form>
+
+                  {/* Available Learning Plans & M-Pesa / Card Options Summary */}
+                  <div className="pt-3 border-t border-slate-200 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
+                        Available Learner Options &amp; Pricing
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        M-Pesa &amp; Card Ready
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs">
+                      <div className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-slate-900">1. Foundational (M1–M4)</span>
+                          <span className="block text-[10px] text-slate-500">
+                            4 Core Cloud Modules Free Forever
+                          </span>
+                        </div>
+                        <span className="font-mono font-black text-emerald-700">KES 0 / $0</span>
+                      </div>
+
+                      <div className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-slate-900">2. Cost Per Single Module</span>
+                          <span className="block text-[10px] text-slate-500">
+                            Any Advanced Module (Modules 5–12)
+                          </span>
+                        </div>
+                        <span className="font-mono font-black text-amber-700">
+                          KES 250 / $2.00
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-sky-50 border border-sky-200 flex items-center justify-between">
+                        <div>
+                          <span className="font-extrabold text-[#0078D4]">
+                            3. All 12 Modules Combined Bundle
+                          </span>
+                          <span className="block text-[10px] text-slate-600">
+                            Saves KES 1,050 (52% off vs. KES 2,000 separate)
+                          </span>
+                        </div>
+                        <span className="font-mono font-black text-slate-900">
+                          KES 950 / $15.00
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setActiveSection('mpesa-payments')}
+                        className="py-2 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <Smartphone className="w-3.5 h-3.5" />
+                        <span>Pay via M-Pesa</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveSection('mpesa-payments')}
+                        className="py-2 px-2.5 rounded-lg bg-[#635BFF] hover:opacity-95 text-white font-extrabold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        <span>Pay via Card</span>
+                      </button>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200 text-[11px] text-emerald-950 leading-snug">
+                      <strong className="font-extrabold">Customer Peace of Mind:</strong> Zero raw
+                      card numbers, CVCs, or M-Pesa PINs are stored. Protected under KDPA 2019 &amp;
+                      PCI-DSS with masked account receipts.
+                    </div>
+                  </div>
                 </div>
 
                 {/* Sync Local Progress Card */}

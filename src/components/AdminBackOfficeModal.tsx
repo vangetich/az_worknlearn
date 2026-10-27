@@ -33,6 +33,17 @@ import {
   isWhitelistedAdminEmail,
   verifyAdminRouteCredentials,
 } from '../utils/adminSecurity';
+import {
+  getAdminTotpConfig,
+  saveAdminTotpConfig,
+  generateBase32Secret,
+  generateCurrentTotpCode,
+  getTotpRemainingSeconds,
+  buildOtpAuthUri,
+  generateOtpQrSvgDataUrl,
+  isAdminTotpSessionAuthorized,
+  revokeAdminTotpSession,
+} from '../utils/totpSecurity';
 
 export type AdminOfficeTab =
   | 'question-bank-crud'
@@ -89,7 +100,22 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
     isWhitelistedAdminEmail(candidateSessionEmail) ? candidateSessionEmail : PRIMARY_ADMIN_EMAIL
   );
   const [adminPasswordInput, setAdminPasswordInput] = useState<string>('');
-  const [isSessionLocked, setIsSessionLocked] = useState<boolean>(false);
+  const [adminTotpCodeInput, setAdminTotpCodeInput] = useState<string>('');
+  const [adminTotpConfig, setAdminTotpConfig] = useState(() => getAdminTotpConfig());
+  const [isTotpVerified, setIsTotpVerified] = useState<boolean>(() =>
+    isAdminTotpSessionAuthorized()
+  );
+  const [isSessionLocked, setIsSessionLocked] = useState<boolean>(
+    () => !isAdminTotpSessionAuthorized()
+  );
+  const [liveAdminTotp, setLiveAdminTotp] = useState<string>(() =>
+    generateCurrentTotpCode(getAdminTotpConfig().secret)
+  );
+  const [totpRemainingSec, setTotpRemainingSec] = useState<number>(() =>
+    getTotpRemainingSeconds()
+  );
+  const [showAdminQrHelper, setShowAdminQrHelper] = useState<boolean>(true);
+  const [copiedAdminSecret, setCopiedAdminSecret] = useState<boolean>(false);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [isVerifyingRouteGuard, setIsVerifyingRouteGuard] = useState<boolean>(false);
 
@@ -102,8 +128,24 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
   } | null>(null);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState<boolean>(false);
 
+  // Live 1-second ticker for RFC 6238 30-second TOTP window
+  useEffect(() => {
+    if (!isOpen) return;
+    const updateTicker = () => {
+      const cfg = getAdminTotpConfig();
+      setAdminTotpConfig(cfg);
+      setLiveAdminTotp(generateCurrentTotpCode(cfg.secret));
+      setTotpRemainingSec(getTotpRemainingSeconds());
+    };
+    updateTicker();
+    const interval = setInterval(updateTicker, 1000);
+    return () => clearInterval(interval);
+  }, [isOpen]);
+
   const isSoleAuthorizedAdmin =
-    !isSessionLocked && isWhitelistedAdminEmail(verifiedAdminEmail);
+    !isSessionLocked &&
+    isTotpVerified &&
+    isWhitelistedAdminEmail(verifiedAdminEmail);
 
   const handleUpdateAdminPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,22 +254,54 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
       const verification = await verifyAdminRouteCredentials({
         email: adminEmailInput,
         password: adminPasswordInput || undefined,
+        totpCode: adminTotpCodeInput,
       });
 
       if (verification.authorized) {
         setVerifiedAdminEmail(verification.email);
+        setIsTotpVerified(true);
         setIsSessionLocked(false);
         setAdminPasswordInput('');
+        setAdminTotpCodeInput('');
+        setAdminTotpConfig(getAdminTotpConfig());
         setAuthNotice(
-          `Route Protection Verified: ${verification.email} matched against ADMIN_EMAIL_WHITELIST. Full Admin Console unlocked.`
+          `Admin 2FA TOTP & Whitelist Verified: ${verification.email} authorized via 6-digit Time-Based One-Time Password. Full Admin Console unlocked.`
         );
-        setTimeout(() => setAuthNotice(null), 4000);
+        setTimeout(() => setAuthNotice(null), 5000);
       } else {
-        setAuthNotice(verification.reason || 'Access denied by Admin Route Protection Layer.');
+        setAuthNotice(
+          verification.reason ||
+            'Access denied: Valid Whitelist Email, Password, and 6-digit TOTP code required.'
+        );
       }
     } finally {
       setIsVerifyingRouteGuard(false);
     }
+  };
+
+  const handleLockOrUnlockSession = () => {
+    if (isSoleAuthorizedAdmin) {
+      revokeAdminTotpSession();
+      setIsTotpVerified(false);
+      setIsSessionLocked(true);
+      setAdminTotpCodeInput('');
+      setAuthNotice(
+        'Admin Console session locked. Enter a fresh 6-digit 2FA TOTP code to re-authorize access.'
+      );
+    } else {
+      setIsSessionLocked(true);
+    }
+  };
+
+  const handleRotateAdminTotpSecret = () => {
+    const nextSecret = generateBase32Secret(16);
+    const updated = saveAdminTotpConfig({ secret: nextSecret });
+    setAdminTotpConfig(updated);
+    setLiveAdminTotp(generateCurrentTotpCode(updated.secret));
+    setPasswordNotice({
+      type: 'success',
+      message: `Rotated Admin Console 2FA TOTP Secret Key (${nextSecret}). Authenticator updated.`,
+    });
   };
 
   if (!isOpen) return null;
@@ -269,23 +343,23 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => setIsSessionLocked((prev) => !prev)}
+              onClick={handleLockOrUnlockSession}
               className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border transition-all cursor-pointer ${
-                isSessionLocked
+                !isSoleAuthorizedAdmin
                   ? 'bg-rose-600 text-white border-rose-500'
                   : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/40'
               }`}
-              title="Lock or unlock the whitelist-protected Admin Console session"
+              title="Lock the Admin Console session and require 2FA TOTP re-verification"
             >
-              {isSessionLocked ? (
+              {!isSoleAuthorizedAdmin ? (
                 <>
                   <Lock className="w-3.5 h-3.5" />
-                  <span>Guard Locked</span>
+                  <span>2FA Gate Locked</span>
                 </>
               ) : (
                 <>
                   <Unlock className="w-3.5 h-3.5" />
-                  <span>Whitelist Verified</span>
+                  <span>2FA TOTP Verified (Lock)</span>
                 </>
               )}
             </button>
@@ -409,66 +483,204 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
             </div>
           )}
 
-          {/* Route Protection Layer Gate if Session is Locked or Unverified */}
+          {/* Route Protection + Mandatory 2FA TOTP Authentication Layer Gate */}
           {!isSoleAuthorizedAdmin ? (
-            <div className="max-w-lg mx-auto my-6 bg-white rounded-2xl border-2 border-amber-300 p-6 shadow-md space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
-                  <Lock className="w-5 h-5" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-700">
-                    Admin Route Protection Layer
-                  </span>
-                  <h3 className="text-base font-extrabold text-slate-900">
-                    Whitelist Email &amp; Credential Verification
-                  </h3>
+            <div className="max-w-2xl mx-auto my-3 bg-white rounded-2xl border-2 border-amber-300 p-5 sm:p-6 shadow-md space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-800 border border-amber-300 flex items-center justify-center shrink-0">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                        Admin Console 2FA Authentication Layer
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        RFC 6238 TOTP (30s Window)
+                      </span>
+                    </div>
+                    <h3 className="text-base sm:text-lg font-extrabold text-slate-900 mt-0.5">
+                      Whitelist Credential &amp; Time-Based One-Time Password (TOTP) Gate
+                    </h3>
+                  </div>
                 </div>
               </div>
 
               <p className="text-xs text-slate-600 leading-relaxed">
-                Access to Cloud Sync, M-Pesa Management, Curriculum Readiness, User Account Management, and Question Bank CRUD is restricted by the administrative route protection whitelist (<strong>{PRIMARY_ADMIN_EMAIL}</strong>).
+                Admin Console login requires two-factor authentication: your whitelisted administrator identity (<strong>{PRIMARY_ADMIN_EMAIL}</strong>) and a valid <strong>6-digit Time-Based One-Time Password (TOTP)</strong> generated every 30 seconds.
+                <span className="block mt-1 text-[11px] text-slate-500">
+                  Note: This Admin Console 2FA layer is strictly isolated from learner account MFA settings in the User Profile tab.
+                </span>
               </p>
 
-              <form onSubmit={handleVerifySingleAdminIdentity} className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Whitelisted Administrator Email
-                  </label>
-                  <input
-                    type="email"
-                    value={adminEmailInput}
-                    onChange={(e) => setAdminEmailInput(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#0078D4]"
-                    placeholder={PRIMARY_ADMIN_EMAIL}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Admin Password (Default: AdminAzure2026!)
-                  </label>
-                  <input
-                    type="password"
-                    value={adminPasswordInput}
-                    onChange={(e) => setAdminPasswordInput(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#0078D4]"
-                    placeholder="Enter admin password..."
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={isVerifyingRouteGuard}
-                  className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+                {/* Left Column: Login & 6-Digit TOTP Authorization Form */}
+                <form
+                  onSubmit={handleVerifySingleAdminIdentity}
+                  className="md:col-span-7 space-y-3.5"
                 >
-                  <Unlock className="w-4 h-4" />
-                  <span>
-                    {isVerifyingRouteGuard
-                      ? 'Verifying Whitelist Credentials...'
-                      : `Verify & Unlock Admin Console (${PRIMARY_ADMIN_EMAIL})`}
-                  </span>
-                </button>
-              </form>
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
+                      1. Whitelisted Administrator Email
+                    </label>
+                    <input
+                      type="email"
+                      value={adminEmailInput}
+                      onChange={(e) => setAdminEmailInput(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-[#0078D4]"
+                      placeholder={PRIMARY_ADMIN_EMAIL}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
+                      2. Admin Password (Default: AdminAzure2026!)
+                    </label>
+                    <input
+                      type="password"
+                      value={adminPasswordInput}
+                      onChange={(e) => setAdminPasswordInput(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#0078D4]"
+                      placeholder="Enter admin password (optional if session active)..."
+                    />
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-300 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <label
+                        htmlFor="admin-totp-code-input"
+                        className="block text-[11px] font-black uppercase tracking-wider text-amber-950"
+                      >
+                        3. 6-Digit Authenticator TOTP Code (Required)
+                      </label>
+                      <span className="text-[11px] font-mono font-bold text-amber-800">
+                        Refreshes in {totpRemainingSec}s
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="admin-totp-code-input"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        value={adminTotpCodeInput}
+                        onChange={(e) =>
+                          setAdminTotpCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))
+                        }
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border-2 border-amber-400 text-base font-mono font-black tracking-[0.35em] text-center text-slate-900 focus:outline-none focus:border-[#0078D4]"
+                        placeholder="000000"
+                        aria-label="6-digit Admin TOTP code"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAdminTotpCodeInput(liveAdminTotp)}
+                        className="px-3 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 text-[11px] font-extrabold whitespace-nowrap cursor-pointer shrink-0 border border-slate-700"
+                        title="Auto-fill current 6-digit TOTP code from synchronized admin authenticator"
+                      >
+                        Use {liveAdminTotp}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-amber-900/90">
+                      Enter the 6-digit code from your authenticator app or click{' '}
+                      <strong className="font-mono">Use {liveAdminTotp}</strong> to fill the active 30-second token.
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isVerifyingRouteGuard || adminTotpCodeInput.length !== 6}
+                    className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-amber-300 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer transition-all"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span>
+                      {isVerifyingRouteGuard
+                        ? 'Verifying 2FA TOTP & Whitelist...'
+                        : 'Verify 2FA TOTP & Authorize Admin Console'}
+                    </span>
+                  </button>
+                </form>
+
+                {/* Right Column: Admin Authenticator Key & Live TOTP Sync Card */}
+                <div className="md:col-span-5 rounded-xl bg-slate-900 text-white p-4 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                      Admin Authenticator Key
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminQrHelper((prev) => !prev)}
+                      className="text-[10px] font-bold text-sky-300 hover:underline cursor-pointer"
+                    >
+                      {showAdminQrHelper ? 'Hide QR' : 'Show QR'}
+                    </button>
+                  </div>
+
+                  {showAdminQrHelper && (
+                    <div className="flex flex-col items-center justify-center bg-white rounded-xl p-2.5 border border-slate-200">
+                      <img
+                        src={generateOtpQrSvgDataUrl(
+                          buildOtpAuthUri({
+                            secret: adminTotpConfig.secret,
+                            accountName: PRIMARY_ADMIN_EMAIL,
+                            issuer: 'AZ900-AdminConsole',
+                          })
+                        )}
+                        alt="Admin 2FA TOTP Authenticator QR Code"
+                        className="w-28 h-28 object-contain"
+                      />
+                      <span className="text-[10px] font-bold text-slate-600 mt-1">
+                        Scan with Microsoft / Google Authenticator
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                      Base32 Secret Key (Admin Console)
+                    </span>
+                    <div className="flex items-center justify-between gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                      <code className="text-[11px] font-mono font-bold text-emerald-300 truncate">
+                        {adminTotpConfig.secret}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(adminTotpConfig.secret);
+                          setCopiedAdminSecret(true);
+                          setTimeout(() => setCopiedAdminSecret(false), 1800);
+                        }}
+                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-200 cursor-pointer shrink-0"
+                      >
+                        {copiedAdminSecret ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                        Current 30s TOTP Token
+                      </span>
+                      <span className="text-base font-mono font-black tracking-widest text-amber-300">
+                        {liveAdminTotp.slice(0, 3)} {liveAdminTotp.slice(3)}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-slate-400 block">
+                        Window Expiry
+                      </span>
+                      <span className="text-xs font-mono font-extrabold text-sky-300">
+                        {totpRemainingSec}s left
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <>
@@ -703,14 +915,50 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
 
                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                         <span className="text-[10px] font-black uppercase text-slate-500">
-                          Protected Admin Features
+                          Admin 2FA TOTP Status
                         </span>
-                        <div className="font-extrabold text-sm text-slate-900">
-                          Cloud Sync, M-Pesa, Readiness &amp; DB
+                        <div className="font-extrabold text-sm text-emerald-800 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>TOTP Verified ({liveAdminTotp})</span>
                         </div>
                         <p className="text-[11px] text-slate-600">
-                          Hidden from standard student views
+                          Secret: <code className="font-mono font-bold">{adminTotpConfig.secret}</code>
                         </p>
+                      </div>
+                    </div>
+
+                    {/* Dedicated Admin Console 2FA TOTP Management Card */}
+                    <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-black uppercase">
+                            Mandatory Admin 2FA Layer
+                          </span>
+                          <span className="text-xs font-mono text-amber-300">
+                            Next code in {totpRemainingSec}s • Active TOTP: {liveAdminTotp}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300">
+                          Admin Console 2FA uses its own dedicated TOTP secret key (<code className="font-mono text-sky-300">{adminTotpConfig.secret}</code>), independent of learner Profile MFA settings.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleRotateAdminTotpSecret}
+                          className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 text-amber-300" />
+                          <span>Rotate Admin TOTP Secret</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleLockOrUnlockSession}
+                          className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Require 2FA Re-Login</span>
+                        </button>
                       </div>
                     </div>
 

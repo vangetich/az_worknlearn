@@ -19,6 +19,7 @@ import {
   KeyRound,
   ShieldCheck,
   Unlock,
+  Lock,
   Download,
   CheckSquare,
   Square,
@@ -32,6 +33,13 @@ import {
   isSupabaseDirectConfigured,
 } from '../lib/supabase';
 import { Question } from '../types/quiz';
+import { PRIMARY_ADMIN_EMAIL, verifyAdminRouteCredentials } from '../utils/adminSecurity';
+import {
+  getAdminTotpConfig,
+  generateCurrentTotpCode,
+  getTotpRemainingSeconds,
+  isAdminTotpSessionAuthorized,
+} from '../utils/totpSecurity';
 
 interface AdminDashboardProps {
   onQuestionSaved?: (newOrUpdatedQuestion: Question) => void;
@@ -60,6 +68,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     type: 'success' | 'info' | 'error';
     message: string;
   } | null>(null);
+
+  // Admin 2FA TOTP Session Verification State
+  const [isTotpAuthorized, setIsTotpAuthorized] = useState<boolean>(() =>
+    isAdminTotpSessionAuthorized()
+  );
+  const [totpGateCode, setTotpGateCode] = useState<string>('');
+  const [totpGatePassword, setTotpGatePassword] = useState<string>('');
+  const [isVerifyingGate, setIsVerifyingGate] = useState<boolean>(false);
+  const [liveGateTotp, setLiveGateTotp] = useState<string>(() =>
+    generateCurrentTotpCode(getAdminTotpConfig().secret)
+  );
+  const [gateRemainingSec, setGateRemainingSec] = useState<number>(() =>
+    getTotpRemainingSeconds()
+  );
+
+  useEffect(() => {
+    const syncTotpStatus = () => {
+      setIsTotpAuthorized(isAdminTotpSessionAuthorized());
+    };
+    window.addEventListener('az900-admin-totp-session-change', syncTotpStatus);
+    const interval = setInterval(() => {
+      const cfg = getAdminTotpConfig();
+      setLiveGateTotp(generateCurrentTotpCode(cfg.secret));
+      setGateRemainingSec(getTotpRemainingSeconds());
+    }, 1000);
+    return () => {
+      window.removeEventListener('az900-admin-totp-session-change', syncTotpStatus);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Sub-view switcher inside AdminDashboard: 'curriculum' vs 'users'
   const [dashboardSection, setDashboardSection] = useState<'curriculum' | 'users'>('curriculum');
@@ -535,6 +573,105 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   });
 
   const activeModuleMeta = statsPayload?.modules.find((m) => m.module_id === selectedModuleId);
+
+  const handleAuthorizeDashboardTotp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsVerifyingGate(true);
+    try {
+      const res = await verifyAdminRouteCredentials({
+        email: PRIMARY_ADMIN_EMAIL,
+        password: totpGatePassword || undefined,
+        totpCode: totpGateCode,
+      });
+      if (res.authorized) {
+        setIsTotpAuthorized(true);
+        setTotpGateCode('');
+        setTotpGatePassword('');
+        notifyBanner({
+          type: 'success',
+          message: 'Admin Console 2FA TOTP verified! Full Admin Dashboard access granted.',
+        });
+      } else {
+        notifyBanner({
+          type: 'error',
+          message: res.reason || 'Invalid 6-digit Admin TOTP code.',
+        });
+      }
+    } finally {
+      setIsVerifyingGate(false);
+    }
+  };
+
+  if (!isTotpAuthorized) {
+    return (
+      <div className="max-w-xl mx-auto my-4 bg-white rounded-2xl border-2 border-amber-300 p-6 shadow-md space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-800 border border-amber-300 flex items-center justify-center shrink-0">
+            <Lock className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+              Admin Console 2FA Layer
+            </span>
+            <h3 className="text-base font-extrabold text-slate-900 mt-0.5">
+              Time-Based One-Time Password (TOTP) Required
+            </h3>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Enter the 6-digit TOTP code for <strong>{PRIMARY_ADMIN_EMAIL}</strong> to unlock the Admin Dashboard.
+        </p>
+
+        {localBanner && (
+          <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-950 text-xs font-bold">
+            {localBanner.message}
+          </div>
+        )}
+
+        <form onSubmit={handleAuthorizeDashboardTotp} className="space-y-3">
+          <div>
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1">
+              <span>6-Digit Admin TOTP Code</span>
+              <span className="font-mono text-amber-700">
+                Active Token: {liveGateTotp} ({gateRemainingSec}s)
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={totpGateCode}
+                onChange={(e) => setTotpGateCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                className="w-full px-3.5 py-2.5 rounded-xl border-2 border-amber-400 font-mono font-black text-base tracking-[0.3em] text-center text-slate-900"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setTotpGateCode(liveGateTotp)}
+                className="px-3 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 text-xs font-extrabold whitespace-nowrap cursor-pointer"
+              >
+                Use {liveGateTotp}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isVerifyingGate || totpGateCode.length !== 6}
+            className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-amber-300 font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>
+              {isVerifyingGate ? 'Verifying 2FA TOTP...' : 'Authorize Admin Console via 2FA TOTP'}
+            </span>
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

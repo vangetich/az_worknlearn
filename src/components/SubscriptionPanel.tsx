@@ -15,10 +15,12 @@ import {
   ArrowRight,
   Minimize2,
   Maximize2,
+  Smartphone,
 } from 'lucide-react';
 import { authService, BackendUserProfile } from '../services/authService';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { MpesaPaymentGateway } from './MpesaPaymentGateway';
 
 export interface SubscriptionPanelProps {
   onPaymentSuccess?: (updatedProfile: BackendUserProfile, receiptNumber: string) => void;
@@ -39,6 +41,7 @@ export const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     'pro_all_access'
   );
   const [targetModuleId, setTargetModuleId] = useState<number>(5);
+  const [paymentGatewayMethod, setPaymentGatewayMethod] = useState<'card' | 'mpesa'>('mpesa');
 
   // Stripe Elements Card State
   const [cardholderName, setCardholderName] = useState<string>(
@@ -62,15 +65,57 @@ export const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     timestamp: string;
   } | null>(null);
 
-  // Sync with authService profile updates
+  // Sync with authService profile updates and deep-link payment gateway selection
   useEffect(() => {
     const handleSessionChange = (e: Event) => {
       const customEvent = e as CustomEvent<{ user: BackendUserProfile | null }>;
       const nextUser = customEvent.detail?.user || authService.getStoredBackendUser();
       setUserProfile(nextUser);
     };
+
+    const handleConfigureGateway = (e: Event) => {
+      const customEvent = e as CustomEvent<{
+        paymentMethod?: 'mpesa' | 'card';
+        plan?: 'pro_all_access' | 'single_module';
+        moduleId?: number;
+      }>;
+      if (customEvent.detail?.paymentMethod) {
+        setPaymentGatewayMethod(customEvent.detail.paymentMethod);
+      }
+      if (customEvent.detail?.plan) {
+        setSelectedPlan(customEvent.detail.plan);
+      }
+      if (typeof customEvent.detail?.moduleId === 'number' && customEvent.detail.moduleId >= 5) {
+        setTargetModuleId(customEvent.detail.moduleId);
+      }
+      setIsExpanded(true);
+    };
+
+    try {
+      const savedIntent = sessionStorage.getItem('az900_preferred_payment_intent');
+      if (savedIntent) {
+        const parsed = JSON.parse(savedIntent);
+        if (parsed.paymentMethod === 'mpesa' || parsed.paymentMethod === 'card') {
+          setPaymentGatewayMethod(parsed.paymentMethod);
+        }
+        if (parsed.plan === 'single_module' || parsed.plan === 'pro_all_access') {
+          setSelectedPlan(parsed.plan);
+        }
+        if (typeof parsed.moduleId === 'number' && parsed.moduleId >= 5) {
+          setTargetModuleId(parsed.moduleId);
+        }
+        sessionStorage.removeItem('az900_preferred_payment_intent');
+      }
+    } catch {
+      // Ignore storage errors
+    }
+
     window.addEventListener('az900-auth-session-change', handleSessionChange);
-    return () => window.removeEventListener('az900-auth-session-change', handleSessionChange);
+    window.addEventListener('az900-configure-subscription-panel', handleConfigureGateway);
+    return () => {
+      window.removeEventListener('az900-auth-session-change', handleSessionChange);
+      window.removeEventListener('az900-configure-subscription-panel', handleConfigureGateway);
+    };
   }, []);
 
   const allModules = LEARNING_PATHS.flatMap((p) => p.modules);
@@ -543,185 +588,274 @@ export const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
               </div>
             </div>
 
-            {/* Right Column: Stripe Elements Secure Card Payment Form (5 cols) */}
+            {/* Right Column: Payment Gateway Selector (M-Pesa Daraja vs Stripe Card) (5 cols) */}
             <div className="lg:col-span-5 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-[#635BFF] text-white shadow-2xs">
-                    <CreditCard className="w-4 h-4" />
-                  </div>
+              <div className="space-y-3 border-b border-slate-200 pb-3.5">
+                <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-xs sm:text-sm font-black text-slate-900">
-                      Stripe Elements Checkout
+                      2. Choose Payment Gateway
                     </h4>
                     <p className="text-[10px] text-slate-500 font-semibold">
-                      256-Bit TLS Encrypted Card Collection
+                      Pay via Safaricom M-Pesa Daraja STK Push or Stripe Card
                     </p>
                   </div>
-                </div>
-                <span className="px-2 py-0.5 rounded bg-[#635BFF]/10 text-[#635BFF] border border-[#635BFF]/20 text-[10px] font-black">
-                  STRIPE SECURE
-                </span>
-              </div>
-
-              <form onSubmit={handleStripePaymentSubmit} className="space-y-3.5">
-                {/* Cardholder Name */}
-                <div>
-                  <label className="block text-[11px] font-extrabold uppercase text-slate-600 mb-1">
-                    Cardholder Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={cardholderName}
-                    onFocus={() => setCardFocusedField('name')}
-                    onBlur={() => setCardFocusedField(null)}
-                    onChange={(e) => setCardholderName(e.target.value)}
-                    placeholder="Full name on card"
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 focus:border-[#635BFF] focus:ring-2 focus:ring-[#635BFF]/20 text-xs font-bold text-slate-900 focus:outline-hidden"
-                  />
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 text-[10px] font-black">
+                    256-BIT TLS
+                  </span>
                 </div>
 
-                {/* Unified Stripe PaymentElement / CardElement Container */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-extrabold uppercase text-slate-600">
-                      Stripe Card Element
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCardNumber('4242 4242 4242 4242');
-                        setCardExpiry('08/28');
-                        setCardCvc('424');
-                      }}
-                      className="text-[10px] font-bold text-[#635BFF] hover:underline cursor-pointer"
-                    >
-                      Autofill Stripe Test Card (4242)
-                    </button>
-                  </div>
-
-                  <div
-                    className={`rounded-xl bg-white border transition-all overflow-hidden ${
-                      cardFocusedField
-                        ? 'border-[#635BFF] ring-2 ring-[#635BFF]/20'
-                        : 'border-slate-300'
+                {/* Gateway Switcher Tabs */}
+                <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-200/80 border border-slate-300/80">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentGatewayMethod('mpesa')}
+                    className={`py-2 px-3 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      paymentGatewayMethod === 'mpesa'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-slate-700 hover:bg-white/60'
                     }`}
                   >
-                    {/* Card Number Row */}
-                    <div className="px-3 py-2.5 border-b border-slate-200 flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-[#635BFF] shrink-0" />
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        required
-                        value={cardNumber}
-                        onFocus={() => setCardFocusedField('number')}
-                        onBlur={() => setCardFocusedField(null)}
-                        onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-                        placeholder="4242 •••• •••• 4242"
-                        aria-label="Stripe Card Number"
-                        className="w-full text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
-                      />
-                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
-                        VISA / MC
+                    <Smartphone className="w-4 h-4 shrink-0" />
+                    <div className="text-left">
+                      <span className="block leading-tight">M-Pesa (Daraja)</span>
+                      <span
+                        className={`text-[9px] font-bold block ${
+                          paymentGatewayMethod === 'mpesa' ? 'text-emerald-100' : 'text-slate-500'
+                        }`}
+                      >
+                        KES {selectedPlan === 'pro_all_access' ? '950' : '250'} STK Push
                       </span>
                     </div>
+                  </button>
 
-                    {/* Expiry + CVC + ZIP Row */}
-                    <div className="grid grid-cols-3 divide-x divide-slate-200">
-                      <div className="px-3 py-2">
-                        <label className="block text-[9px] font-bold uppercase text-slate-400">
-                          Expiry
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={cardExpiry}
-                          onFocus={() => setCardFocusedField('expiry')}
-                          onBlur={() => setCardFocusedField(null)}
-                          onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
-                          placeholder="MM/YY"
-                          aria-label="Card Expiration Date"
-                          className="w-full text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
-                        />
+                  <button
+                    type="button"
+                    onClick={() => setPaymentGatewayMethod('card')}
+                    className={`py-2 px-3 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      paymentGatewayMethod === 'card'
+                        ? 'bg-[#635BFF] text-white shadow-xs'
+                        : 'text-slate-700 hover:bg-white/60'
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4 shrink-0" />
+                    <div className="text-left">
+                      <span className="block leading-tight">Card (Stripe)</span>
+                      <span
+                        className={`text-[9px] font-bold block ${
+                          paymentGatewayMethod === 'card' ? 'text-indigo-100' : 'text-slate-500'
+                        }`}
+                      >
+                        ${selectedPlan === 'pro_all_access' ? '15.00' : '2.00'} USD
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {paymentGatewayMethod === 'mpesa' ? (
+                <MpesaPaymentGateway
+                  selectedPlan={selectedPlan}
+                  targetModuleId={targetModuleId}
+                  moduleTitle={
+                    advancedModules.find((m) => m.id === targetModuleId)?.title
+                  }
+                  onPaymentSuccess={(updatedProfile, receiptNumber) => {
+                    setUserProfile(updatedProfile);
+                    const amountUsd = selectedPlan === 'pro_all_access' ? 15 : 2;
+                    const planLabel =
+                      selectedPlan === 'pro_all_access'
+                        ? 'AZ-900 Pro All-Access Pass (Modules 1–12)'
+                        : `Module ${targetModuleId} Advanced Practice Unlock`;
+                    setLastReceipt({
+                      receiptNumber,
+                      checkoutId: `mpesa_${Date.now()}`,
+                      amountUsd,
+                      planLabel,
+                      timestamp: new Date().toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }),
+                    });
+                    if (onPaymentSuccess) {
+                      onPaymentSuccess(updatedProfile, receiptNumber);
+                    }
+                  }}
+                />
+              ) : (
+                <form onSubmit={handleStripePaymentSubmit} className="space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-[#635BFF] text-white">
+                        <CreditCard className="w-3.5 h-3.5" />
                       </div>
+                      <span className="text-xs font-black text-slate-900">
+                        Stripe Elements Card Checkout
+                      </span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded bg-[#635BFF]/10 text-[#635BFF] border border-[#635BFF]/20 text-[10px] font-black">
+                      STRIPE SECURE
+                    </span>
+                  </div>
 
-                      <div className="px-3 py-2">
-                        <label className="block text-[9px] font-bold uppercase text-slate-400">
-                          CVC
-                        </label>
+                  {/* Cardholder Name */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase text-slate-600 mb-1">
+                      Cardholder Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={cardholderName}
+                      onFocus={() => setCardFocusedField('name')}
+                      onBlur={() => setCardFocusedField(null)}
+                      onChange={(e) => setCardholderName(e.target.value)}
+                      placeholder="Full name on card"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 focus:border-[#635BFF] focus:ring-2 focus:ring-[#635BFF]/20 text-xs font-bold text-slate-900 focus:outline-hidden"
+                    />
+                  </div>
+
+                  {/* Unified Stripe PaymentElement / CardElement Container */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-extrabold uppercase text-slate-600">
+                        Stripe Card Element
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCardNumber('4242 4242 4242 4242');
+                          setCardExpiry('08/28');
+                          setCardCvc('424');
+                        }}
+                        className="text-[10px] font-bold text-[#635BFF] hover:underline cursor-pointer"
+                      >
+                        Autofill Stripe Test Card (4242)
+                      </button>
+                    </div>
+
+                    <div
+                      className={`rounded-xl bg-white border transition-all overflow-hidden ${
+                        cardFocusedField
+                          ? 'border-[#635BFF] ring-2 ring-[#635BFF]/20'
+                          : 'border-slate-300'
+                      }`}
+                    >
+                      {/* Card Number Row */}
+                      <div className="px-3 py-2.5 border-b border-slate-200 flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-[#635BFF] shrink-0" />
                         <input
                           type="text"
                           inputMode="numeric"
                           required
-                          maxLength={4}
-                          value={cardCvc}
-                          onFocus={() => setCardFocusedField('cvc')}
+                          value={cardNumber}
+                          onFocus={() => setCardFocusedField('number')}
                           onBlur={() => setCardFocusedField(null)}
-                          onChange={(e) =>
-                            setCardCvc(e.target.value.replace(/\D/g, '').slice(0, 4))
-                          }
-                          placeholder="CVC"
-                          aria-label="Card CVC Security Code"
+                          onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                          placeholder="4242 •••• •••• 4242"
+                          aria-label="Stripe Card Number"
                           className="w-full text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
                         />
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                          VISA / MC
+                        </span>
                       </div>
 
-                      <div className="px-3 py-2">
-                        <label className="block text-[9px] font-bold uppercase text-slate-400">
-                          Postal / ZIP
-                        </label>
-                        <input
-                          type="text"
-                          value={billingZip}
-                          onChange={(e) => setBillingZip(e.target.value.slice(0, 10))}
-                          placeholder="00100"
-                          aria-label="Billing Postal Code"
-                          className="w-full text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
-                        />
+                      {/* Expiry + CVC + ZIP Row */}
+                      <div className="grid grid-cols-3 divide-x divide-slate-200">
+                        <div className="px-3 py-2">
+                          <label className="block text-[9px] font-bold uppercase text-slate-400">
+                            Expiry
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={cardExpiry}
+                            onFocus={() => setCardFocusedField('expiry')}
+                            onBlur={() => setCardFocusedField(null)}
+                            onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
+                            placeholder="MM/YY"
+                            aria-label="Card Expiration Date"
+                            className="w-full text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div className="px-3 py-2">
+                          <label className="block text-[9px] font-bold uppercase text-slate-400">
+                            CVC
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            required
+                            maxLength={4}
+                            value={cardCvc}
+                            onFocus={() => setCardFocusedField('cvc')}
+                            onBlur={() => setCardFocusedField(null)}
+                            onChange={(e) =>
+                              setCardCvc(e.target.value.replace(/\D/g, '').slice(0, 4))
+                            }
+                            placeholder="CVC"
+                            aria-label="Card CVC Security Code"
+                            className="w-full text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div className="px-3 py-2">
+                          <label className="block text-[9px] font-bold uppercase text-slate-400">
+                            Postal / ZIP
+                          </label>
+                          <input
+                            type="text"
+                            value={billingZip}
+                            onChange={(e) => setBillingZip(e.target.value.slice(0, 10))}
+                            placeholder="00100"
+                            aria-label="Billing Postal Code"
+                            className="w-full text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {errorMessage && (
-                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>{errorMessage}</span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={isProcessing}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-[#635BFF] via-[#0078D4] to-[#005A9E] hover:opacity-95 disabled:opacity-60 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Verifying Stripe Payment &amp; Unlocking...</span>
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck className="w-4 h-4 text-amber-300" />
-                      <span>
-                        {selectedPlan === 'pro_all_access'
-                          ? 'Pay $15.00 USD & Unlock All 12 Modules'
-                          : `Pay $2.00 USD & Unlock Module ${targetModuleId}`}
-                      </span>
-                    </>
+                  {errorMessage && (
+                    <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>{errorMessage}</span>
+                    </div>
                   )}
-                </button>
 
-                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
-                  <span className="flex items-center gap-1 font-semibold">
-                    <Lock className="w-3 h-3 text-emerald-600" />
-                    <span>Stripe Elements PCI-DSS Level 1</span>
-                  </span>
-                  <span>Updates Supabase paid_status immediately</span>
-                </div>
-              </form>
+                  <button
+                    type="submit"
+                    disabled={isProcessing}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-[#635BFF] via-[#0078D4] to-[#005A9E] hover:opacity-95 disabled:opacity-60 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Verifying Stripe Payment &amp; Unlocking...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-4 h-4 text-amber-300" />
+                        <span>
+                          {selectedPlan === 'pro_all_access'
+                            ? 'Pay $15.00 USD & Unlock All 12 Modules'
+                            : `Pay $2.00 USD & Unlock Module ${targetModuleId}`}
+                        </span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+                    <span className="flex items-center gap-1 font-semibold">
+                      <Lock className="w-3 h-3 text-emerald-600" />
+                      <span>Stripe Elements PCI-DSS Level 1</span>
+                    </span>
+                    <span>Updates Supabase paid_status immediately</span>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         </div>

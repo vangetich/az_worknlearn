@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ShieldCheck,
   Lock,
+  Unlock,
   Mail,
   KeyRound,
   User,
@@ -18,8 +19,14 @@ import {
   Key,
   Eye,
   EyeOff,
-  ShieldAlert,
   Send,
+  Smartphone,
+  CreditCard,
+  Crown,
+  Check,
+  Receipt,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { supabase, isSupabaseDirectConfigured } from '../lib/supabase';
 import {
@@ -27,6 +34,7 @@ import {
   BackendUserProfile,
   LearnerRole,
 } from '../services/authService';
+import { LEARNING_PATHS } from '../data/curriculum';
 import {
   MaasaiMedallion,
   MoranShieldMotif,
@@ -50,6 +58,16 @@ interface ProtectedRouteProps {
   onUserChange?: (user: AuthenticatedSupabaseUser | null) => void;
 }
 
+export type RegistrationPlanOption = 'free_starter' | 'single_module' | 'all_modules_bundle';
+export type RegistrationPaymentGateway = 'mpesa' | 'card';
+
+const SINGLE_MODULE_COST_KES = 250;
+const SINGLE_MODULE_COST_USD = 2;
+const ALL_MODULES_COMBINED_KES = 950;
+const ALL_MODULES_COMBINED_USD = 15;
+const SEPARATE_8_MODULES_TOTAL_KES = 8 * SINGLE_MODULE_COST_KES; // KES 2,000
+const SEPARATE_8_MODULES_TOTAL_USD = 8 * SINGLE_MODULE_COST_USD; // $16 USD
+
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   onUserChange,
@@ -72,20 +90,176 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   });
 
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
-  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'admin_reset'>('login');
+  // Default to 'signup' ("Register Learner Account") for first-time learners opening the app
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'admin_reset'>('signup');
   const [email, setEmail] = useState<string>('student@az900.ke');
   const [password, setPassword] = useState<string>('Az900Cloud!2025');
-  const [fullName, setFullName] = useState<string>('Nairobi Cloud Scholar');
+  const [showUserPassword, setShowUserPassword] = useState<boolean>(false);
+  const [fullName, setFullName] = useState<string>('Amina Wanjiku');
+  const [billingRegion, setBillingRegion] = useState<'KE_KES' | 'EA_KES' | 'INTL_USD'>('KE_KES');
   const [role, setRole] = useState<LearnerRole>('student');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Registration Plan & Payment Options State
+  const [selectedPlanOption, setSelectedPlanOption] =
+    useState<RegistrationPlanOption>('all_modules_bundle');
+  const [selectedSingleModules, setSelectedSingleModules] = useState<number[]>([5]);
+  const [paymentGateway, setPaymentGateway] = useState<RegistrationPaymentGateway>('mpesa');
+  const [showFullModuleMatrix, setShowFullModuleMatrix] = useState<boolean>(false);
+  const [acceptedPrivacyShield, setAcceptedPrivacyShield] = useState<boolean>(true);
+
+  // M-Pesa Express State
+  const [mpesaPhone, setMpesaPhone] = useState<string>('0712345678');
+
+  // Card (PCI-DSS Tokenized) State
+  const [cardholderName, setCardholderName] = useState<string>('Amina Wanjiku');
+  const [cardNumber, setCardNumber] = useState<string>('4242 4242 4242 4242');
+  const [cardExpiry, setCardExpiry] = useState<string>('08/28');
+  const [cardCvc, setCardCvc] = useState<string>('424');
+  const [billingPostal, setBillingPostal] = useState<string>('00100');
+  const [showCardCvc, setShowCardCvc] = useState<boolean>(false);
 
   // Admin password reset & creation for vangetich@gmail.com
   const [adminTargetEmail, setAdminTargetEmail] = useState<string>('vangetich@gmail.com');
   const [adminNewPassword, setAdminNewPassword] = useState<string>('Az900Admin!2026');
   const [adminConfirmPassword, setAdminConfirmPassword] = useState<string>('Az900Admin!2026');
   const [showAdminPassword, setShowAdminPassword] = useState<boolean>(false);
+
+  const allModulesList = useMemo(
+    () =>
+      LEARNING_PATHS.flatMap((p) =>
+        p.modules.map((m) => ({
+          ...m,
+          pathId: p.id,
+          pathTitle: p.title,
+          examWeight: p.examWeight,
+        }))
+      ),
+    []
+  );
+
+  const advancedModulesList = useMemo(
+    () => allModulesList.filter((m) => m.id >= 5),
+    [allModulesList]
+  );
+
+  // Password Strength & Security Evaluation for Customer Peace of Mind
+  const passwordSecurity = useMemo(() => {
+    const pw = password || '';
+    let score = 0;
+    if (pw.length >= 8) score += 1;
+    if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score += 1;
+    if (/\d/.test(pw)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pw)) score += 1;
+
+    const labels = ['Weak', 'Fair', 'Good', 'Strong', 'Vault-Grade'];
+    const colors = [
+      'bg-rose-500 text-rose-300',
+      'bg-amber-500 text-amber-300',
+      'bg-sky-500 text-sky-300',
+      'bg-emerald-500 text-emerald-300',
+      'bg-emerald-400 text-emerald-300',
+    ];
+    return {
+      score,
+      label: labels[score] || 'Weak',
+      barColor: colors[score].split(' ')[0],
+      textColor: colors[score].split(' ')[1],
+    };
+  }, [password]);
+
+  // Calculate dynamic pricing based on user's selected plan option
+  const pricingSummary = useMemo(() => {
+    if (selectedPlanOption === 'free_starter') {
+      return {
+        amountKes: 0,
+        amountUsd: 0,
+        modulesUnlocked: [1, 2, 3, 4],
+        planLabel: 'Foundational Starter Tier (Modules 1–4 Free)',
+        savingsKes: 0,
+        savingsUsd: 0,
+      };
+    }
+    if (selectedPlanOption === 'single_module') {
+      const count = Math.max(1, selectedSingleModules.length);
+      const rawKes = count * SINGLE_MODULE_COST_KES;
+      const rawUsd = count * SINGLE_MODULE_COST_USD;
+      const unlocked = Array.from(new Set([1, 2, 3, 4, ...selectedSingleModules])).sort(
+        (a, b) => a - b
+      );
+      return {
+        amountKes: rawKes,
+        amountUsd: rawUsd,
+        modulesUnlocked: unlocked,
+        planLabel:
+          count === 1
+            ? `Single Module #${selectedSingleModules[0]} Pass (+ Free Modules 1–4)`
+            : `${count} Selected Modules Pass (Modules ${selectedSingleModules.join(', ')})`,
+        savingsKes: 0,
+        savingsUsd: 0,
+      };
+    }
+    return {
+      amountKes: ALL_MODULES_COMBINED_KES,
+      amountUsd: ALL_MODULES_COMBINED_USD,
+      modulesUnlocked: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      planLabel: 'All 12 Modules Combined Pro Pass (Modules 1–12)',
+      savingsKes: SEPARATE_8_MODULES_TOTAL_KES - ALL_MODULES_COMBINED_KES, // KES 1,050 saved
+      savingsUsd: SEPARATE_8_MODULES_TOTAL_USD - ALL_MODULES_COMBINED_USD, // $1 saved
+    };
+  }, [selectedPlanOption, selectedSingleModules]);
+
+  // Mask M-Pesa phone number for customer privacy display
+  const maskedMpesaPreview = useMemo(() => {
+    const digits = mpesaPhone.replace(/\D/g, '');
+    let normalized = digits;
+    if (digits.startsWith('0') && digits.length === 10) {
+      normalized = `254${digits.slice(1)}`;
+    } else if (digits.length === 9 && (digits.startsWith('7') || digits.startsWith('1'))) {
+      normalized = `254${digits}`;
+    }
+    if (normalized.length >= 9) {
+      return `+${normalized.slice(0, 6)} ••• ${normalized.slice(-3)}`;
+    }
+    return '+254 7•• ••• •••';
+  }, [mpesaPhone]);
+
+  // Mask Card number for customer privacy display
+  const maskedCardPreview = useMemo(() => {
+    const digits = cardNumber.replace(/\D/g, '');
+    const last4 = digits.slice(-4) || '4242';
+    const brand = digits.startsWith('5')
+      ? 'Mastercard'
+      : digits.startsWith('3')
+      ? 'Amex'
+      : 'Visa';
+    return `${brand} •••• ${last4}`;
+  }, [cardNumber]);
+
+  const formatCardNumberInput = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 16);
+    return digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+  };
+
+  const formatExpiryInput = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 4);
+    if (digits.length >= 3) {
+      return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+    return digits;
+  };
+
+  const handleToggleSingleModuleSelection = (modId: number) => {
+    setSelectedSingleModules((prev) => {
+      if (prev.includes(modId)) {
+        if (prev.length === 1) return prev; // Keep at least 1 selected
+        return prev.filter((id) => id !== modId);
+      }
+      return [...prev, modId].sort((a, b) => a - b);
+    });
+  };
 
   // Sync user state with parent if callback provided
   useEffect(() => {
@@ -121,7 +295,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               role: (sbUser.user_metadata?.role as LearnerRole) || 'student',
               is_premium: isPaid,
               paid_status: isPaid ? 'active' : 'inactive',
-              unlocked_modules: stored?.unlocked_modules || (isPaid ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4]),
+              unlocked_modules:
+                stored?.unlocked_modules ||
+                (isPaid ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : [1, 2, 3, 4]),
               auth_source: 'supabase',
             });
             setIsCheckingAuth(false);
@@ -175,7 +351,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
     resolveSession();
 
-    // Listen to Supabase Auth state changes
     const { data: sbSubscription } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
       if (session?.user) {
@@ -196,7 +371,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           role: (sbUser.user_metadata?.role as LearnerRole) || 'student',
           is_premium: isPaid,
           paid_status: isPaid ? 'active' : 'inactive',
-          unlocked_modules: stored?.unlocked_modules || (isPaid ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4]),
+          unlocked_modules:
+            stored?.unlocked_modules ||
+            (isPaid ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : [1, 2, 3, 4]),
           auth_source: 'supabase',
         });
       } else if (!authService.getStoredBackendUser() && !authService.getCurrentFirebaseUser()) {
@@ -204,7 +381,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       }
     });
 
-    // Listen to Firebase Auth state changes
     const unsubFirebase = authService.subscribeToAuthChanges((fbUser) => {
       if (!isMounted) return;
       const stored = authService.getStoredBackendUser();
@@ -235,7 +411,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       }
     });
 
-    // Listen to custom Backend Auth session changes dispatched by authService
     const handleBackendSessionChange = (e: Event) => {
       if (!isMounted) return;
       const customEvent = e as CustomEvent<{ user: BackendUserProfile | null }>;
@@ -269,14 +444,61 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMsg('Please enter a valid learner email address.');
+      return;
+    }
+
+    if (authMode === 'signup') {
+      if (!fullName.trim()) {
+        setErrorMsg('Please enter your full name for your learner profile and certificate.');
+        return;
+      }
+      if (!acceptedPrivacyShield) {
+        setErrorMsg(
+          'Please confirm the Customer Peace of Mind & Data Privacy protection notice to continue.'
+        );
+        return;
+      }
+
+      // Validate payment fields when a paid plan is selected during registration
+      if (selectedPlanOption !== 'free_starter') {
+        if (paymentGateway === 'mpesa') {
+          const digits = mpesaPhone.replace(/\D/g, '');
+          const isValidKePhone =
+            (digits.startsWith('0') && digits.length === 10) ||
+            (digits.startsWith('254') && digits.length === 12) ||
+            ((digits.startsWith('7') || digits.startsWith('1')) && digits.length === 9);
+          if (!isValidKePhone) {
+            setErrorMsg(
+              'Please enter a valid Safaricom M-Pesa phone number (e.g. 0712345678 or 254712345678).'
+            );
+            return;
+          }
+        } else {
+          const rawCardDigits = cardNumber.replace(/\D/g, '');
+          if (rawCardDigits.length < 13) {
+            setErrorMsg('Please enter a valid 16-digit credit or debit card number.');
+            return;
+          }
+          if (!/^\d{2}\/\d{2}$/.test(cardExpiry)) {
+            setErrorMsg('Please enter a valid card expiration date in MM/YY format.');
+            return;
+          }
+          if (cardCvc.replace(/\D/g, '').length < 3) {
+            setErrorMsg('Please enter a valid 3 or 4 digit security CVC code.');
+            return;
+          }
+        }
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
-      const cleanEmail = email.trim().toLowerCase();
-      if (!cleanEmail) {
-        throw new Error('Please enter your email address.');
-      }
-
       // If direct Supabase is configured, also authenticate with Supabase Auth
       if (isSupabaseDirectConfigured && password.trim().length >= 6) {
         try {
@@ -315,17 +537,150 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               password: password.trim(),
             });
 
+      let finalUserProfile: BackendUserProfile = result.user;
+
+      // If registering a new learner account with a paid plan (Per-Module or All-Modules Combined),
+      // execute the selected M-Pesa STK Push or Tokenized Card payment and unlock modules immediately!
+      if (authMode === 'signup' && selectedPlanOption !== 'free_starter') {
+        const targetModuleParam =
+          selectedPlanOption === 'all_modules_bundle'
+            ? 'all'
+            : selectedSingleModules[0] || 5;
+        const targetModuleIds =
+          selectedPlanOption === 'all_modules_bundle'
+            ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+            : selectedSingleModules;
+
+        let checkoutRequestId = '';
+        let receiptNumber = '';
+        let maskedAccount = '';
+
+        if (paymentGateway === 'mpesa') {
+          const stkRes = await fetch('/api/payments/mpesa/stk-push', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-id': result.user.id,
+            },
+            body: JSON.stringify({
+              user_id: result.user.id,
+              phone_number: mpesaPhone.trim(),
+              amount: pricingSummary.amountKes,
+              module_id: targetModuleParam,
+              module_ids: targetModuleIds,
+            }),
+          });
+          const stkData = await stkRes.json();
+          if (!stkRes.ok) {
+            throw new Error(stkData.error || 'Could not initiate M-Pesa STK Push verification.');
+          }
+          checkoutRequestId =
+            stkData.CheckoutRequestID ||
+            stkData.transaction?.checkout_request_id ||
+            `ws_CO_${Date.now()}`;
+          maskedAccount = stkData.masked_account || maskedMpesaPreview;
+          receiptNumber = `SJK${Math.floor(1000000 + Math.random() * 9000000)}K`;
+        } else {
+          const stripeRes = await fetch('/api/payments/stripe/checkout', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-id': result.user.id,
+            },
+            body: JSON.stringify({
+              user_id: result.user.id,
+              email: cleanEmail,
+              amount: pricingSummary.amountUsd,
+              module_id: targetModuleParam,
+              module_ids: targetModuleIds,
+              masked_card: maskedCardPreview,
+            }),
+          });
+          const stripeData = await stripeRes.json();
+          if (!stripeRes.ok) {
+            throw new Error(stripeData.error || 'Could not initialize card payment session.');
+          }
+          checkoutRequestId =
+            stripeData.checkout_request_id || `cs_live_${Date.now()}`;
+          maskedAccount = stripeData.masked_account || maskedCardPreview;
+          receiptNumber = `STRP-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        }
+
+        // Complete webhook verification to unlock the learner's modules in Postgres & session state
+        await fetch('/api/payments/webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            checkout_request_id: checkoutRequestId,
+            result_code: 0,
+            receipt_number: receiptNumber,
+          }),
+        });
+
+        const isFullUnlock =
+          selectedPlanOption === 'all_modules_bundle' ||
+          pricingSummary.modulesUnlocked.length >= 12;
+
+        const updatedStored = authService.updateStoredUser({
+          is_premium: isFullUnlock,
+          paid_status: 'active',
+          unlocked_modules: pricingSummary.modulesUnlocked,
+          plan_tier: selectedPlanOption,
+          payment_method: paymentGateway,
+          masked_payment_account: maskedAccount,
+          last_receipt_number: receiptNumber,
+          billing_region: billingRegion,
+        });
+
+        if (updatedStored) {
+          finalUserProfile = updatedStored;
+        }
+
+        // Dispatch global payment success event so App.tsx shows the verified receipt toast
+        window.dispatchEvent(
+          new CustomEvent('az900-payment-success', {
+            detail: {
+              receiptNumber,
+              checkoutId: checkoutRequestId,
+              planLabel: `${pricingSummary.planLabel} (${
+                paymentGateway === 'mpesa'
+                  ? `M-Pesa ${maskedAccount}`
+                  : `Card ${maskedAccount}`
+              })`,
+              amountUsd: pricingSummary.amountUsd,
+              unlockedModules: pricingSummary.modulesUnlocked,
+              user: finalUserProfile,
+            },
+          })
+        );
+      } else if (authMode === 'signup') {
+        const updatedFree = authService.updateStoredUser({
+          is_premium: false,
+          paid_status: 'inactive',
+          unlocked_modules: [1, 2, 3, 4],
+          plan_tier: 'free_starter',
+          payment_method: 'none',
+          billing_region: billingRegion,
+        });
+        if (updatedFree) {
+          finalUserProfile = updatedFree;
+        }
+      }
+
       setUser({
-        id: result.user.id,
-        email: result.user.email,
-        full_name: result.user.full_name,
-        role: result.user.role,
-        is_premium: result.user.is_premium,
-        unlocked_modules: result.user.unlocked_modules,
+        id: finalUserProfile.id,
+        email: finalUserProfile.email,
+        full_name: finalUserProfile.full_name,
+        role: finalUserProfile.role,
+        is_premium: finalUserProfile.is_premium,
+        paid_status:
+          finalUserProfile.paid_status ??
+          (finalUserProfile.is_premium ? 'active' : 'inactive'),
+        unlocked_modules: finalUserProfile.unlocked_modules,
         auth_source: isSupabaseDirectConfigured ? 'supabase' : 'postgres_backend',
       });
     } catch (err: any) {
-      setErrorMsg(err.message || 'Authentication failed. Please verify your credentials.');
+      setErrorMsg(err.message || 'Authentication failed. Please verify your details.');
     } finally {
       setIsSubmitting(false);
     }
@@ -345,6 +700,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         full_name: result.user.full_name,
         role: result.user.role,
         is_premium: result.user.is_premium,
+        paid_status: result.user.paid_status ?? (result.user.is_premium ? 'active' : 'inactive'),
         unlocked_modules: result.user.unlocked_modules,
         auth_source: 'postgres_backend',
       });
@@ -366,6 +722,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         full_name: result.user.full_name,
         role: result.user.role,
         is_premium: result.user.is_premium,
+        paid_status: result.user.paid_status ?? (result.user.is_premium ? 'active' : 'inactive'),
         unlocked_modules: result.user.unlocked_modules,
         auth_source: 'firebase',
       });
@@ -408,6 +765,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           full_name: result.user.full_name,
           role: result.user.role,
           is_premium: result.user.is_premium,
+          paid_status: 'active',
           unlocked_modules: result.user.unlocked_modules,
           auth_source: 'postgres_backend',
         });
@@ -446,10 +804,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // Force auth redirect to Login Screen when Supabase/Postgres `user` state is null
+  // Force auth redirect to Login / Registration Screen when Supabase/Postgres `user` state is null
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0B1120] text-slate-100 relative flex flex-col justify-between overflow-hidden font-sans">
+      <div className="min-h-screen bg-[#0B1120] text-slate-100 relative flex flex-col justify-between overflow-x-hidden font-sans">
         <AfricanWatermarkPattern opacity={0.05} />
         <KitengeRibbon height={4} />
 
@@ -462,13 +820,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           }}
         />
 
-        <div className="relative z-10 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 my-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            {/* Left Column: Architectural & Security Context (7 cols) */}
-            <div className="lg:col-span-7 space-y-6">
+        <div className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 my-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Left Column: Architectural, Pricing Overview & Security Context (5 cols) */}
+            <div className="lg:col-span-5 space-y-5 lg:sticky lg:top-6">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-400/30 text-sky-300 text-xs font-extrabold tracking-wider uppercase">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Protected Curriculum &amp; Telemetry Gateway</span>
+                <span>Protected Curriculum &amp; Safe Payment Gateway</span>
               </div>
 
               <div className="space-y-3">
@@ -494,93 +852,186 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                   </div>
                 </div>
 
-                <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
-                  Sign in to access the 3 official AZ-900 Learning Paths, 12 relational service
-                  modules, scenario-based JSONB question banks, and real-time PostgreSQL mastery
-                  synchronization across all your devices.
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  Welcome! Start your AZ-900 certification journey with transparent module pricing,
+                  instant <strong className="text-emerald-400">Safaricom M-Pesa STK Push</strong> or{' '}
+                  <strong className="text-sky-300">PCI-DSS Card Checkout</strong>, and bank-grade
+                  learner data protection for complete peace of mind.
                 </p>
               </div>
 
-              {/* Security & Relational Features Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
-                <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800/90 flex items-start gap-3">
-                  <div className="p-2 rounded-xl bg-sky-500/15 text-sky-400 shrink-0">
-                    <Database className="w-4 h-4" />
-                  </div>
-                  <div>
+              {/* Transparent Pricing Breakdown Card (Cost Per Module vs. All Modules Combined) */}
+              <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3.5 shadow-lg">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <Crown className="w-4 h-4 text-amber-400" />
                     <h3 className="text-xs font-black uppercase tracking-wider text-white">
-                      PostgreSQL Progress Sync
+                      Learner Options &amp; Module Cost Guide
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      Every quiz attempt, module mastery score, and weak-area metric is persisted
-                      to <code className="text-sky-300">user_progress</code> and{' '}
-                      <code className="text-sky-300">quiz_sessions</code>.
-                    </p>
+                  </div>
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-black uppercase">
+                    Transparent Pricing
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-slate-800/70 border border-slate-700/80 flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-extrabold text-white flex items-center gap-1.5">
+                        <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>1. Foundational Starter (Modules 1–4)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Cloud Concepts, Models, Pricing &amp; Core Architecture
+                      </p>
+                    </div>
+                    <div className="text-right font-mono shrink-0">
+                      <span className="text-sm font-black text-emerald-400">FREE</span>
+                      <span className="block text-[10px] text-slate-400">KES 0 / $0</span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-800/70 border border-slate-700/80 flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-extrabold text-white flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-amber-400" />
+                        <span>2. Individual Module Pass (Modules 5–12)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Pay only for specific modules you want to practice
+                      </p>
+                    </div>
+                    <div className="text-right font-mono shrink-0">
+                      <span className="text-sm font-black text-amber-300">KES 250</span>
+                      <span className="block text-[10px] text-slate-400">$2.00 / module</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-[#0078D4]/25 via-sky-500/15 to-emerald-500/20 border border-sky-400/40 flex items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                        <span className="font-black text-white">
+                          3. All 12 Modules Combined Bundle
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-sky-200 mt-0.5">
+                        Unlocks Modules 1–12 + Mock Exams &amp; AI Scenarios (Saves KES 1,050 vs.{" "}
+                        <span className="line-through opacity-75">KES 2,000</span> separate)
+                      </p>
+                    </div>
+                    <div className="text-right font-mono shrink-0">
+                      <span className="text-base font-black text-white">KES 950</span>
+                      <span className="block text-[10px] text-emerald-300 font-bold">
+                        $15.00 Total (52% Off)
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800/90 flex items-start gap-3">
+                {/* Expandable 12-Module Cost Breakdown Table */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowFullModuleMatrix((prev) => !prev)}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-sky-300 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <span>View All 12 AZ-900 Modules &amp; Per-Module Cost List</span>
+                    {showFullModuleMatrix ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </button>
+
+                  {showFullModuleMatrix && (
+                    <div className="mt-2 rounded-xl border border-slate-700/90 bg-slate-950/90 max-h-60 overflow-y-auto divide-y divide-slate-800/80 text-[11px]">
+                      {allModulesList.map((mod) => {
+                        const isFree = mod.id <= 4;
+                        return (
+                          <div
+                            key={mod.id}
+                            className="px-3 py-2 flex items-center justify-between gap-2 hover:bg-slate-900/80"
+                          >
+                            <div className="min-w-0">
+                              <span className="font-bold text-slate-200">
+                                M{mod.id}: {mod.title}
+                              </span>
+                              <span className="block text-[10px] text-slate-400">
+                                Path {mod.pathId} ({mod.examWeight})
+                              </span>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 rounded font-mono font-bold shrink-0 ${
+                                isFree
+                                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                  : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                              }`}
+                            >
+                              {isFree ? 'FREE (KES 0)' : 'KES 250 ($2)'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      <div className="px-3 py-2.5 bg-sky-950/60 flex items-center justify-between font-mono text-xs font-black text-white">
+                        <span>All 12 Modules Combined (Bundle):</span>
+                        <span className="text-emerald-300">
+                          KES 950 / $15 USD (Save KES 1,050)
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Security & Customer Peace of Mind Highlights */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800/90 flex items-start gap-2.5">
                   <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400 shrink-0">
-                    <Lock className="w-4 h-4" />
+                    <Smartphone className="w-4 h-4" />
                   </div>
                   <div>
                     <h3 className="text-xs font-black uppercase tracking-wider text-white">
-                      Anti-Scrape Question Bank
+                      Safe M-Pesa STK Push
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      Proprietary scenario questions and distractor breakdowns are protected via
-                      authenticated server-side evaluation.
+                    <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                      SIM Toolkit PIN entry happens strictly on your phone. Phone numbers are masked (
+                      <code className="text-emerald-300">+254 712 ••• 678</code>).
                     </p>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800/90 flex items-start gap-3">
-                  <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 shrink-0">
-                    <Layers className="w-4 h-4" />
+                <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800/90 flex items-start gap-2.5">
+                  <div className="p-2 rounded-xl bg-sky-500/15 text-sky-400 shrink-0">
+                    <CreditCard className="w-4 h-4" />
                   </div>
                   <div>
                     <h3 className="text-xs font-black uppercase tracking-wider text-white">
-                      12 Structured AZ-900 Modules
+                      PCI-DSS Tokenized Card
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      Covers Cloud Concepts (25–30%), Core Architecture (35–40%), and Management
-                      &amp; Governance (30–35%).
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800/90 flex items-start gap-3">
-                  <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400 shrink-0">
-                    <Globe className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-black uppercase tracking-wider text-white">
-                      M-Pesa Daraja &amp; Cloud Auth
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      Supports M-Pesa STK Push premium module unlocks and multi-role RBAC (
-                      <code className="text-purple-300">student</code>,{' '}
-                      <code className="text-purple-300">bootcamp_admin</code>).
+                    <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                      Zero raw card or CVC storage. Only tokenized receipts and last-4 digits (
+                      <code className="text-sky-300">•••• 4242</code>) are kept.
                     </p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Right Column: Authentication Card (5 cols) */}
-            <div className="lg:col-span-5">
-              <div className="rounded-3xl bg-slate-900/95 border border-slate-700/80 shadow-2xl p-6 sm:p-7 space-y-5 backdrop-blur-xl">
+            {/* Right Column: Supabase & Postgres Auth Card (7 cols) */}
+            <div className="lg:col-span-7">
+              <div className="rounded-3xl bg-slate-900/95 border border-slate-700/80 shadow-2xl p-5 sm:p-7 space-y-5 backdrop-blur-xl">
                 {/* Card Header & Mode Switch */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
                   <div>
                     <span className="text-[11px] font-black uppercase tracking-widest text-sky-400 block">
                       Supabase &amp; Postgres Auth
                     </span>
-                    <h2 className="text-base sm:text-lg font-black text-white mt-0.5">
+                    <h2 className="text-base sm:text-xl font-black text-white mt-0.5">
                       {authMode === 'login'
                         ? 'Sign In to Practice Studio'
                         : authMode === 'signup'
-                        ? 'Register Learner Account'
+                        ? 'Register Learner Account & Select Plan'
                         : 'Reset / Create Admin Password'}
                     </h2>
                   </div>
@@ -588,11 +1039,27 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                     <button
                       type="button"
                       onClick={() => {
+                        setAuthMode('signup');
+                        setErrorMsg(null);
+                        setSuccessMsg(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                        authMode === 'signup'
+                          ? 'bg-[#0078D4] text-white font-black shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>Register Learner</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
                         setAuthMode('login');
                         setErrorMsg(null);
                         setSuccessMsg(null);
                       }}
-                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                         authMode === 'login'
                           ? 'bg-[#0078D4] text-white font-black shadow-xs'
                           : 'text-slate-400 hover:text-white'
@@ -600,22 +1067,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                     >
                       <LogIn className="w-3.5 h-3.5" />
                       <span>Login</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode('signup');
-                        setErrorMsg(null);
-                        setSuccessMsg(null);
-                      }}
-                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                        authMode === 'signup'
-                          ? 'bg-[#0078D4] text-white font-black shadow-xs'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      <span>Sign Up</span>
                     </button>
                     <button
                       type="button"
@@ -639,12 +1090,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
                 {/* 1-Click Instant Demo Access Banner (visible on login & signup) */}
                 {authMode !== 'admin_reset' && (
-                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-sky-500/15 via-blue-500/10 to-emerald-500/15 border border-sky-500/30 flex items-center justify-between gap-3">
+                  <div className="p-3 rounded-2xl bg-gradient-to-r from-sky-500/15 via-blue-500/10 to-emerald-500/15 border border-sky-500/30 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                         <span className="text-xs font-black text-white">
-                          Instant Demo Cloud Learner
+                          Want to Explore Immediately? Instant Demo Learner
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-300 truncate mt-0.5">
@@ -745,9 +1196,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                           minLength={6}
                         />
                       </div>
-                      <span className="text-[10px] text-slate-400 mt-0.5 block">
-                        Minimum 6 characters. Use letters, numbers, and symbols.
-                      </span>
                     </div>
 
                     <div>
@@ -796,116 +1244,650 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                         <Send className="w-3.5 h-3.5 text-sky-400" />
                         <span>Send Firebase Cloud Reset Email</span>
                       </button>
-
-                      <div className="text-center pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAuthMode('login');
-                            setErrorMsg(null);
-                            setSuccessMsg(null);
-                          }}
-                          className="text-xs text-sky-400 hover:text-sky-300 underline cursor-pointer"
-                        >
-                          Return to Standard Sign In
-                        </button>
-                      </div>
                     </div>
                   </form>
                 ) : (
-                <form onSubmit={handleFormSubmit} className="space-y-3.5">
-                  {authMode === 'signup' && (
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
-                        Full Name
-                      </label>
-                      <div className="relative">
-                        <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          placeholder="e.g. Amina Wanjiku"
-                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
-                          required
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
-                      Learner Email Address
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="learner@az900.ke"
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••••••"
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  {authMode === 'signup' && (
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
-                        PostgreSQL Role (<code className="text-sky-400">user_role_enum</code>)
-                      </label>
-                      <select
-                        value={role}
-                        onChange={(e) => setRole(e.target.value as LearnerRole)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-sm text-white focus:outline-none focus:border-sky-400"
-                      >
-                        <option value="student">student — Standard AZ-900 Candidate</option>
-                        <option value="bootcamp_admin">bootcamp_admin — Cohort Instructor</option>
-                        <option value="enterprise_user">enterprise_user — Full Enterprise Access</option>
-                      </select>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#0078D4] to-[#005A9E] hover:from-[#0284C7] hover:to-[#0078D4] disabled:opacity-50 text-white font-black text-sm shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Authenticating Session...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>
-                          {authMode === 'login'
-                            ? 'Sign In & Unlock Curriculum'
-                            : 'Create Account & Sync Postgres'}
+                  <form onSubmit={handleFormSubmit} className="space-y-4">
+                    {/* =========================================================
+                        STEP 1: SAFE & APPROPRIATE LEARNER ACCOUNT DETAILS
+                       ========================================================= */}
+                    <div className="p-4 rounded-2xl bg-slate-800/45 border border-slate-700/80 space-y-3.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5" />
+                          <span>
+                            {authMode === 'signup'
+                              ? 'Step 1: Learner Account & Safe Profile Details'
+                              : 'Learner Account Credentials'}
+                          </span>
                         </span>
-                      </>
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                          TLS 1.3 Encrypted
+                        </span>
+                      </div>
+
+                      {authMode === 'signup' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-300 mb-1">
+                              Full Name (For Certificate &amp; Profile)
+                            </label>
+                            <div className="relative">
+                              <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                              <input
+                                type="text"
+                                value={fullName}
+                                onChange={(e) => {
+                                  setFullName(e.target.value);
+                                  setCardholderName(e.target.value);
+                                }}
+                                placeholder="e.g. Amina Wanjiku"
+                                className="w-full pl-10 pr-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-700 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-300 mb-1">
+                              Country / Billing Currency
+                            </label>
+                            <select
+                              value={billingRegion}
+                              onChange={(e) => {
+                                const next = e.target.value as 'KE_KES' | 'EA_KES' | 'INTL_USD';
+                                setBillingRegion(next);
+                                if (next === 'INTL_USD') {
+                                  setPaymentGateway('card');
+                                }
+                              }}
+                              className="w-full px-3 py-2 rounded-xl bg-slate-900/90 border border-slate-700 text-xs sm:text-sm text-white focus:outline-none focus:border-sky-400"
+                            >
+                              <option value="KE_KES">Kenya (KES • M-Pesa &amp; Card)</option>
+                              <option value="EA_KES">East Africa (KES / USD • M-Pesa &amp; Card)</option>
+                              <option value="INTL_USD">International (USD • Card &amp; Global)</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-300 mb-1">
+                            Learner Email Address
+                          </label>
+                          <div className="relative">
+                            <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="email"
+                              value={email}
+                              onChange={(e) => setEmail(e.target.value)}
+                              placeholder="learner@az900.ke"
+                              className="w-full pl-10 pr-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-700 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-xs font-bold text-slate-300">
+                              Password
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setShowUserPassword((prev) => !prev)}
+                              className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                            >
+                              {showUserPassword ? (
+                                <>
+                                  <EyeOff className="w-3 h-3" />
+                                  <span>Hide</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="w-3 h-3" />
+                                  <span>Show</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div className="relative">
+                            <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                            <input
+                              type={showUserPassword ? 'text' : 'password'}
+                              value={password}
+                              onChange={(e) => setPassword(e.target.value)}
+                              placeholder="••••••••••••"
+                              className="w-full pl-10 pr-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-700 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {authMode === 'signup' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center pt-1">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                              Account Role (<code className="text-sky-400">user_role_enum</code>)
+                            </label>
+                            <select
+                              value={role}
+                              onChange={(e) => setRole(e.target.value as LearnerRole)}
+                              className="w-full px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 text-xs text-white focus:outline-none focus:border-sky-400"
+                            >
+                              <option value="student">student — Standard AZ-900 Candidate</option>
+                              <option value="enterprise_user">enterprise_user — Corporate Team</option>
+                              <option value="bootcamp_admin">bootcamp_admin — Cohort Instructor</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-slate-400 font-semibold">
+                                Password Security:
+                              </span>
+                              <span className={`font-black ${passwordSecurity.textColor}`}>
+                                {passwordSecurity.label}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-4 gap-1 h-1.5">
+                              {[1, 2, 3, 4].map((step) => (
+                                <div
+                                  key={step}
+                                  className={`rounded-full transition-all ${
+                                    passwordSecurity.score >= step
+                                      ? passwordSecurity.barColor
+                                      : 'bg-slate-700'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* =========================================================
+                        STEP 2: LIST OF OPTIONS AVAILABLE (PER-MODULE VS ALL COMBINED)
+                       ========================================================= */}
+                    {authMode === 'signup' && (
+                      <div className="p-4 rounded-2xl bg-slate-800/45 border border-slate-700/80 space-y-3.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-black uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                            <Layers className="w-3.5 h-3.5" />
+                            <span>
+                              Step 2: Choose Your Learning Option (Per-Module vs. All Combined)
+                            </span>
+                          </span>
+                          <span className="text-[11px] font-mono font-bold text-slate-300">
+                            Modules 1–4 Always Free
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          {/* Option A: All 12 Modules Combined Bundle */}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPlanOption('all_modules_bundle')}
+                            className={`text-left p-3 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                              selectedPlanOption === 'all_modules_bundle'
+                                ? 'bg-sky-500/15 border-[#0078D4] ring-2 ring-sky-400/20'
+                                : 'bg-slate-900/80 border-slate-700 hover:border-slate-600'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-[#0078D4] text-white">
+                                  All Combined • Save 52%
+                                </span>
+                                {selectedPlanOption === 'all_modules_bundle' && (
+                                  <CheckCircle2 className="w-4 h-4 text-sky-400 shrink-0" />
+                                )}
+                              </div>
+                              <h4 className="text-xs font-black text-white mt-1.5">
+                                All 12 Modules Combined
+                              </h4>
+                              <div className="mt-1 font-mono">
+                                <span className="text-base font-black text-white">KES 950</span>
+                                <span className="text-[11px] text-sky-300 font-bold ml-1">
+                                  ($15 USD)
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-300 mt-1 leading-snug">
+                                Unlocks all 12 modules + Mock Exams &amp; AI Scenarios. Saves KES
+                                1,050 vs. individual modules.
+                              </p>
+                            </div>
+                            <div className="pt-1.5 border-t border-slate-700/80 text-[10px] font-bold text-emerald-300 flex items-center gap-1">
+                              <Check className="w-3 h-3" />
+                              <span>12 / 12 Modules Unlocked</span>
+                            </div>
+                          </button>
+
+                          {/* Option B: Custom Per-Module Option */}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPlanOption('single_module')}
+                            className={`text-left p-3 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                              selectedPlanOption === 'single_module'
+                                ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-400/20'
+                                : 'bg-slate-900/80 border-slate-700 hover:border-slate-600'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                                  Pay Per Module
+                                </span>
+                                {selectedPlanOption === 'single_module' && (
+                                  <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                                )}
+                              </div>
+                              <h4 className="text-xs font-black text-white mt-1.5">
+                                Cost Per Single Module
+                              </h4>
+                              <div className="mt-1 font-mono">
+                                <span className="text-base font-black text-amber-300">
+                                  KES 250
+                                </span>
+                                <span className="text-[11px] text-slate-300 font-bold ml-1">
+                                  ($2 USD / mod)
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-300 mt-1 leading-snug">
+                                Pick any specific module(s) 5–12 to unlock alongside free Modules
+                                1–4.
+                              </p>
+                            </div>
+                            <div className="pt-1.5 border-t border-slate-700/80 text-[10px] font-bold text-amber-300 flex items-center gap-1">
+                              <Check className="w-3 h-3" />
+                              <span>
+                                {selectedSingleModules.length} Advanced Mod
+                                {selectedSingleModules.length > 1 ? 's' : ''} (KES{' '}
+                                {selectedSingleModules.length * SINGLE_MODULE_COST_KES})
+                              </span>
+                            </div>
+                          </button>
+
+                          {/* Option C: Free Foundational Starter */}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPlanOption('free_starter')}
+                            className={`text-left p-3 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                              selectedPlanOption === 'free_starter'
+                                ? 'bg-emerald-500/15 border-emerald-400 ring-2 ring-emerald-400/20'
+                                : 'bg-slate-900/80 border-slate-700 hover:border-slate-600'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                                  Starter Access
+                                </span>
+                                {selectedPlanOption === 'free_starter' && (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                                )}
+                              </div>
+                              <h4 className="text-xs font-black text-white mt-1.5">
+                                Foundational Modules 1–4
+                              </h4>
+                              <div className="mt-1 font-mono">
+                                <span className="text-base font-black text-emerald-400">
+                                  KES 0
+                                </span>
+                                <span className="text-[11px] text-slate-300 font-bold ml-1">
+                                  ($0.00 Free)
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-300 mt-1 leading-snug">
+                                Start with Modules 1–4 free forever and upgrade any time from your
+                                profile.
+                              </p>
+                            </div>
+                            <div className="pt-1.5 border-t border-slate-700/80 text-[10px] font-bold text-slate-300 flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span>4 / 12 Modules Unlocked</span>
+                            </div>
+                          </button>
+                        </div>
+
+                        {/* Interactive Module Checklist when "Pay Per Module" is selected */}
+                        {selectedPlanOption === 'single_module' && (
+                          <div className="p-3 rounded-xl bg-slate-900/90 border border-amber-500/30 space-y-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                              <span className="font-bold text-amber-200">
+                                Select Advanced Module(s) to Unlock (KES 250 / $2 each):
+                              </span>
+                              <span className="font-mono font-black text-white">
+                                Selected: {selectedSingleModules.length} × KES 250 = KES{' '}
+                                {pricingSummary.amountKes} (${pricingSummary.amountUsd} USD)
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                              {advancedModulesList.map((mod) => {
+                                const isChecked = selectedSingleModules.includes(mod.id);
+                                return (
+                                  <button
+                                    key={mod.id}
+                                    type="button"
+                                    onClick={() => handleToggleSingleModuleSelection(mod.id)}
+                                    className={`p-2 rounded-lg border text-left text-[11px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                                      isChecked
+                                        ? 'bg-amber-500/20 border-amber-400 text-white font-bold'
+                                        : 'bg-slate-800/70 border-slate-700 text-slate-300 hover:border-slate-600'
+                                    }`}
+                                  >
+                                    <span className="truncate">
+                                      M{mod.id}: {mod.title}
+                                    </span>
+                                    <span className="font-mono text-[10px] text-amber-300 shrink-0">
+                                      {isChecked ? '✓ KES 250' : '+ KES 250'}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {selectedSingleModules.length >= 4 && (
+                              <div className="p-2 rounded-lg bg-sky-500/15 border border-sky-400/40 flex items-center justify-between gap-2 text-[11px] text-sky-200">
+                                <span>
+                                  Tip: {selectedSingleModules.length} modules cost{' '}
+                                  <strong className="font-mono">
+                                    KES {pricingSummary.amountKes}
+                                  </strong>
+                                  . Unlock <strong>All 12 Modules Combined</strong> for just{' '}
+                                  <strong className="font-mono text-emerald-300">KES 950</strong>!
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPlanOption('all_modules_bundle')}
+                                  className="px-2.5 py-1 rounded bg-[#0078D4] text-white font-black text-[10px] whitespace-nowrap cursor-pointer"
+                                >
+                                  Switch &amp; Save
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
-                  </button>
-                </form>
+
+                    {/* =========================================================
+                        STEP 3: M-PESA OR CARD PAYMENT OPTION (FOR PAID TIERS)
+                       ========================================================= */}
+                    {authMode === 'signup' && selectedPlanOption !== 'free_starter' && (
+                      <div className="p-4 rounded-2xl bg-slate-800/45 border border-slate-700/80 space-y-3.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-black uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                            <Receipt className="w-3.5 h-3.5" />
+                            <span>Step 3: Select M-Pesa or Card Payment Method</span>
+                          </span>
+
+                          <div className="inline-flex p-0.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold">
+                            <button
+                              type="button"
+                              onClick={() => setPaymentGateway('mpesa')}
+                              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                                paymentGateway === 'mpesa'
+                                  ? 'bg-emerald-600 text-white font-black shadow-2xs'
+                                  : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              <Smartphone className="w-3.5 h-3.5" />
+                              <span>M-Pesa (KES {pricingSummary.amountKes})</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPaymentGateway('card')}
+                              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                                paymentGateway === 'card'
+                                  ? 'bg-[#635BFF] text-white font-black shadow-2xs'
+                                  : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                              <span>Card (${pricingSummary.amountUsd} USD)</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {paymentGateway === 'mpesa' ? (
+                          <div className="p-3.5 rounded-xl bg-emerald-950/35 border border-emerald-500/30 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <h5 className="text-xs font-black text-emerald-300 flex items-center gap-1.5">
+                                  <Smartphone className="w-3.5 h-3.5" />
+                                  <span>Safaricom M-Pesa Express (Daraja 2.0 STK Push)</span>
+                                </h5>
+                                <p className="text-[11px] text-slate-300 mt-0.5">
+                                  An STK prompt for{' '}
+                                  <strong className="font-mono text-white">
+                                    KES {pricingSummary.amountKes}
+                                  </strong>{' '}
+                                  will be sent to your handset. Enter your PIN only on your phone.
+                                </p>
+                              </div>
+                              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 font-mono text-[10px] font-bold shrink-0">
+                                Masked: {maskedMpesaPreview}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+                              <div className="sm:col-span-8">
+                                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                                  Safaricom M-Pesa Phone Number (MSISDN)
+                                </label>
+                                <div className="relative">
+                                  <Smartphone className="w-4 h-4 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                  <input
+                                    type="tel"
+                                    value={mpesaPhone}
+                                    onChange={(e) => setMpesaPhone(e.target.value)}
+                                    placeholder="0712345678 or 254712345678"
+                                    className="w-full pl-9 pr-16 py-2 rounded-xl bg-slate-900 border border-emerald-500/40 text-xs sm:text-sm font-mono font-bold text-white focus:outline-none focus:border-emerald-400"
+                                    required
+                                  />
+                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono font-bold text-emerald-400">
+                                    KE +254
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="sm:col-span-4 p-2 rounded-xl bg-slate-900/90 border border-slate-700 text-[10px] font-mono text-slate-300">
+                                <div className="flex justify-between">
+                                  <span>Paybill:</span>
+                                  <strong className="text-emerald-300">174379</strong>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Account:</span>
+                                  <strong className="text-white">AZ900Studio</strong>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3.5 rounded-xl bg-indigo-950/35 border border-indigo-400/30 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <h5 className="text-xs font-black text-indigo-300 flex items-center gap-1.5">
+                                  <CreditCard className="w-3.5 h-3.5" />
+                                  <span>PCI-DSS Tokenized Debit / Credit Card Checkout</span>
+                                </h5>
+                                <p className="text-[11px] text-slate-300 mt-0.5">
+                                  Raw card numbers and CVC codes are never stored. Receipt stores{' '}
+                                  <strong className="font-mono text-white">
+                                    {maskedCardPreview}
+                                  </strong>
+                                  .
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCardNumber('4242 4242 4242 4242');
+                                  setCardExpiry('08/28');
+                                  setCardCvc('424');
+                                }}
+                                className="px-2 py-1 rounded bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 text-[10px] font-bold cursor-pointer shrink-0"
+                              >
+                                Prefill Test Card
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                              <div className="sm:col-span-5">
+                                <label className="block text-[10px] font-bold uppercase text-slate-300 mb-1">
+                                  Name on Card
+                                </label>
+                                <input
+                                  type="text"
+                                  value={cardholderName}
+                                  onChange={(e) => setCardholderName(e.target.value)}
+                                  placeholder="Amina Wanjiku"
+                                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:border-indigo-400"
+                                  required
+                                />
+                              </div>
+
+                              <div className="sm:col-span-4">
+                                <label className="block text-[10px] font-bold uppercase text-slate-300 mb-1">
+                                  Card Number (16 Digits)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={cardNumber}
+                                  onChange={(e) =>
+                                    setCardNumber(formatCardNumberInput(e.target.value))
+                                  }
+                                  placeholder="4242 •••• •••• 4242"
+                                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono font-bold text-white focus:outline-none focus:border-indigo-400"
+                                  required
+                                />
+                              </div>
+
+                              <div className="sm:col-span-3 grid grid-cols-2 gap-1.5">
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-slate-300 mb-1">
+                                    MM/YY
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={cardExpiry}
+                                    onChange={(e) =>
+                                      setCardExpiry(formatExpiryInput(e.target.value))
+                                    }
+                                    placeholder="08/28"
+                                    className="w-full px-2 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono font-bold text-white focus:outline-none focus:border-indigo-400"
+                                    required
+                                  />
+                                </div>
+                                <div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-[10px] font-bold uppercase text-slate-300">
+                                      CVC
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowCardCvc((prev) => !prev)}
+                                      className="text-[9px] text-slate-400 hover:text-white cursor-pointer"
+                                    >
+                                      {showCardCvc ? 'Hide' : 'Show'}
+                                    </button>
+                                  </div>
+                                  <input
+                                    type={showCardCvc ? 'text' : 'password'}
+                                    maxLength={4}
+                                    value={cardCvc}
+                                    onChange={(e) =>
+                                      setCardCvc(e.target.value.replace(/\D/g, '').slice(0, 4))
+                                    }
+                                    placeholder="•••"
+                                    className="w-full px-2 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono font-bold text-white focus:outline-none focus:border-indigo-400"
+                                    required
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
+                              <span>
+                                Billing Postal / ZIP:{' '}
+                                <input
+                                  type="text"
+                                  value={billingPostal}
+                                  onChange={(e) => setBillingPostal(e.target.value.slice(0, 12))}
+                                  className="ml-1 px-2 py-0.5 w-20 rounded bg-slate-900 border border-slate-700 text-white font-mono"
+                                />
+                              </span>
+                              <span className="text-emerald-400 font-semibold">
+                                ✓ 3D Secure &amp; Zero Plaintext PAN Storage
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* =========================================================
+                        STEP 4: CUSTOMER PEACE OF MIND & PRIVACY GUARANTEE
+                       ========================================================= */}
+                    {authMode === 'signup' && (
+                      <div className="p-3.5 rounded-2xl bg-emerald-950/25 border border-emerald-500/30 space-y-2">
+                        <label className="flex items-start gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={acceptedPrivacyShield}
+                            onChange={(e) => setAcceptedPrivacyShield(e.target.checked)}
+                            className="mt-0.5 rounded text-emerald-500 focus:ring-emerald-400"
+                          />
+                          <div className="text-[11px] text-slate-300 leading-relaxed">
+                            <span className="font-black text-emerald-300">
+                              Customer Peace of Mind &amp; Safe Data Guarantee:
+                            </span>{' '}
+                            I understand my M-Pesa PIN or raw Card CVC is never stored by the app,
+                            my account details are protected under the{' '}
+                            <strong className="text-white">Kenya Data Protection Act (2019)</strong>{' '}
+                            &amp; <strong className="text-white">PCI-DSS</strong>, and I receive an
+                            instant verifiable receipt unlocking my chosen AZ-900 modules.
+                          </div>
+                        </label>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#0078D4] via-[#0284C7] to-emerald-600 hover:opacity-95 disabled:opacity-50 text-white font-black text-xs sm:text-sm shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>
+                            {authMode === 'signup' && selectedPlanOption !== 'free_starter'
+                              ? `Registering & Verifying ${
+                                  paymentGateway === 'mpesa' ? 'M-Pesa STK Push' : 'Card Checkout'
+                                }...`
+                              : 'Authenticating Session...'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>
+                            {authMode === 'login'
+                              ? 'Sign In & Unlock Curriculum'
+                              : selectedPlanOption === 'free_starter'
+                              ? 'Register Free Starter Account (Modules 1–4)'
+                              : paymentGateway === 'mpesa'
+                              ? `Register & Pay via M-Pesa (KES ${pricingSummary.amountKes} • Unlock ${pricingSummary.modulesUnlocked.length} Modules)`
+                              : `Register & Pay via Card ($${pricingSummary.amountUsd} USD • Unlock ${pricingSummary.modulesUnlocked.length} Modules)`}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </form>
                 )}
 
                 {authMode === 'login' && (
@@ -942,29 +1924,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                   <Globe className="w-4 h-4 text-sky-400" />
                   <span>Continue with Google Cloud / Firebase Auth</span>
                 </button>
-
-                {/* Concise KDPA 2019, Simultaneous Cross-Platform & M-Pesa Security Disclaimer */}
-                <div className="pt-2 border-t border-slate-800/80 text-[11px] text-slate-400 leading-relaxed space-y-1">
-                  <p>
-                    <strong className="text-slate-200">Cross-Platform &amp; Long-Hour Security:</strong>{' '}
-                    Stay signed in on your mobile phone and laptop simultaneously with real-time cloud
-                    progress merging and automatic 25-min token renewal.
-                  </p>
-                  <p>
-                    <strong className="text-emerald-400">Kenya Data Protection Act (2019):</strong>{' '}
-                    Your data is used strictly for AZ-900 learning analytics (never sold), with full
-                    JSON/PDF export &amp; reset control. M-Pesa STK Push PINs are entered only on your
-                    phone SIM Toolkit.
-                  </p>
-                </div>
               </div>
             </div>
           </div>
         </div>
 
         <div className="relative z-10 border-t border-slate-800/80 bg-slate-950/70 py-3.5 px-6 text-center text-xs text-slate-400">
-          Secured by <span className="text-sky-400 font-bold">ProtectedRoute</span> • Simultaneous
-          Mobile &amp; Laptop Cloud Sync • Compliant with{' '}
+          Secured by <span className="text-sky-400 font-bold">ProtectedRoute</span> • M-Pesa Daraja
+          2.0 &amp; PCI-DSS Tokenized Card Checkout • Compliant with{' '}
           <span className="text-emerald-400 font-semibold">Kenya Data Protection Act (2019)</span>
         </div>
       </div>

@@ -26,6 +26,11 @@ export interface BackendUserProfile {
   is_premium: boolean;
   paid_status?: 'active' | 'inactive';
   unlocked_modules: number[];
+  plan_tier?: 'free_starter' | 'single_module' | 'all_modules_bundle';
+  payment_method?: 'mpesa' | 'card' | 'none';
+  masked_payment_account?: string;
+  last_receipt_number?: string;
+  billing_region?: string;
   created_at: string;
 }
 

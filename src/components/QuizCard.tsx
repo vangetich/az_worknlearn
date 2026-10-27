@@ -39,6 +39,8 @@ import {
   SlidersHorizontal,
   Layers,
   SkipForward,
+  Download,
+  Anchor,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
@@ -52,6 +54,12 @@ import { DeepWorkTimerWidget } from './DeepWorkTimerWidget';
 import { SessionCountdownTimer } from './SessionCountdownTimer';
 import { QuizTtsBar } from './QuizTtsBar';
 import { HoverInfoFeedback } from './HoverInfoFeedback';
+import { BUILTIN_QUESTIONS } from '../data/questionBank';
+import {
+  downloadNotesAndMemoryAnchorsMarkdown,
+  saveMemoryAnchor,
+  isMemoryAnchorSaved,
+} from '../utils/exportNotesMarkdown';
 
 interface QuizCardProps {
   question: Question;
@@ -109,6 +117,7 @@ interface QuizCardProps {
   onRateConfidence?: (questionId: string, confidence: number) => void;
   onOpenUserGuide?: () => void;
   onSkipQuestion?: (questionId: string) => void;
+  onOpenPeerChallenge?: () => void;
 }
 
 const EXAM_SIMULATION_DURATION_SECONDS = 45 * 60; // 45:00 standard AZ-900 exam duration
@@ -462,6 +471,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   onRateConfidence,
   onOpenUserGuide,
   onSkipQuestion,
+  onOpenPeerChallenge,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
@@ -474,6 +484,10 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [questionNoteText, setQuestionNoteText] = useState<string>(() => getQuestionNote(question.id));
   const [hasNote, setHasNote] = useState<boolean>(() => Boolean(getQuestionNote(question.id)));
   const [noteSavedFeedback, setNoteSavedFeedback] = useState<boolean>(false);
+  const [isAnchorPinned, setIsAnchorPinned] = useState<boolean>(() =>
+    isMemoryAnchorSaved(`anchor-${question.id}`)
+  );
+  const [markdownExportToast, setMarkdownExportToast] = useState<string | null>(null);
   const [retryNoticeMessage, setRetryNoticeMessage] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
@@ -481,6 +495,32 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [showQuickStudy, setShowQuickStudy] = useState<boolean>(false);
   const [showStudyZoneMenu, setShowStudyZoneMenu] = useState<boolean>(false);
   const studyZoneMenuRef = React.useRef<HTMLDivElement>(null);
+
+  const handlePinCurrentAnchor = () => {
+    saveMemoryAnchor({
+      id: `anchor-${question.id}`,
+      questionId: question.id,
+      moduleId: question.moduleId,
+      moduleTitle: question.moduleTitle,
+      title: `${question.id.toUpperCase()}: ${question.moduleTitle}`,
+      anchorText: question.examTip || questionNoteText.trim() || question.whyCorrect,
+      examTrap: question.examTip,
+    });
+    setIsAnchorPinned(true);
+    setMarkdownExportToast('Memory Anchor pinned for offline Markdown export!');
+    setTimeout(() => setMarkdownExportToast(null), 3200);
+  };
+
+  const handleExportAllNotesMarkdown = () => {
+    if (questionNoteText.trim()) {
+      saveQuestionNote(question.id, questionNoteText);
+    }
+    const result = downloadNotesAndMemoryAnchorsMarkdown(BUILTIN_QUESTIONS, stats);
+    setMarkdownExportToast(
+      `Downloaded ${result.filename} (${result.notesCount} notes & ${result.anchorsCount} anchors)`
+    );
+    setTimeout(() => setMarkdownExportToast(null), 4000);
+  };
 
   // Accordion section states inside the centered Study Zone popup
   const [openStudyZoneSections, setOpenStudyZoneSections] = useState<{
@@ -3089,8 +3129,33 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 <FileText className="w-3 h-3 text-amber-600" />
                 <span>All Saved Notes</span>
               </button>
+              <button
+                type="button"
+                onClick={handleExportAllNotesMarkdown}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 text-[11px] font-extrabold transition-colors shadow-2xs cursor-pointer"
+                title="Export all saved question notes and memory anchors as a formatted Markdown (.md) file for offline study"
+              >
+                <Download className="w-3 h-3" />
+                <span>Export Notes &amp; Anchors (.md)</span>
+              </button>
             </div>
           </div>
+
+          {markdownExportToast && (
+            <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>{markdownExportToast}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setMarkdownExportToast(null)}
+                className="text-emerald-700 font-extrabold hover:underline cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {speechError && (
             <div className="px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-semibold flex items-center justify-between gap-2">
@@ -3374,22 +3439,49 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
             {/* Exam Tip Card - Savannah Gold / Warm Ochre */}
             <div className="relative overflow-hidden bg-gradient-to-r from-amber-50 via-amber-50/80 to-yellow-50 rounded-xl p-5 border border-amber-300/80 shadow-xs animate-cascade-4">
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-amber-500 text-white shrink-0 mt-0.5 shadow-xs">
-                  <Lightbulb className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h5 className="font-extrabold text-xs tracking-wider uppercase text-amber-900">
-                      💡 Exam Anchor Tip
-                    </h5>
-                    <span className="text-[10px] bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded font-semibold">
-                      High Yield
-                    </span>
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex items-start gap-3 flex-1 min-w-[240px]">
+                  <div className="p-2 rounded-lg bg-amber-500 text-white shrink-0 mt-0.5 shadow-xs">
+                    <Lightbulb className="w-4 h-4" />
                   </div>
-                  <p className="text-amber-950 text-xs sm:text-sm font-medium mt-1 leading-relaxed">
-                    {question.examTip}
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h5 className="font-extrabold text-xs tracking-wider uppercase text-amber-900">
+                        💡 Exam Memory Anchor Tip
+                      </h5>
+                      <span className="text-[10px] bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded font-semibold">
+                        High Yield
+                      </span>
+                    </div>
+                    <p className="text-amber-950 text-xs sm:text-sm font-medium mt-1 leading-relaxed">
+                      {question.examTip}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handlePinCurrentAnchor}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold border flex items-center gap-1 transition-colors cursor-pointer ${
+                      isAnchorPinned
+                        ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                        : 'bg-white hover:bg-amber-100 text-amber-900 border-amber-300'
+                    }`}
+                    title="Pin this question's memory anchor for offline Markdown export"
+                  >
+                    <Anchor className="w-3 h-3" />
+                    <span>{isAnchorPinned ? 'Anchor Pinned ✓' : 'Pin Memory Anchor'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportAllNotesMarkdown}
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-300 text-[11px] font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Export all saved question notes and memory anchors as a formatted Markdown (.md) file"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Export .MD</span>
+                  </button>
                 </div>
               </div>
             </div>

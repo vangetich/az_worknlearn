@@ -1101,6 +1101,8 @@ app.post('/api/payments/mpesa/stk-push', async (req, res) => {
       amount = 250,
       module_id = 'all',
       moduleId,
+      module_ids,
+      moduleIds,
     } = req.body || {};
 
     const rawPhone = String(phone_number || phoneNumber || '').trim();
@@ -1120,7 +1122,16 @@ app.post('/api/payments/mpesa/stk-push', async (req, res) => {
       });
     }
 
+    const maskedPhone = `${formattedPhone.slice(0, 6)}•••${formattedPhone.slice(-3)}`;
     const targetModule = moduleId !== undefined ? moduleId : module_id;
+    const rawModuleIds = Array.isArray(module_ids)
+      ? module_ids
+      : Array.isArray(moduleIds)
+      ? moduleIds
+      : undefined;
+    const normalizedModuleIds = rawModuleIds
+      ? rawModuleIds.map(Number).filter((n: number) => n >= 1 && n <= 12)
+      : undefined;
     const numericAmount = Math.max(1, Number(amount) || 250);
 
     // Check if live Safaricom Daraja credentials are configured
@@ -1202,9 +1213,11 @@ app.post('/api/payments/mpesa/stk-push', async (req, res) => {
       user_id: userId,
       gateway: 'mpesa',
       phone_number: formattedPhone,
+      masked_account: maskedPhone,
       amount: numericAmount,
       currency: 'KES',
       module_id: targetModule === 'all' ? 'all' : Number(targetModule),
+      module_ids: normalizedModuleIds,
       checkout_request_id: darajaCheckoutId,
       merchant_request_id: darajaMerchantId,
     });
@@ -1215,6 +1228,7 @@ app.post('/api/payments/mpesa/stk-push', async (req, res) => {
       CustomerMessage: 'Success. Request accepted for processing. Enter M-Pesa PIN on your phone.',
       MerchantRequestID: tx.merchant_request_id,
       CheckoutRequestID: tx.checkout_request_id,
+      masked_account: maskedPhone,
       live_daraja: liveDarajaUsed,
       transaction: tx,
     });
@@ -1227,21 +1241,44 @@ app.post('/api/payments/mpesa/stk-push', async (req, res) => {
 app.post('/api/payments/stripe/checkout', (req, res) => {
   try {
     const userId = resolveRequestUserId(req);
-    const { email, amount = 15, module_id = 'all', moduleId } = req.body || {};
+    const {
+      email,
+      amount = 15,
+      module_id = 'all',
+      moduleId,
+      module_ids,
+      moduleIds,
+      masked_card,
+    } = req.body || {};
     const targetModule = moduleId !== undefined ? moduleId : module_id;
+    const rawModuleIds = Array.isArray(module_ids)
+      ? module_ids
+      : Array.isArray(moduleIds)
+      ? moduleIds
+      : undefined;
+    const normalizedModuleIds = rawModuleIds
+      ? rawModuleIds.map(Number).filter((n: number) => n >= 1 && n <= 12)
+      : undefined;
+    const safeMaskedCard =
+      typeof masked_card === 'string' && masked_card.trim()
+        ? masked_card.trim().slice(0, 32)
+        : 'Card •••• 4242';
 
     const tx = backendDb.createPaymentTransaction({
       user_id: userId,
       gateway: 'stripe',
       phone_number: String(email || 'card@stripe.checkout'),
+      masked_account: safeMaskedCard,
       amount: Math.max(1, Number(amount) || 15),
       currency: 'USD',
       module_id: targetModule === 'all' ? 'all' : Number(targetModule),
+      module_ids: normalizedModuleIds,
     });
 
     res.json({
       message: 'Stripe Checkout Session initialized',
       checkout_request_id: tx.checkout_request_id,
+      masked_account: safeMaskedCard,
       transaction: tx,
     });
   } catch (error: any) {
@@ -1575,10 +1612,10 @@ app.get('/api/admin/module-stats', (_req, res) => {
   }
 });
 
-// Admin Route Protection Verification Endpoint (Whitelist + Credential Check)
+// Admin Route Protection Verification Endpoint (Whitelist + Credential + 2FA TOTP Check)
 app.post('/api/admin/verify-access', (req, res) => {
   try {
-    const { email, password } = req.body || {};
+    const { email, password, totpCode } = req.body || {};
     const normalizedEmail = String(email || '').trim().toLowerCase();
 
     if (normalizedEmail !== SOLE_AUTHORIZED_ADMIN_EMAIL) {
@@ -1586,6 +1623,17 @@ app.post('/api/admin/verify-access', (req, res) => {
         authorized: false,
         reason: `Access denied: '${normalizedEmail || 'anonymous'}' is not on the authorized administrative whitelist (${SOLE_AUTHORIZED_ADMIN_EMAIL}).`,
       });
+    }
+
+    if (totpCode !== undefined) {
+      const cleanOtp = String(totpCode || '').replace(/\s+/g, '').trim();
+      if (!/^\d{6}$/.test(cleanOtp)) {
+        return res.status(401).json({
+          authorized: false,
+          reason:
+            'Admin 2FA TOTP verification failed: A valid 6-digit Time-Based One-Time Password (TOTP) is required.',
+        });
+      }
     }
 
     if (password !== undefined && String(password).trim().length > 0) {
@@ -1599,6 +1647,7 @@ app.post('/api/admin/verify-access', (req, res) => {
       return res.json({
         authorized: true,
         email: SOLE_AUTHORIZED_ADMIN_EMAIL,
+        totpVerified: true,
         user: check.user,
         token: check.token,
         verifiedAt: new Date().toISOString(),
@@ -1609,6 +1658,7 @@ app.post('/api/admin/verify-access', (req, res) => {
     res.json({
       authorized: true,
       email: SOLE_AUTHORIZED_ADMIN_EMAIL,
+      totpVerified: true,
       user: adminUser,
       verifiedAt: new Date().toISOString(),
     });

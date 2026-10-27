@@ -11,21 +11,25 @@ import {
   Sparkles,
   BookOpen,
 } from 'lucide-react';
-import { UserStats } from '../types/quiz';
+import { Question, UserStats } from '../types/quiz';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { calculateDomainConfidence } from '../utils/storage';
 import { MaasaiMedallion, KitengeRibbon } from './MotifDecorations';
 import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 import { generateDomainConfidencePdf, generateUserManualPdf } from '../utils/pdfGenerator';
+import { downloadNotesAndMemoryAnchorsMarkdown } from '../utils/exportNotesMarkdown';
+import { BUILTIN_QUESTIONS } from '../data/questionBank';
 
 interface ExportProgressModalProps {
   stats: UserStats;
+  questions?: Question[];
   onClose: () => void;
   onOpenUserGuide?: () => void;
 }
 
 export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
   stats,
+  questions,
   onClose,
   onOpenUserGuide,
 }) => {
@@ -129,6 +133,16 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
         onOpenUserGuide();
       }
     }
+  };
+
+  // 3.5 Export Saved Question Notes & Memory Anchors as Formatted Markdown (.md)
+  const handleExportNotesMarkdown = () => {
+    const pool = questions && questions.length > 0 ? questions : BUILTIN_QUESTIONS;
+    const result = downloadNotesAndMemoryAnchorsMarkdown(pool, stats);
+    setCopiedNotification(
+      `Exported ${result.notesCount} question notes & ${result.anchorsCount} memory anchors to ${result.filename}!`
+    );
+    setTimeout(() => setCopiedNotification(null), 4000);
   };
 
   // 4. Export / Print as PDF (Printable HTML view)
@@ -342,6 +356,38 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
               </div>
 
               <div className="p-2 rounded-lg bg-blue-100/60 text-[#0078D4] group-hover:bg-[#0078D4] group-hover:text-white transition-all shrink-0 ml-2">
+                <Download className="w-4 h-4" />
+              </div>
+            </div>
+
+            {/* Option 1B: Export Saved Question Notes & Memory Anchors (.MD) */}
+            <div
+              onClick={handleExportNotesMarkdown}
+              className="p-3.5 rounded-xl border-2 border-amber-300 bg-amber-50/50 hover:bg-amber-50 hover:shadow-md cursor-pointer transition-all flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xs shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-amber-800 transition-colors">
+                      Saved Question Notes &amp; Memory Anchors (.MD)
+                    </h4>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-slate-900 text-amber-300">
+                      Markdown
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                      Offline Study
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Formatted Markdown guide with all your saved question notes, pinned memory anchors &amp; exam traps
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-2 rounded-lg bg-amber-100 text-amber-900 group-hover:bg-slate-900 group-hover:text-amber-300 transition-all shrink-0 ml-2">
                 <Download className="w-4 h-4" />
               </div>
             </div>
