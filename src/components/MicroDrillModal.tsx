@@ -11,6 +11,8 @@ import {
   X,
   Lightbulb,
   ShieldCheck,
+  TrendingUp,
+  Activity,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Question } from '../types/quiz';
@@ -26,6 +28,243 @@ interface MicroDrillProps {
   onLaunchPeerChallenge?: (moduleId: number) => void;
   onClose: () => void;
 }
+
+interface MicroDrillSparklineProps {
+  currentIndex: number;
+  totalQuestions: number;
+  hasSubmitted: boolean;
+  score?: number;
+  isFinished?: boolean;
+}
+
+export const MicroDrillSparkline: React.FC<MicroDrillSparklineProps> = ({
+  currentIndex,
+  totalQuestions,
+  hasSubmitted,
+  score = 0,
+  isFinished = false,
+}) => {
+  const total = Math.max(1, totalQuestions);
+  const completedQuestions = isFinished
+    ? total
+    : Math.min(total, currentIndex + (hasSubmitted ? 1 : 0));
+  const progressPercent = Math.min(100, Math.round((completedQuestions / total) * 100));
+  const remainingQuestions = Math.max(0, total - completedQuestions);
+  const remainingPercent = Math.max(0, 100 - progressPercent);
+
+  // Sparkline coordinates setup
+  const width = 280;
+  const height = 48;
+  const paddingX = 20;
+  const topY = 10;
+  const bottomY = 36;
+  const usableWidth = width - 2 * paddingX;
+  const usableHeight = bottomY - topY;
+
+  // Generate milestone points from start (0%) to completion (100%)
+  const points = Array.from({ length: total + 1 }, (_, i) => {
+    const x = paddingX + (i / total) * usableWidth;
+    const pct = (i / total) * 100;
+    const y = bottomY - (pct / 100) * usableHeight;
+    return { index: i, x, y, pct };
+  });
+
+  // Completed points (up to completedQuestions)
+  const completedPoints = points.slice(0, completedQuestions + 1);
+  const currentPoint = points[completedQuestions] || points[0];
+
+  // SVG Paths
+  const completedLinePath =
+    completedPoints.length > 0
+      ? completedPoints.reduce((acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '')
+      : '';
+
+  const completedAreaPath =
+    completedPoints.length > 0
+      ? `${completedLinePath} L ${currentPoint.x} ${bottomY} L ${points[0].x} ${bottomY} Z`
+      : '';
+
+  // Remaining trajectory dashed line from current point to final 100% target
+  const remainingPoints = points.slice(completedQuestions);
+  const remainingLinePath =
+    remainingPoints.length > 1
+      ? remainingPoints.reduce((acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '')
+      : '';
+
+  return (
+    <div className="bg-gradient-to-b from-slate-50 to-amber-50/30 p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs">
+      {/* Header Metric Row */}
+      <div className="flex items-center justify-between text-xs font-semibold mb-1 flex-wrap gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="w-5 h-5 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+            <TrendingUp className="w-3.5 h-3.5" />
+          </div>
+          <span className="text-slate-800 font-bold">
+            Progress Sparkline:
+          </span>
+          <span className="text-emerald-700 font-black">
+            {progressPercent}% Complete
+          </span>
+          <span className="text-slate-400 font-normal text-[11px]">
+            ({completedQuestions}/{total} solved)
+          </span>
+        </div>
+
+        {/* Remaining Effort Tag */}
+        <div className="flex items-center gap-1 text-[11px]">
+          {remainingQuestions > 0 ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-900 border border-amber-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              <span>Remaining Effort: <strong>{remainingQuestions} Q</strong> ({remainingPercent}% left)</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>Goal Reached • 0 Q Remaining</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Mini SVG Sparkline Chart */}
+      <div className="relative w-full">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="w-full h-11 overflow-visible"
+          aria-label={`Progress sparkline: ${progressPercent}% completed, ${remainingQuestions} questions remaining`}
+        >
+          <defs>
+            <linearGradient id="drillProgressAreaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.32" />
+              <stop offset="100%" stopColor="#0078D4" stopOpacity="0.04" />
+            </linearGradient>
+            <linearGradient id="drillProgressStrokeGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#0078D4" />
+              <stop offset="100%" stopColor="#10b981" />
+            </linearGradient>
+          </defs>
+
+          {/* Baseline (0%) & Ceiling (100%) Guidelines */}
+          <line
+            x1={paddingX}
+            y1={bottomY}
+            x2={width - paddingX}
+            y2={bottomY}
+            stroke="#e2e8f0"
+            strokeWidth="1"
+            strokeDasharray="2 2"
+          />
+          <line
+            x1={paddingX}
+            y1={topY}
+            x2={width - paddingX}
+            y2={topY}
+            stroke="#cbd5e1"
+            strokeWidth="1"
+            strokeDasharray="2 2"
+          />
+
+          {/* Area under completed curve */}
+          {completedAreaPath && (
+            <path
+              d={completedAreaPath}
+              fill="url(#drillProgressAreaGrad)"
+              className="transition-all duration-300"
+            />
+          )}
+
+          {/* Remaining effort trajectory line (dashed amber showing remaining effort) */}
+          {remainingLinePath && (
+            <path
+              d={remainingLinePath}
+              fill="none"
+              stroke="#f59e0b"
+              strokeWidth="2"
+              strokeDasharray="4 3"
+              strokeLinecap="round"
+              className="opacity-80"
+            />
+          )}
+
+          {/* Completed progress line */}
+          {completedLinePath && (
+            <path
+              d={completedLinePath}
+              fill="none"
+              stroke="url(#drillProgressStrokeGrad)"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="transition-all duration-300"
+            />
+          )}
+
+          {/* Milestone points for each question */}
+          {points.map((pt, i) => {
+            if (i === 0) return null; // Show Q1..Q5
+            const isCompleted = i <= completedQuestions;
+            const isCurrent = !isFinished && i === currentIndex + 1 && !hasSubmitted;
+
+            return (
+              <g key={i}>
+                {/* Active current pulsing halo */}
+                {isCurrent && (
+                  <circle
+                    cx={pt.x}
+                    cy={pt.y}
+                    r="6.5"
+                    fill="#f59e0b"
+                    opacity="0.35"
+                    className="animate-ping"
+                  />
+                )}
+
+                {/* Main point dot */}
+                <circle
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={isCurrent ? '4.5' : isCompleted ? '3.8' : '3'}
+                  fill={isCompleted ? '#10b981' : isCurrent ? '#f59e0b' : '#ffffff'}
+                  stroke={isCompleted ? '#065f46' : isCurrent ? '#d97706' : '#94a3b8'}
+                  strokeWidth={isCurrent ? '2.5' : '1.75'}
+                  className="transition-all duration-200"
+                />
+
+                {/* Question index label */}
+                <text
+                  x={pt.x}
+                  y={height - 2}
+                  textAnchor="middle"
+                  className={`text-[9px] font-bold ${
+                    isCompleted
+                      ? 'fill-emerald-800'
+                      : isCurrent
+                      ? 'fill-amber-700 font-black'
+                      : 'fill-slate-400'
+                  }`}
+                >
+                  Q{i}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Legend / Key */}
+        <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5 px-0.5 font-medium">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2.5 h-0.5 bg-emerald-500 rounded-full" />
+            <span>Completed ({progressPercent}%)</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2.5 h-0.5 border-b border-dashed border-amber-500" />
+            <span>Remaining Effort ({remainingPercent}%)</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const MicroDrillModal: React.FC<MicroDrillProps> = ({
   questions,
@@ -314,6 +553,17 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
                   ? `Outstanding accuracy on Module ${targetModuleId} (${targetModuleName})! Your weakness tracker and domain confidence have been updated.`
                   : `You need at least 4 of 5 (80%) correct to unlock the Harambee Weakness Conqueror badge for Module ${targetModuleId}. Retry now to claim your badge!`}
               </p>
+            </div>
+
+            {/* Completed Sparkline Summary */}
+            <div className="max-w-md mx-auto text-left">
+              <MicroDrillSparkline
+                currentIndex={drillQuestions.length - 1}
+                totalQuestions={drillQuestions.length}
+                hasSubmitted={true}
+                score={score}
+                isFinished={true}
+              />
             </div>
 
             {/* Badge Card Display */}

@@ -753,37 +753,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* Admin Dashboard Mode Switcher: Curriculum Content Edits vs User Accounts & Password Resets */}
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <button
             type="button"
             onClick={() => setDashboardSection('curriculum')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               dashboardSection === 'curriculum'
                 ? 'bg-[#0078D4] text-white shadow-xs'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
             }`}
           >
-            <Database className="w-3.5 h-3.5" />
-            <span>Curriculum Content Edits &amp; Question Bank ({statsPayload?.total_questions ?? 27} Qs)</span>
+            <Database className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Curriculum Content Edits &amp; Question Bank ({statsPayload?.total_questions ?? 27} Qs)</span>
           </button>
 
           <button
             type="button"
             onClick={() => setDashboardSection('users')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               dashboardSection === 'users'
                 ? 'bg-[#0078D4] text-white shadow-xs'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
-            <span>User Accounts &amp; Password Resets ({adminUsers.length})</span>
+            <Users className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">User Accounts &amp; Password Resets ({adminUsers.length})</span>
           </button>
         </div>
 
-        <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
-          <ShieldCheck className="w-3.5 h-3.5" />
+        <span className="text-[11px] font-bold text-emerald-700 flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 shrink-0">
+          <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
           <span>Authorized Whitelist Admin View</span>
         </span>
       </div>
@@ -1061,7 +1061,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* Top 4 Summary KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="p-3.5 rounded-xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between text-[11px] font-bold uppercase text-slate-500">
             <span>Total Postgres Questions</span>

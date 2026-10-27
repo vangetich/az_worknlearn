@@ -82,6 +82,7 @@ import { ProtectedRoute, AuthenticatedSupabaseUser } from './components/Protecte
 import { PaymentGatekeeper } from './components/PaymentGatekeeper';
 import { SubscriptionTierSelection } from './components/SubscriptionTierSelection';
 import { PeerChallengeModal } from './components/PeerChallengeModal';
+import { PracticeControlOverflowMenu } from './components/PracticeControlOverflowMenu';
 import { downloadNotesAndMemoryAnchorsMarkdown } from './utils/exportNotesMarkdown';
 import { usePostgresDatabase } from './hooks/usePostgresDatabase';
 import { authService } from './services/authService';
@@ -562,6 +563,9 @@ export default function App() {
       return false;
     }
   });
+
+  // Touch-friendly overflow menu for Sort, Diff, Heatmap, Maps, and Study Zone on mobile devices
+  const [showMobileControlOverflow, setShowMobileControlOverflow] = useState<boolean>(false);
 
   const handleToggleToolbarHidden = () => {
     setIsToolbarHidden((prev) => {
@@ -1707,8 +1711,26 @@ export default function App() {
                      SINGLE-LINE COMPACT BAR: Sort, Diff, Heatmap, Maps & Study Zone in 1 Line
                      ===================================================================== */
                   <div className="relative z-10 flex items-center justify-between gap-1.5 w-full flex-nowrap overflow-x-auto py-0.5">
-                    {/* Single-Line Unified Row of Controls */}
-                    <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
+                    {/* Mobile Touch-Friendly Overflow Button (< md screens): Bundles Sort, Diff, Heatmap, Maps & Study Zone without line wrapping */}
+                    <div className="flex md:hidden items-center shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setShowMobileControlOverflow(true)}
+                        className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] hover:opacity-95 text-white text-[11px] font-black flex items-center gap-1.5 shadow-2xs cursor-pointer shrink-0 whitespace-nowrap"
+                        aria-label="Open Practice Controls overflow menu"
+                        title="Open touch-friendly menu for Sort, Diff, Heatmap, Maps & Study Zone"
+                      >
+                        <SlidersHorizontal className="w-3 h-3 text-amber-300" />
+                        <span>Controls</span>
+                        <span className="px-1.5 py-0.2 rounded bg-white/20 text-[9.5px] font-bold text-amber-200">
+                          {questionSortOrder === 'default' ? 'Adaptive' : questionSortOrder} • {selectedDifficultyFilter === 'all' ? 'All' : selectedDifficultyFilter}
+                        </span>
+                        <ChevronDown className="w-3 h-3 text-slate-300" />
+                      </button>
+                    </div>
+
+                    {/* Desktop & Tablet Inline Controls (md+ screens): 1. Sort, 2. Diff, 3. Heatmap, 4. Maps, 5. Study Zone */}
+                    <div className="hidden md:flex items-center gap-1.5 flex-nowrap shrink-0">
                       {/* 1. Sort: Adaptive Default */}
                       <div className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/95 border border-slate-300 shadow-2xs shrink-0 whitespace-nowrap">
                         <KenyanFlagMiniEmblem size={13} />
@@ -1902,8 +1924,29 @@ export default function App() {
                      EXPANDED SETTING: Full Multi-Button Bar with Single-Line & Hide Toggles
                      ===================================================================== */
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 w-full">
-                    {/* Left: Quick-Sort Toggle Buttons & Persistent Difficulty Level Dropdown Selector */}
-                    <div className="relative z-10 flex flex-wrap items-center gap-1.5">
+                    {/* Mobile Touch-Friendly Overflow Button (< md screens): Replaces multi-line button wrapping */}
+                    <div className="flex md:hidden items-center shrink-0 w-full mb-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowMobileControlOverflow(true)}
+                        className="w-full px-3 py-2 rounded-xl bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] hover:opacity-95 text-white text-xs font-black flex items-center justify-between shadow-xs cursor-pointer"
+                        title="Open touch-friendly menu for Sort, Diff, Heatmap, Maps & Study Zone"
+                      >
+                        <div className="flex items-center gap-2">
+                          <SlidersHorizontal className="w-3.5 h-3.5 text-amber-300" />
+                          <span>Practice Controls &amp; Filters</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 rounded bg-white/20 text-[10px] font-bold text-amber-200">
+                            {questionSortOrder === 'default' ? 'Adaptive' : questionSortOrder} • {selectedDifficultyFilter === 'all' ? 'All' : selectedDifficultyFilter}
+                          </span>
+                          <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Desktop & Tablet Inline Controls (md+ screens) */}
+                    <div className="hidden md:flex relative z-10 flex-wrap items-center gap-1.5">
                       <span
                         className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5 mr-1 px-2.5 py-1 rounded-xl bg-white/90 border border-slate-200/80 shadow-2xs backdrop-blur-xs"
                         title="Kenyan Heritage Quick-Sort Dashboard (Black • Red • Green • White)"
@@ -3223,6 +3266,38 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Touch-Friendly Practice Control Overflow Menu for Mobile Devices (Sort, Diff, Heatmap, Maps & Study Zone) */}
+      <PracticeControlOverflowMenu
+        isOpen={showMobileControlOverflow}
+        onClose={() => setShowMobileControlOverflow(false)}
+        questionSortOrder={questionSortOrder}
+        onSortChange={(order) => {
+          handleChangeSortOrder(order);
+          triggerMotifShimmer();
+        }}
+        selectedDifficultyFilter={selectedDifficultyFilter}
+        onDifficultyChange={(diff) => {
+          setSelectedDifficultyFilter(diff);
+          handleChangeLockedDifficulty(diff === 'all' ? null : diff);
+          setCurrentQuestionIndex(0);
+        }}
+        showPracticeHeatmap={showPracticeHeatmap}
+        onToggleHeatmap={() => setShowPracticeHeatmap((prev) => !prev)}
+        showWorkspacePanels={showWorkspacePanels}
+        onToggleWorkspacePanels={() => setShowWorkspacePanels((prev) => !prev)}
+        onOpenStudyZone={() => setExternalStudyZoneOpenTrigger((prev) => prev + 1)}
+        onOpenPeerChallenge={() => {
+          setPeerChallengeModuleId(selectedModuleId);
+          setShowPeerChallengeModal(true);
+        }}
+        onExportNotesMarkdown={() => {
+          const res = downloadNotesAndMemoryAnchorsMarkdown(questions, stats);
+          setAllTimeHighToast(
+            `Exported ${res.notesCount} Notes & ${res.anchorsCount} Memory Anchors to ${res.filename}`
+          );
+        }}
+      />
 
       {/* Export Progress & Domain Confidence Report Modal */}
       {showExportModal && (

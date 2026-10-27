@@ -1467,7 +1467,7 @@ ${
                     onClick={() => {
                       const readmeBlob = new Blob(
                         [
-                          `# Microsoft Azure Fundamentals (AZ-900) Smart Quiz Builder & Adaptive Practice Studio\n\nSee /README.md in the project root for full setup, architecture, Adaptive Learning Path, Analyze Distractors, Azure Concept Snap, Daily Study Goal Ring, Global Harambee Peer Leaderboard, and API telemetry documentation.`,
+                          `# Microsoft Azure Fundamentals (AZ-900) Smart Quiz Builder & Adaptive Practice Studio\n\nSee /README.md in the project root for full setup, architecture, Adaptive Learning Path, Analyze Distractors, Azure Concept Snap, Daily Study Goal Ring, Global Harambee Peer Leaderboard, M-Pesa Daraja & Stripe payments, 2FA/MFA security, Peer Challenge mode, offline Markdown notes export, and API telemetry documentation.`,
                         ],
                         { type: 'text/markdown;charset=utf-8' }
                       );
@@ -1488,7 +1488,7 @@ ${
                     onClick={() => {
                       const historyBlob = new Blob(
                         [
-                          `# History of Build — AZ-900 Smart Quiz Builder & Adaptive Practice Studio\n\nSee /BUILD_HISTORY.md in the project root for the chronological engineering log covering Phase 1 (Curriculum Foundation) through Phase 9 (Analyze Distractors, Azure Concept Snap, Daily Study Goal Ring, Global Peer Leaderboard, and Vitest Backend Tests).`,
+                          `# History of Build — AZ-900 Smart Quiz Builder & Adaptive Practice Studio\n\nSee /BUILD_HISTORY.md and /HISTORY.md in the project root for the chronological engineering log covering Phase 1 (Curriculum Foundation) through Phase 15 (M-Pesa Daraja, 2FA/MFA, Peer Challenge Mode, Offline Markdown Export, and Collapsible Controls).`,
                         ],
                         { type: 'text/markdown;charset=utf-8' }
                       );
@@ -1518,7 +1518,7 @@ ${
                     </span>
                   </div>
                   <p className="text-xs text-slate-700 leading-relaxed">
-                    Covers full-stack setup (`npm install`, `npm run dev`, `npx vitest run`), official AZ-900 Learning Paths (Cloud Concepts, Azure Architecture &amp; Services, Management &amp; Governance), Adaptive Difficulty &amp; Persistent Override Selector, Study Mode, Analyze Distractors, Azure Concept Snap, Daily Study Goal Ring, Global Peer Leaderboard, `.KenyanFlagQuickSortMotifs` animations, and Express/PostgreSQL API routes.
+                    Covers full-stack setup (`npm install`, `npm run dev`, `npx vitest run`), official AZ-900 Learning Paths (Cloud Concepts, Azure Architecture &amp; Services, Management &amp; Governance), Adaptive Difficulty &amp; Persistent Override Selector, Study Mode, Analyze Distractors, Azure Concept Snap, Daily Study Goal Ring, Global Peer Leaderboard, M-Pesa Daraja &amp; Stripe checkout, 2FA/MFA security layers, Peer Challenge micro-drills, Markdown study notes export, collapsible practice toolbar, and Express/PostgreSQL API routes.
                   </p>
                 </div>
 
@@ -1528,11 +1528,11 @@ ${
                       📜 /BUILD_HISTORY.md &amp; /HISTORY.md
                     </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900">
-                      9 Engineering Phases
+                      15 Engineering Phases
                     </span>
                   </div>
                   <p className="text-xs text-slate-700 leading-relaxed">
-                    Chronological engineering log detailing Phase 1 (Curriculum &amp; Exam Engine), Phase 2 (Adaptive Learning &amp; Weak Areas Review), Phase 3 (Study Mode &amp; ELI5), Phase 4 (Azure Concept Snap &amp; Analyze Distractors), Phase 5 (`.KenyanFlagQuickSortMotifs` 180° Trend Flip &amp; Shimmer), Phase 6 (Daily Goal Ring &amp; Red Sign-Out Transition), Phase 7 (Global Harambee Leaderboard), and Phase 8 (Recharts Telemetry &amp; Vitest Tests).
+                    Chronological engineering log detailing Phase 1 (Curriculum &amp; Exam Engine) through Phase 15: Virtual Study Rooms &amp; Whiteboards, Settings Password Reset, Admin Protection Layer &amp; Dashboard, M-Pesa Daraja STK Push &amp; Subscription Cost Transparency, Admin 2FA &amp; User Profile MFA, Peer Challenge Cohort Micro-Drills, Offline Markdown Study Guide Export, and Collapsible Single-Line Practice Controls.
                   </p>
                 </div>
               </div>

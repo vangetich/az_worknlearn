@@ -20,6 +20,9 @@ import {
   Cloud,
   Sparkles,
   ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  Menu,
 } from 'lucide-react';
 import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 import { KitengeRibbon } from './MotifDecorations';
@@ -81,6 +84,7 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
   const [copiedSql, setCopiedSql] = useState<boolean>(false);
   const [isLoadingSecurity, setIsLoadingSecurity] = useState<boolean>(false);
   const [showFullApiModal, setShowFullApiModal] = useState<boolean>(false);
+  const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState<boolean>(false);
 
   // Route Protection Layer State (Validates against ADMIN_EMAIL_WHITELIST)
   const storedBackendUser = authService.getStoredBackendUser();
@@ -311,7 +315,7 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
       <ResponsiveModalContainer
         isOpen={isOpen}
         onClose={onClose}
-        maxWidth="4xl"
+        maxWidth="6xl"
         ariaLabel="Admin Back-Office, Cloud Sync, M-Pesa & Curriculum Control Console"
       >
         <div className="shrink-0">
@@ -319,32 +323,221 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
         </div>
 
         {/* Top Header */}
-        <div className="px-5 py-4 bg-gradient-to-r from-slate-950 via-slate-900 to-[#003865] text-white flex items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center shrink-0">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-gradient-to-r from-slate-950 via-slate-900 to-[#003865] text-white flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center shrink-0">
               <ShieldCheck className="w-5 h-5 text-amber-300" />
             </div>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-extrabold text-base sm:text-lg tracking-tight">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <h2 className="font-extrabold text-sm sm:text-lg tracking-tight truncate">
                   Admin Dashboard &amp; Back-Office Control Center
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 flex items-center gap-1 shrink-0">
                   <Lock className="w-2.5 h-2.5" />
                   <span>Whitelist Protected: {PRIMARY_ADMIN_EMAIL}</span>
                 </span>
               </div>
-              <p className="text-xs text-sky-200/85 truncate">
+              <p className="text-[11px] sm:text-xs text-sky-200/85 truncate">
                 Admin DB, User Accounts, Password Resets, Cloud Sync, M-Pesa Daraja Ledger &amp; Curriculum Readiness
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Dedicated Admin Navigation & Portals Dropdown Menu Button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsAdminDropdownOpen((prev) => !prev)}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white border border-slate-700 text-xs font-black flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+                aria-expanded={isAdminDropdownOpen}
+                aria-label="Toggle Admin Dashboard dropdown menu"
+                title="Open dropdown menu with all Admin buttons, tabs, portals & route guard"
+              >
+                <Menu className="w-4 h-4 text-amber-300 shrink-0" />
+                <span className="hidden sm:inline">Admin Menu &amp; Portals</span>
+                <span className="sm:hidden">Menu</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                    isAdminDropdownOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {/* The Consolidated Dropdown Menu Popover */}
+              {isAdminDropdownOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsAdminDropdownOpen(false)}
+                  />
+                  <div
+                    className="absolute right-0 top-full mt-2 z-50 w-[92vw] sm:w-[440px] max-w-[calc(100vw-1.5rem)] max-h-[82vh] overflow-y-auto overscroll-contain bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 space-y-3.5 text-slate-900 text-left animate-in fade-in zoom-in-95 duration-150"
+                    onClick={(e) => e.stopPropagation()}
+                    role="menu"
+                    aria-label="Admin Navigation and Portals Menu"
+                  >
+                    {/* Whitelist Route Guard Security Section */}
+                    <div className="p-3 rounded-xl bg-slate-900 text-slate-200 border border-slate-800 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold">
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>Whitelist Route Guard: [{ADMIN_EMAIL_WHITELIST.join(', ')}]</span>
+                        </span>
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-amber-300">
+                        <Lock className="w-3 h-3 text-amber-400 shrink-0" />
+                        <span>• Hidden from standard student views</span>
+                      </div>
+                    </div>
+
+                    {/* External Portals & Modals Buttons */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                        Admin Portals &amp; Modals
+                      </span>
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {onOpenCloudSyncPortal && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAdminDropdownOpen(false);
+                              onOpenCloudSyncPortal();
+                            }}
+                            className="w-full min-h-[42px] px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#006600] border border-emerald-300 font-extrabold text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Cloud className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span className="truncate">Open Cloud Sync &amp; M-Pesa Portal</span>
+                            </div>
+                            <ExternalLink className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          </button>
+                        )}
+
+                        {onOpenCurriculumReadiness && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAdminDropdownOpen(false);
+                              onOpenCurriculumReadiness();
+                            }}
+                            className="w-full min-h-[42px] px-3 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-[#0078D4] border border-sky-300 font-extrabold text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <RefreshCw className="w-4 h-4 text-[#0078D4] shrink-0" />
+                              <span className="truncate">Curriculum Readiness Modal</span>
+                            </div>
+                            <ExternalLink className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAdminDropdownOpen(false);
+                            setShowFullApiModal(true);
+                          }}
+                          className="w-full min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-300 font-extrabold text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileCode className="w-4 h-4 text-slate-700 shrink-0" />
+                            <span className="truncate">Full REST API Reference</span>
+                          </div>
+                          <ExternalLink className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Admin Navigation Tabs */}
+                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                        Admin Dashboard Sections
+                      </span>
+                      <div className="space-y-1">
+                        {[
+                          {
+                            id: 'question-bank-crud' as AdminOfficeTab,
+                            label: '1. Admin Dashboard (Users, Passwords & DB CRUD)',
+                            sublabel: 'CRUD & Users Management',
+                            icon: Database,
+                          },
+                          {
+                            id: 'cloud-mpesa-readiness' as AdminOfficeTab,
+                            label: '2. Cloud Sync, M-Pesa & Curriculum Readiness',
+                            sublabel: 'Payments & Sync Portals',
+                            icon: CreditCard,
+                          },
+                          {
+                            id: 'security-access-rbac' as AdminOfficeTab,
+                            label: '3. Whitelist Route Guard & Admin Password',
+                            sublabel: 'Security & 2FA Setup',
+                            icon: ShieldCheck,
+                          },
+                          {
+                            id: 'telemetry-migrations' as AdminOfficeTab,
+                            label: '4. Telemetry & SQL Migrations.',
+                            sublabel: 'Postgres Telemetry & DDL',
+                            icon: Activity,
+                          },
+                        ].map((item) => {
+                          const isActive = activeTab === item.id;
+                          const ItemIcon = item.icon;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                setActiveTab(item.id);
+                                setIsAdminDropdownOpen(false);
+                              }}
+                              className={`w-full min-h-[44px] px-3 py-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                                isActive
+                                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                  : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div
+                                  className={`p-1.5 rounded-lg shrink-0 ${
+                                    isActive
+                                      ? 'bg-white/20 text-amber-300'
+                                      : 'bg-slate-100 text-slate-700'
+                                  }`}
+                                >
+                                  <ItemIcon className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-black truncate">{item.label}</div>
+                                  <div
+                                    className={`text-[10px] truncate ${
+                                      isActive ? 'text-slate-300' : 'text-slate-500'
+                                    }`}
+                                  >
+                                    {item.sublabel}
+                                  </div>
+                                </div>
+                              </div>
+                              {isActive && (
+                                <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+                                  <Check className="w-3 h-3 stroke-[3]" />
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={handleLockOrUnlockSession}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border transition-all cursor-pointer ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border transition-all cursor-pointer shrink-0 ${
                 !isSoleAuthorizedAdmin
                   ? 'bg-rose-600 text-white border-rose-500'
                   : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/40'
@@ -354,12 +547,14 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
               {!isSoleAuthorizedAdmin ? (
                 <>
                   <Lock className="w-3.5 h-3.5" />
-                  <span>2FA Gate Locked</span>
+                  <span className="hidden sm:inline">2FA Gate Locked</span>
+                  <span className="sm:hidden">Locked</span>
                 </>
               ) : (
                 <>
                   <Unlock className="w-3.5 h-3.5" />
-                  <span>2FA TOTP Verified (Lock)</span>
+                  <span className="hidden sm:inline">2FA Verified (Lock)</span>
+                  <span className="sm:hidden">Lock</span>
                 </>
               )}
             </button>
@@ -367,15 +562,40 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer shrink-0"
+              aria-label="Close Admin Modal"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Single-User Whitelist Security Allocation Banner */}
-        <div className="px-6 py-2.5 bg-slate-900 text-slate-200 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] shrink-0">
+        {/* Mobile / Tablet Sub-Header Bar (< lg): Quick-Nav Trigger + Whitelist Status Badge */}
+        <div className="lg:hidden px-4 py-2 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between gap-2 text-xs shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsAdminDropdownOpen(true)}
+            className="flex items-center gap-2 min-w-0 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-left border border-white/15 cursor-pointer flex-1 transition-colors"
+          >
+            <Menu className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+            <span className="font-extrabold text-amber-300 truncate text-[11px]">
+              {activeTab === 'question-bank-crud'
+                ? '1. Admin Dashboard (Users, Passwords & DB CRUD)'
+                : activeTab === 'cloud-mpesa-readiness'
+                ? '2. Cloud Sync, M-Pesa & Curriculum Readiness'
+                : activeTab === 'security-access-rbac'
+                ? '3. Whitelist Route Guard & Admin Password'
+                : '4. Telemetry & SQL Migrations'}
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-300 shrink-0 ml-auto" />
+          </button>
+          <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+            {PRIMARY_ADMIN_EMAIL.split('@')[0]}
+          </span>
+        </div>
+
+        {/* Desktop Single-User Whitelist Security Allocation Banner (lg+ screens) */}
+        <div className="hidden lg:flex px-6 py-2.5 bg-slate-900 text-slate-200 border-b border-slate-800 flex-wrap items-center justify-between gap-2 text-[11px] shrink-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
               <UserCheck className="w-3 h-3" />
@@ -419,12 +639,12 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="px-6 pt-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-1.5 shrink-0">
+        {/* Desktop Navigation Tabs (lg+ screens) with overflow-x-auto protection */}
+        <div className="hidden lg:flex px-6 pt-3 bg-slate-50 border-b border-slate-200 flex-nowrap overflow-x-auto items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('question-bank-crud')}
-            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'question-bank-crud'
                 ? 'bg-white text-amber-800 border-amber-600 shadow-2xs'
                 : 'text-slate-600 border-transparent hover:text-slate-900'
@@ -437,7 +657,7 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('cloud-mpesa-readiness')}
-            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'cloud-mpesa-readiness'
                 ? 'bg-white text-sky-800 border-sky-600 shadow-2xs'
                 : 'text-slate-600 border-transparent hover:text-slate-900'
@@ -450,7 +670,7 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('security-access-rbac')}
-            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'security-access-rbac'
                 ? 'bg-white text-emerald-800 border-emerald-600 shadow-2xs'
                 : 'text-slate-600 border-transparent hover:text-slate-900'
@@ -463,7 +683,7 @@ export const AdminBackOfficeModal: React.FC<AdminBackOfficeModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('telemetry-migrations')}
-            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-2.5 rounded-t-xl text-xs font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'telemetry-migrations'
                 ? 'bg-white text-[#0078D4] border-[#0078D4] shadow-2xs'
                 : 'text-slate-600 border-transparent hover:text-slate-900'

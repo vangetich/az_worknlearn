@@ -284,7 +284,7 @@ export function generateOtpQrSvgDataUrl(otpAuthUri: string): string {
 
       const byteVal = hashBytes[Math.floor(bitIdx / 8) % hashBytes.length];
       const bit = ((byteVal >>> (bitIdx % 8)) & 1) === 1;
-      grid[r][c] = bit ^ ((r + c) % 3 === 0);
+      grid[r][c] = bit !== ((r + c) % 3 === 0);
       bitIdx++;
     }
   }

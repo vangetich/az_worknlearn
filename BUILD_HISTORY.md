@@ -114,3 +114,79 @@ This document provides the complete chronological engineering history, architect
   - Added **User Accounts & Password Resets** management (`GET /api/admin/users`, `POST /api/admin/users/manage`) alongside **PostgreSQL/Supabase Question Bank CRUD**.
   - Added a dedicated **Cloud Sync, M-Pesa & Curriculum Readiness** tab in `AdminBackOfficeModal.tsx` (`GET /api/admin/payments-ledger`, `GET /api/curriculum/readiness-check`) storing and displaying M-Pesa Daraja STK Push transactions, Cloud Sync status, and official Microsoft Learn readiness audits.
 
+---
+
+## 📅 Phase 13: M-Pesa Daraja Payment Gateway & Subscription Cost Transparency
+- **M-Pesa Daraja Mobile Money Integration (`MpesaPaymentGateway.tsx` & `SubscriptionPanel.tsx`)**:
+  - Engineered an interactive M-Pesa payment gateway powered by Safaricom Daraja API STK Push (`POST /api/payments/mpesa/stk-push`) alongside Stripe card processing.
+  - Added Kenyan phone number auto-formatting (`07...`, `01...`, `+254...`), simulated 60-second STK prompt push countdown, status polling, and instant ledger auditing.
+- **Subscription Cost Transparency (`SubscriptionTierSelection.tsx`)**:
+  - Designed a transparent pricing breakdown modal displaying individual module costs (KSh 1,299 / $9.99) vs. the All-Access bundle (KSh 3,899 / $29.99 with 67% discount savings), clarifying value per learning domain.
+- **Payment Gatekeeper Helper UI (`PaymentGatekeeper.tsx`)**:
+  - Added an inline 'Authorize Payment Method' helper guide when users encounter locked premium modules, explaining payment options and providing one-click authorization navigation to the Subscription Panel.
+
+---
+
+## 📅 Phase 14: Multi-Factor Authentication (Admin 2FA & User Profile MFA)
+- **Admin Console 2FA Layer (`TwoFactorAuthModal.tsx` & `adminSecurity.ts`)**:
+  - Added a mandatory TOTP 2FA authentication challenge (`POST /api/admin/verify-2fa`) when signing into the Admin Console, protecting cloud sync, student accounts, and curriculum management.
+- **User Profile MFA Security Setup (`MfaSecurityModal.tsx`)**:
+  - Created a dedicated MFA setup modal in the User Profile tab allowing individual students to configure TOTP Multi-Factor Authentication for their own accounts (with QR codes, secret keys, and backup recovery codes) independent of admin 2FA.
+
+---
+
+## 📅 Phase 15: Peer Challenge Mode, Offline Markdown Export & Collapsible Controls
+- **Cohort Peer Challenge Mode (`PeerChallengeModal.tsx`)**:
+  - Built a deterministic seeded 5-question micro-drill engine (`hashChallengeCode(code)`) that ensures every learner who enters the same challenge code or link (`?peer_challenge=CODE`) gets the exact same questions in the same sequence.
+  - Integrated an interactive Cohort Peer Invitation Hub with 1-click invites for the Global Harambee Azure Cohort or custom peer handles.
+  - Implemented high-precision `0.1s` completion timer, question-by-question split times (`Q1`–`Q5`), live ghost pace bar, and persisted leaderboard.
+- **Offline Markdown Study Export (`exportNotesMarkdown.ts`)**:
+  - Added custom memory anchor pinning from any question's exam tip or the Quick Notes Drawer.
+  - Added export functionality to download all personal question notes, pinned anchors, bookmarked anchors, and core AZ-900 curriculum memory anchors as a structured `.md` study file (`az900-notes-and-memory-anchors-YYYY-MM-DD.md`).
+- **Single-Line & Collapsible Practice Control Toolbar (`App.tsx`)**:
+  - Consolidated **Sort: Adaptive Default**, **Diff: All Levels (Adaptive Auto)**, **Heatmap**, **Maps**, **Study Zone**, **Peer Challenge**, and **Notes .MD** into a single horizontal row.
+  - Added a **Hide Controls / Show Controls** toggle that collapses the entire toolbar into an ultra-slim header strip (`Toolbar Hidden: Sort • Diff • Heatmap • Maps • Study Zone — Show Controls`) for distraction-free practice.
+
+---
+
+## 📅 Phase 16: Micro-Drill Progress Percentage Sparkline & Remaining Effort Visualization
+- **Mini Sparkline Chart Integration (`MicroDrillModal.tsx` & `MicroDrillSparkline`)**:
+  - Embedded an interactive SVG mini sparkline chart into `MicroDrillModal.tsx` displaying the student's exact progress percentage (`0%` to `100%`) across the 5-question micro-drill sequence.
+  - Visualized remaining effort dynamically: displays completed trajectory curve with emerald gradient area shading, active question pulsing beacon, discrete milestone node rings (`Q1` through `Q5`), and a dashed amber forward trajectory line showing the remaining effort required to reach mastery.
+  - Added real-time effort metrics badge: updates per question to show remaining questions count and percentage (e.g., `Remaining Effort: 3 Q (60% left)` down to `Goal Reached • 0 Q Remaining`).
+  - Integrated the sparkline into both active sequence questions and final completion review screens.
+
+---
+
+## 📅 Phase 17: Mobile Touch-Friendly Overflow Menu & Disappearing Brand Title with Student Stats Hover Pop-up
+- **Mobile Practice Control Overflow Menu (`PracticeControlOverflowMenu.tsx` & `App.tsx`)**:
+  - Engineered a touch-friendly overflow menu for mobile devices (`< md` screens) replacing the wrapping of 'Sort', 'Diff', 'Heatmap', 'Maps', and 'Study Zone' buttons.
+  - Features high-touch targets (`min-h-[46px]`), active indicator tags, one-tap sort order switches (5 options), difficulty level overrides (4 options), visual toggles for Heatmap and Maps, and instant Study Zone launch.
+- **Disappearing Brand Text on Mobile & Small Tablet Views (`Header.tsx`)**:
+  - Made "Azure Cloud Explorer AZ-900 Fundamentals Practice Studio" a disappearing set of text on mobile and smaller tablet viewports (`hidden md:block`), displaying exclusively the Azure Cloud logo on compact screens.
+- **1/4 Screen Size Student Stats Cloud Pop-up with Randomized Encouraging Message (`StudentStatsCloudPopup.tsx`)**:
+  - Built a 1/4 screen size pop-up window triggered by hovering or tapping the Cloud logo in both mobile/tablet and desktop headers.
+  - Displays live student core metrics: Overall Accuracy % with visual progress bar, total questions solved & today's count, active study streak days, daily study goal progress, and mastered modules count.
+  - Carries an automatically randomized, uplifting encouraging message rooted in Harambee wisdom and Azure exam preparation tips with a quick shuffle button.
+
+---
+
+## 📅 Phase 18: Responsive Admin Dashboard & Consolidated Admin Dropdown Menu
+- **Consolidated Admin Navigation & Portals Dropdown Menu (`AdminBackOfficeModal.tsx`)**:
+  - Replaced sprawling multi-row admin header buttons and tab bars with a neat, unified dropdown menu accessible via the top navigation bar and a mobile sub-header trigger.
+  - Consolidated all 9 requested administrative actions and route guard badges into structured, accessible menu sections:
+    1. `Whitelist Route Guard: [vangetich@gmail.com]` (live pulse indicator)
+    2. `• Hidden from standard student views` (security lock badge)
+    3. `Open Cloud Sync & M-Pesa Portal` (direct modal launcher)
+    4. `Curriculum Readiness Modal` (audit modal launcher)
+    5. `Full REST API Reference` (REST documentation modal launcher)
+    6. `1. Admin Dashboard (Users, Passwords & DB CRUD)` (tab switcher)
+    7. `2. Cloud Sync, M-Pesa & Curriculum Readiness` (tab switcher)
+    8. `3. Whitelist Route Guard & Admin Password` (tab switcher)
+    9. `4. Telemetry & SQL Migrations.` (tab switcher)
+- **Responsive Tailwind CSS Across All View Window Sizes (`AdminDashboard.tsx`, `AdminBackOfficeModal.tsx`)**:
+  - Upgraded modal container to `maxWidth="6xl"` (`max-w-[min(72rem,96vw)]`) for comfortable data-table rendering on wide displays.
+  - Integrated a dedicated mobile/tablet sub-header bar (`< lg`) providing a single-line touch trigger for the dropdown menu showing active section title, eliminating multi-line horizontal tab wrapping.
+  - Built vertical scroll protection (`max-h-[82vh] overflow-y-auto overscroll-contain`) into the dropdown menu so all actions remain fully reachable on short or landscape mobile screens.
+  - Refactored KPI summary cards in `AdminDashboard.tsx` to `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3` and mode switchers to responsive flex columns (`flex-col sm:flex-row`) preventing awkward text wrapping and card clipping on narrow screens (320px–480px).
+  - Maintained strict single-admin whitelist authorization (`vangetich@gmail.com`) and RFC 6238 TOTP 2FA security enforcement across all viewports.

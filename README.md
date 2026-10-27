@@ -106,6 +106,91 @@ An interactive, full-stack **Microsoft Certified: Azure Fundamentals (AZ-900)** 
 
 ---
 
+### 12. 📱 M-Pesa Daraja Payment Gateway & Subscription Cost Transparency
+- **MpesaPaymentGateway Component (`MpesaPaymentGateway.tsx`)**:
+  - Direct integration with Safaricom's Daraja API for mobile money STK Push payments alongside Stripe credit/debit card processing.
+  - Supports Kenyan phone number formats (`07...`, `01...`, `+254...`), includes a realistic 60-second STK prompt countdown simulator, instant status polling, and transaction receipt ledger.
+- **Subscription Cost Breakdown (`SubscriptionTierSelection.tsx` & `SubscriptionPanel.tsx`)**:
+  - Clear, transparent pricing breakdown displaying individual module costs (KSh 1,299 / $9.99 per module) versus the comprehensive **All-Access Bundle** (KSh 3,899 / $29.99 with 67% bundle savings).
+- **Payment Gatekeeper Helper UI (`PaymentGatekeeper.tsx`)**:
+  - Explicit 'Authorize Payment Method' helper card that triggers when a learner attempts to access a locked premium module, guiding them directly to choose Card or M-Pesa.
+
+---
+
+### 13. 🔐 Multi-Factor Authentication (Admin 2FA & User Profile MFA)
+- **Admin Console 2FA Layer (`TwoFactorAuthModal.tsx` & `adminSecurity.ts`)**:
+  - Requires a Time-based One-Time Password (TOTP) from an authenticator app (Google Authenticator, Microsoft Authenticator) before granting access to the sensitive Admin Console (`POST /api/admin/verify-2fa`).
+- **User Profile MFA Security Setup (`MfaSecurityModal.tsx`)**:
+  - Dedicated security configuration modal in the User Profile tab allowing individual learners to toggle and configure TOTP Multi-Factor Authentication for their personal accounts, independent of the admin 2FA requirement.
+
+---
+
+### 14. ⚔️ Peer Challenge Mode (5-Question Cohort Micro-Drill)
+- **Deterministic 5-Question Micro-Drill (`PeerChallengeModal.tsx`)**:
+  - Seeded algorithmic generator (`hashChallengeCode(code)`) ensuring that every member who inputs or receives the same Challenge Code (e.g., `HRM-M5-7F3A` or via URL query `?peer_challenge=CODE`) gets the **exact same 5 questions in the exact same sequence**.
+- **Cohort Peer Invitation Hub**:
+  - 1-click invitation system for peers across the Global Harambee Azure Cohort or custom peer handles.
+- **High-Precision Timer & Split-Times**:
+  - Tracks total completion time (`0.1s` resolution) and per-question split times (`Q1`–`Q5`) with a live Cohort Pace Ghost Bar and persisted local leaderboard.
+
+---
+
+### 15. 📝 Offline Markdown Study Export (.md)
+- **Saved Question Notes & Memory Anchors Export (`exportNotesMarkdown.ts`)**:
+  - Export all personal question notes, bookmarked anchors, custom pinned memory anchors, and core AZ-900 curriculum memory anchors into a clean, formatted `.md` file (`az900-notes-and-memory-anchors-YYYY-MM-DD.md`) for offline revision in Obsidian, VS Code, or Notion.
+  - Pin memory anchors directly from question tips or the Quick Notes Drawer.
+
+---
+
+### 16. 🎛️ Single-Line & Neatly Collapsible Practice Control Toolbar
+- **Single-Line Practice Toolbar**:
+  - Consolidated **Sort (`Adaptive Default`)**, **Diff (`All Levels (Adaptive Auto)`)**, **Heatmap**, **Maps**, **Study Zone**, **Peer Challenge**, and **Notes .MD** into a single horizontal row (`flex-nowrap overflow-x-auto`).
+- **Neatly Hidden Control Strip**:
+  - One-click **Hide Controls** / **Show Controls** toggle that collapses the entire toolbar into an ultra-slim single-line header strip (`Toolbar Hidden: Sort • Diff • Heatmap • Maps • Study Zone — Show Controls`), maximizing vertical focus during intensive exam practice.
+
+---
+
+### 17. 📈 Micro-Drill Progress Percentage Sparkline & Remaining Effort Visualization
+- **Mini Sparkline Chart (`MicroDrillModal.tsx`)**:
+  - Interactive SVG sparkline integrated directly in the 5-question micro-drill modal displaying cumulative progress percentage (`0%` -> `100%`) across questions.
+  - Features dual trajectory curves: an emerald filled gradient area for completed questions, an active question pulsing beacon, and a dashed amber forward trajectory line visualizing remaining effort to finish.
+  - Dynamic remaining effort badge showing remaining questions count and percentage (e.g. `Remaining Effort: 3 Q (60% left)` down to `Goal Reached • 0 Q Remaining`) both during the active drill and in the completed review summary.
+
+---
+
+### 18. 📱 Mobile Touch Overflow Menu & Disappearing Brand Title with Student Stats Hover Pop-up
+- **Mobile Touch-Friendly Practice Control Overflow Menu (`PracticeControlOverflowMenu.tsx` & `App.tsx`)**:
+  - Replaces wrapping of 'Sort', 'Diff', 'Heatmap', 'Maps', and 'Study Zone' buttons on mobile screens (`< md`) with a touch-friendly overflow menu sheet.
+  - Generous 44px+ tap targets, clear active status tags, instant one-tap sorting selection, locked difficulty toggling, and visual workspace triggers.
+- **Disappearing Title on Mobile/Small Tablets (`Header.tsx`)**:
+  - Made "Azure Cloud Explorer AZ-900 Fundamentals Practice Studio" disappear on mobile and smaller tablet screens (`hidden md:block`), displaying solely the clean Azure Cloud logo.
+- **1/4 Screen Size Student Stats Pop-up with Encouraging Message (`StudentStatsCloudPopup.tsx`)**:
+  - Hovering or tapping the Cloud logo in either mobile/tablet or desktop headers opens an approximate 1/4 screen size dossier pop-up window.
+  - Displays live student metrics (Accuracy %, Total and Today's Questions Solved, Active Streak Days, Daily Study Goal, and Modules Mastered).
+  - Automatically features a randomized uplifting encouraging message (grounded in Harambee wisdom and Azure exam preparation tips) with an interactive shuffle button.
+
+---
+
+### 19. 🛡️ Responsive Admin Dashboard & Consolidated Admin Dropdown Menu
+- **Consolidated Admin Navigation & Portals Dropdown Menu (`AdminBackOfficeModal.tsx`)**:
+  - Replaced multi-line wrapping and scattered administrative controls with a unified, accessible dropdown menu (`Menu` + `ChevronDown`):
+    1. `Whitelist Route Guard: [vangetich@gmail.com]` (live pulse indicator)
+    2. `• Hidden from standard student views` (route guard badge)
+    3. `Open Cloud Sync & M-Pesa Portal` (portal launcher)
+    4. `Curriculum Readiness Modal` (readiness inspector)
+    5. `Full REST API Reference` (REST documentation modal)
+    6. `1. Admin Dashboard (Users, Passwords & DB CRUD)` (tab switcher)
+    7. `2. Cloud Sync, M-Pesa & Curriculum Readiness` (tab switcher)
+    8. `3. Whitelist Route Guard & Admin Password` (tab switcher)
+    9. `4. Telemetry & SQL Migrations.` (tab switcher)
+- **Responsive Tailwind CSS Across All Viewports (`AdminDashboard.tsx`, `AdminBackOfficeModal.tsx`)**:
+  - Compact mobile/tablet sub-header bar (`< lg`) provides a single-line touch trigger for the menu, eliminating tab wrapping on narrow screens.
+  - Modal scaled to `maxWidth="6xl"` (`max-w-[min(72rem,96vw)]`) with vertical scroll safety (`max-h-[82vh] overflow-y-auto overscroll-contain`).
+  - Responsive KPI cards (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`) and mode switchers (`flex-col sm:flex-row`) ensure clean, uncluttered display on phones (320px–480px), tablets, and high-res desktops.
+  - Hardened single-admin whitelist verification (`vangetich@gmail.com`) and RFC 6238 TOTP 2FA layer remain strictly enforced.
+
+---
+
 ## 🏗️ Technical Architecture & Stack
 
 | Layer | Technology | Purpose |
@@ -114,6 +199,7 @@ An interactive, full-stack **Microsoft Certified: Azure Fundamentals (AZ-900)** 
 | **Data Visualization** | Recharts 3.10 + D3.js + HTML5 Canvas | Domain Radar, D3 Heatmaps, Shared Whiteboard Canvas, and Telemetry Line Charts |
 | **Backend Server** | Express.js (`server.ts`) + WebSocket (`ws`) | REST API proxy, real-time Study Hub WebSockets, M-Pesa/Stripe ledger, and RBAC admin routes |
 | **Cloud Databases** | PostgreSQL + Supabase + Firebase Firestore | Multi-cloud progress sync, RBAC security rules (`firestore.rules`), and offline-first `localStorage` fallback |
+| **Payment Gateways** | Safaricom Daraja API + Stripe | Mobile money STK push payments & credit/debit card subscriptions |
 | **Audio & Speech** | Web Audio API + Web Speech API | Synthesized answer chimes, hands-free TTS question reader, and SpeechRecognition voice answering/notes |
 | **Unit Testing** | Vitest 5 (`npm test`) | Automated unit tests for authentication, PostgreSQL backend latency, and sync error resilience |
 
@@ -165,6 +251,7 @@ npm run build
 | `POST` | `/api/auth/change-password` | Verifies `currentPassword` and updates to `newPassword` for email-authenticated users |
 | `POST` | `/api/admin/set-password` | Sets or resets the administrative sign-in password for `vangetich@gmail.com` |
 | `POST` | `/api/admin/verify-access` | Validates user email against `ADMIN_EMAIL_WHITELIST` and verifies admin password |
+| `POST` | `/api/admin/verify-2fa` | Validates TOTP 2FA code for authorized administrative console access |
 | `GET` | `/api/admin/users` | Returns all user accounts and role/premium metadata for the Admin Dashboard |
 | `POST` | `/api/admin/users/manage` | Updates user roles, premium module unlocks, and password resets |
 | `GET` | `/api/admin/payments-ledger` | Returns M-Pesa Daraja STK Push & Stripe transaction ledger and Cloud Sync status |

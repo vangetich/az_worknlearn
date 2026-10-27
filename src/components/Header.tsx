@@ -41,6 +41,7 @@ import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
 import { GlobalSearchBar } from './GlobalSearchBar';
 import { FocusSessionWidget } from './FocusSessionWidget';
 import { SupabaseRealtimeStatus } from '../hooks/usePostgresDatabase';
+import { StudentStatsCloudPopup } from './StudentStatsCloudPopup';
 
 /**
  * Animated Daily Study Goal Circular Progress Ring
@@ -246,6 +247,32 @@ export const Header: React.FC<HeaderProps> = ({
     });
   };
 
+  // State & timer handlers for Cloud Logo 1/4 screen student stats popup with random encouraging message
+  const [showCloudStatsPopup, setShowCloudStatsPopup] = useState<boolean>(false);
+  const closeCloudStatsTimerRef = React.useRef<any>(null);
+
+  const handleCloudMouseEnter = () => {
+    if (closeCloudStatsTimerRef.current) {
+      clearTimeout(closeCloudStatsTimerRef.current);
+      closeCloudStatsTimerRef.current = null;
+    }
+    setShowCloudStatsPopup(true);
+  };
+
+  const handleCloudMouseLeave = () => {
+    if (closeCloudStatsTimerRef.current) {
+      clearTimeout(closeCloudStatsTimerRef.current);
+    }
+    closeCloudStatsTimerRef.current = setTimeout(() => {
+      setShowCloudStatsPopup(false);
+    }, 280);
+  };
+
+  const handleCloudLogoClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowCloudStatsPopup((prev) => !prev);
+  };
+
   const missedCount = React.useMemo(() => {
     if (stats.mistakesHistory && stats.mistakesHistory.length > 0) {
       return Math.min(10, stats.mistakesHistory.length);
@@ -418,36 +445,58 @@ export const Header: React.FC<HeaderProps> = ({
             MOBILE & TABLET COMPACT TOP BAR (< lg screens)
            ===================================================================== */}
         <div className="flex lg:hidden flex-wrap sm:flex-nowrap items-center justify-between py-2 gap-1.5 sm:gap-2 min-w-0 w-full">
-          {/* Compact Brand Logo & Title */}
-          <div
-            className="flex items-center gap-1.5 sm:gap-2 cursor-pointer group/logo min-w-0 flex-1"
-            onClick={() => setActiveTab('quiz')}
-          >
-            <div className="relative flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shrink-0">
-              <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
-              </svg>
-              <div className="absolute -bottom-1 -right-1">
-                <MaasaiMedallion size={11} />
+          {/* Compact Brand Logo & Disappearing Title on Mobile/Small Tablet Views (< md) + Hover/Tap Student Stats Pop-up */}
+          <div className="relative shrink-0 flex items-center">
+            <div
+              className="flex items-center gap-1.5 sm:gap-2 cursor-pointer group/logo min-w-0"
+              onClick={handleCloudLogoClick}
+              onMouseEnter={handleCloudMouseEnter}
+              onMouseLeave={handleCloudMouseLeave}
+              title="Click or hover to view Student Stats & Daily Encouragement"
+            >
+              <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shrink-0 group-hover/logo:scale-105 transition-transform">
+                <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
+                </svg>
+                <div className="absolute -bottom-1 -right-1">
+                  <MaasaiMedallion size={11} />
+                </div>
+              </div>
+
+              {/* Text disappears on mobile and smaller tablet views (< md), showing ONLY the Cloud logo */}
+              <div className="hidden md:block truncate text-left min-w-0">
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className="font-black text-xs sm:text-sm tracking-tight text-slate-900 truncate">
+                    Azure Cloud Explorer
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-[#0078D4] text-white shrink-0 shadow-2xs">
+                    AZ-900
+                  </span>
+                </div>
+                <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/35 shadow-2xs max-w-full">
+                  <Sparkles className="w-2.5 h-2.5 text-[#0078D4] shrink-0" />
+                  <span className="text-[9.5px] sm:text-[11px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent truncate studio-subtitle-standout">
+                    Fundamentals Practice Studio
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="truncate text-left min-w-0">
-              <div className="flex items-center gap-1 min-w-0">
-                <span className="font-black text-xs sm:text-sm tracking-tight text-slate-900 truncate">
-                  Azure Cloud Explorer
-                </span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-[#0078D4] text-white shrink-0 shadow-2xs">
-                  AZ-900
-                </span>
-              </div>
-              <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/35 shadow-2xs max-w-full">
-                <Sparkles className="w-2.5 h-2.5 text-[#0078D4] shrink-0" />
-                <span className="text-[9.5px] sm:text-[11px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent truncate studio-subtitle-standout">
-                  Fundamentals Practice Studio
-                </span>
-              </div>
-            </div>
+            {/* Mobile/Tablet 1/4 Screen Size Student Stats Pop-up with Random Encouraging Message */}
+            <StudentStatsCloudPopup
+              isOpen={showCloudStatsPopup}
+              onClose={() => setShowCloudStatsPopup(false)}
+              stats={stats}
+              todayAnsweredCount={todayAnsweredCount}
+              dailyGoal={dailyGoal}
+              anchorSide="left"
+              onMouseEnter={handleCloudMouseEnter}
+              onMouseLeave={handleCloudMouseLeave}
+              onNavigateToTab={(tab) => {
+                setActiveTab(tab as any);
+                setShowCloudStatsPopup(false);
+              }}
+            />
           </div>
 
           {/* Right Controls on Mobile & Tablet */}
@@ -565,36 +614,57 @@ export const Header: React.FC<HeaderProps> = ({
             LAPTOP & DESKTOP PERMANENT SLIM NAVIGATION BAR TOP TIER (lg+ screens)
            ===================================================================== */}
         <div className="hidden lg:flex items-center justify-between py-1.5 gap-2">
-          {/* Left Brand: Logo & Compact Azure Curriculum Title */}
-          <div
-            className="flex items-center gap-2 cursor-pointer group/logo shrink-0"
-            onClick={() => setActiveTab('quiz')}
-          >
-            <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shadow-blue-500/20 group-hover/logo:scale-105 transition-transform shrink-0">
-              <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
-              </svg>
-              <div className="absolute -bottom-1 -right-1">
-                <MaasaiMedallion size={12} />
+          {/* Left Brand: Logo & Compact Azure Curriculum Title with Hover/Tap Stats Popup */}
+          <div className="relative shrink-0 flex items-center">
+            <div
+              className="flex items-center gap-2 cursor-pointer group/logo shrink-0"
+              onClick={handleCloudLogoClick}
+              onMouseEnter={handleCloudMouseEnter}
+              onMouseLeave={handleCloudMouseLeave}
+              title="Click or hover to view Student Stats & Daily Encouragement"
+            >
+              <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shadow-blue-500/20 group-hover/logo:scale-105 transition-transform shrink-0">
+                <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
+                </svg>
+                <div className="absolute -bottom-1 -right-1">
+                  <MaasaiMedallion size={12} />
+                </div>
+              </div>
+
+              <div className="text-left">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-black text-base tracking-tight text-slate-900 leading-none">
+                    Azure Cloud Explorer
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-[#0078D4] text-white shadow-2xs">
+                    AZ-900
+                  </span>
+                </div>
+                <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/40 shadow-2xs">
+                  <Sparkles className="w-2.5 h-2.5 text-[#0078D4] shrink-0" />
+                  <span className="text-[10.5px] font-extrabold tracking-wider uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent studio-subtitle-standout">
+                    Fundamentals Practice Studio
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="text-left">
-              <div className="flex items-center gap-1.5">
-                <span className="font-black text-base tracking-tight text-slate-900 leading-none">
-                  Azure Cloud Explorer
-                </span>
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-[#0078D4] text-white shadow-2xs">
-                  AZ-900
-                </span>
-              </div>
-              <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/40 shadow-2xs">
-                <Sparkles className="w-2.5 h-2.5 text-[#0078D4] shrink-0" />
-                <span className="text-[10.5px] font-extrabold tracking-wider uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent studio-subtitle-standout">
-                  Fundamentals Practice Studio
-                </span>
-              </div>
-            </div>
+            {/* Desktop 1/4 Screen Size Student Stats Pop-up with Random Encouraging Message */}
+            <StudentStatsCloudPopup
+              isOpen={showCloudStatsPopup}
+              onClose={() => setShowCloudStatsPopup(false)}
+              stats={stats}
+              todayAnsweredCount={todayAnsweredCount}
+              dailyGoal={dailyGoal}
+              anchorSide="left"
+              onMouseEnter={handleCloudMouseEnter}
+              onMouseLeave={handleCloudMouseLeave}
+              onNavigateToTab={(tab) => {
+                setActiveTab(tab as any);
+                setShowCloudStatsPopup(false);
+              }}
+            />
           </div>
 
           {/* Right Controls: Global Search, Compact Path Selector, Tools & Goal Dropdown, Goal Ring & Actions */}

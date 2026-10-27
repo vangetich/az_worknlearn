@@ -50,3 +50,46 @@
     - Route protection layer (`src/utils/adminSecurity.ts` & `POST /api/admin/verify-access`) validating user email credentials against `ADMIN_EMAIL_WHITELIST = ['vangetich@gmail.com']` to restrict access to Cloud Sync, M-Pesa management, Curriculum Readiness, User Account Management, and Question Bank CRUD.
     - Consolidated `AdminDashboard.tsx` and `AdminBackOfficeModal.tsx` storing and surfacing Admin DB CRUD, User Accounts & Password Resets (`GET /api/admin/users`, `POST /api/admin/users/manage`), Cloud Sync & M-Pesa Daraja Ledger (`GET /api/admin/payments-ledger`), and Curriculum Readiness while hiding these sensitive tools from standard student views.
 
+12. **M-Pesa Daraja Payment Gateway & Subscription Cost Transparency**
+    - Mobile money payment gateway integrating Safaricom Daraja API STK Push (`MpesaPaymentGateway.tsx`, `POST /api/payments/mpesa/stk-push`) alongside Stripe card processing for seamless Kenyan & Pan-African student access.
+    - Transparent pricing breakdown modal in `SubscriptionTierSelection.tsx` comparing single module unlocks (KSh 1,299 / $9.99) vs. All-Access Bundle (KSh 3,899 / $29.99 with 67% bundle discount).
+    - `PaymentGatekeeper.tsx` helper UI presenting an explicit 'Authorize Payment Method' card when students attempt to access locked premium modules.
+
+13. **Multi-Factor Authentication (Admin 2FA & User Profile MFA)**
+    - 2FA authentication challenge layer (`TwoFactorAuthModal.tsx` & `POST /api/admin/verify-2fa`) requiring TOTP one-time passcode confirmation for admin login.
+    - User Profile MFA Security Setup modal (`MfaSecurityModal.tsx`) allowing students to independently toggle and configure TOTP MFA for their personal accounts.
+
+14. **Peer Challenge Mode (5-Question Cohort Micro-Drill)**
+    - Seeded deterministic 5-question micro-drill engine (`PeerChallengeModal.tsx`) ensuring all invited cohort members face the identical 5 questions in the exact same sequence via shared challenge codes or URL links (`?peer_challenge=CODE`).
+    - Cohort Peer Invitation Hub with 1-click invites for the Global Harambee Azure Cohort or custom peer handles.
+    - High-precision `0.1s` completion timer, per-question split times (`Q1`–`Q5`), live ghost pace bar, and persisted historical leaderboards.
+
+15. **Offline Markdown Study Export & Collapsible Practice Controls**
+    - Custom memory anchor pinning and one-click export of personal notes, pinned anchors, bookmarked anchors, and curriculum memory anchors into a structured `.md` study guide (`exportNotesMarkdown.ts`).
+    - Practice Toolbar refactoring: single horizontal line alignment (`Sort: Adaptive Default`, `Diff: All Levels (Adaptive Auto)`, `Heatmap`, `Maps`, `Study Zone`, `Peer Challenge`, `Notes .MD`) with a one-click **Hide Controls / Show Controls** toggle that collapses the bar into a slim single-line strip for focused practice.
+
+16. **Micro-Drill Progress Percentage Sparkline & Remaining Effort Visualization**
+    - Integrated a mini SVG sparkline chart directly inside `MicroDrillModal.tsx` (`MicroDrillSparkline`) calculating and rendering cumulative progress percentage across the 5-question micro-drill sequence.
+    - Added visualization of remaining effort with dual trajectory curves: solid emerald progress line with gradient fill, active question pulsing beacon, discrete milestone node rings (`Q1`–`Q5`), and a dashed amber forward trajectory line representing remaining questions to answer.
+    - Added dynamic effort counter badges (`Remaining Effort: 3 Q (60% left)` down to `Goal Reached • 0 Q Remaining`) displayed during questions and in the completed drill summary.
+
+17. **Mobile Touch-Friendly Overflow Menu & Disappearing Brand Title with Student Stats Hover Pop-up**
+    - Mobile Practice Control Overflow Menu (`PracticeControlOverflowMenu.tsx` & `App.tsx`): Replaced multi-line wrapping of 'Sort', 'Diff', 'Heatmap', 'Maps', and 'Study Zone' on mobile devices (`< md`) with an accessible touch-friendly sheet menu featuring large tap targets, instant sort/difficulty switches, and visual toggles.
+    - Disappearing Title on Mobile/Small Tablets (`Header.tsx`): Made "Azure Cloud Explorer AZ-900 Fundamentals Practice Studio" a disappearing set of text on mobile and smaller tablet screens (`hidden md:block`), displaying solely the Azure Cloud logo.
+    - 1/4 Screen Size Student Stats Pop-up with Random Encouraging Message (`StudentStatsCloudPopup.tsx`): Hovering or tapping the Cloud logo in the header opens a 1/4 screen size pop-up window displaying live student metrics (Accuracy %, Questions Solved, Streak Days, Daily Goal Progress, Modules Mastered) and an automatically randomized Harambee encouragement quote with a shuffle button.
+
+18. **Responsive Admin Dashboard & Consolidated Admin Dropdown Menu**
+    - Consolidated Dropdown Menu (`AdminBackOfficeModal.tsx`): Integrated all requested admin action buttons, modal triggers, and security route guard notices into a clean, unified dropdown menu (`Menu` + `ChevronDown`):
+      1. `Whitelist Route Guard: [vangetich@gmail.com]` (live status indicator)
+      2. `• Hidden from standard student views` (security lock badge)
+      3. `Open Cloud Sync & M-Pesa Portal` (direct portal modal launcher)
+      4. `Curriculum Readiness Modal` (audit modal launcher)
+      5. `Full REST API Reference` (REST documentation modal launcher)
+      6. `1. Admin Dashboard (Users, Passwords & DB CRUD)` (tab switcher)
+      7. `2. Cloud Sync, M-Pesa & Curriculum Readiness` (tab switcher)
+      8. `3. Whitelist Route Guard & Admin Password` (tab switcher)
+      9. `4. Telemetry & SQL Migrations.` (tab switcher)
+    - Responsive Tailwind CSS: Mobile/tablet sub-header bar (`< lg`) replaces multi-line horizontal tab wrapping with a single touch trigger showing the active section. Modal scaled to `maxWidth="6xl"` with vertical scroll safety (`max-h-[82vh] overflow-y-auto overscroll-contain`) and responsive KPI grids (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`).
+    - Maintained strict single-admin whitelist security (`vangetich@gmail.com`) and TOTP 2FA layer.
+
+
