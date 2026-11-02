@@ -436,9 +436,11 @@ export const Header: React.FC<HeaderProps> = ({
   }, [questions, stats]);
 
   return (
-    <header className="sticky top-0 z-40 w-full max-w-full overflow-x-hidden bg-white/95 backdrop-blur-md border-b border-sky-200/80 shadow-xs relative">
+    <header className="sticky top-0 z-40 w-full max-w-full bg-white/95 backdrop-blur-md border-b border-sky-200/80 shadow-xs relative">
       {/* Azure African Fabric Patterns Only (Multiple Opacities of Azure) */}
-      <WavyAzureFabricMotif />
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <WavyAzureFabricMotif />
+      </div>
 
       <div className="max-w-7xl w-full mx-auto px-2.5 sm:px-5 lg:px-6 relative z-10 min-w-0">
         {/* =====================================================================
@@ -481,22 +483,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
             </div>
-
-            {/* Mobile/Tablet 1/4 Screen Size Student Stats Pop-up with Random Encouraging Message */}
-            <StudentStatsCloudPopup
-              isOpen={showCloudStatsPopup}
-              onClose={() => setShowCloudStatsPopup(false)}
-              stats={stats}
-              todayAnsweredCount={todayAnsweredCount}
-              dailyGoal={dailyGoal}
-              anchorSide="left"
-              onMouseEnter={handleCloudMouseEnter}
-              onMouseLeave={handleCloudMouseLeave}
-              onNavigateToTab={(tab) => {
-                setActiveTab(tab as any);
-                setShowCloudStatsPopup(false);
-              }}
-            />
           </div>
 
           {/* Right Controls on Mobile & Tablet */}
@@ -649,22 +635,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
             </div>
-
-            {/* Desktop 1/4 Screen Size Student Stats Pop-up with Random Encouraging Message */}
-            <StudentStatsCloudPopup
-              isOpen={showCloudStatsPopup}
-              onClose={() => setShowCloudStatsPopup(false)}
-              stats={stats}
-              todayAnsweredCount={todayAnsweredCount}
-              dailyGoal={dailyGoal}
-              anchorSide="left"
-              onMouseEnter={handleCloudMouseEnter}
-              onMouseLeave={handleCloudMouseLeave}
-              onNavigateToTab={(tab) => {
-                setActiveTab(tab as any);
-                setShowCloudStatsPopup(false);
-              }}
-            />
           </div>
 
           {/* Right Controls: Global Search, Compact Path Selector, Tools & Goal Dropdown, Goal Ring & Actions */}
@@ -1257,6 +1227,22 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
       </div>
+
+      {/* Global Portal Student Cloud Dossier (Viewable over all the app on hover or tap) */}
+      <StudentStatsCloudPopup
+        isOpen={showCloudStatsPopup}
+        onClose={() => setShowCloudStatsPopup(false)}
+        stats={stats}
+        todayAnsweredCount={todayAnsweredCount}
+        dailyGoal={dailyGoal}
+        anchorSide="left"
+        onMouseEnter={handleCloudMouseEnter}
+        onMouseLeave={handleCloudMouseLeave}
+        onNavigateToTab={(tab) => {
+          setActiveTab(tab as any);
+          setShowCloudStatsPopup(false);
+        }}
+      />
 
       {/* Dedicated Daily Goal & Custom Alerts Modal (Pops up in lower central position) */}
       <DailyGoalAlertsModal

@@ -2330,18 +2330,34 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                                   onToggleFocusMode();
                                   setShowStudyZoneMenu(false);
                                 }}
-                                className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                                title={
+                                  isFocusMode
+                                    ? "Exit Focus Mode (press 'Ctrl+F', 'F', or 'Esc')"
+                                    : "Enter Distraction-Free Focus Mode (press 'Ctrl+F' or 'F')"
+                                }
+                                className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 transition-all cursor-pointer ${
                                   isFocusMode
                                     ? 'bg-[#0078D4] text-white border-[#0078D4]'
                                     : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
                                 }`}
                               >
-                                {isFocusMode ? (
-                                  <Minimize2 className="w-3.5 h-3.5 shrink-0" />
-                                ) : (
-                                  <Maximize2 className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
-                                )}
-                                <span>{isFocusMode ? 'Exit Focus UI' : 'Focus Mode UI'}</span>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {isFocusMode ? (
+                                    <Minimize2 className="w-3.5 h-3.5 shrink-0" />
+                                  ) : (
+                                    <Maximize2 className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+                                  )}
+                                  <span className="truncate">{isFocusMode ? 'Exit Focus UI' : 'Focus Mode UI'}</span>
+                                </div>
+                                <kbd
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono shrink-0 ${
+                                    isFocusMode
+                                      ? 'bg-white/20 text-white'
+                                      : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                  }`}
+                                >
+                                  Ctrl+F / F
+                                </kbd>
                               </button>
                             )}
 

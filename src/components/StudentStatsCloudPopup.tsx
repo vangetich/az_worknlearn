@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Sparkles,
-  Award,
   Zap,
   Target,
   Flame,
-  CheckCircle2,
   TrendingUp,
   X,
   Shuffle,
@@ -104,54 +103,50 @@ export const StudentStatsCloudPopup: React.FC<StudentStatsCloudPopupProps> = ({
     };
   }, [overallAccuracy, totalAnswered]);
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       role="dialog"
       aria-modal="false"
       aria-label="Student Stats and Encouragement Dossier"
-      className={`absolute top-full mt-2.5 z-50 ${
-        anchorSide === 'left' ? 'left-0' : 'right-0'
-      } w-[92vw] sm:w-[380px] md:w-[410px] max-w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto overscroll-contain bg-white/95 backdrop-blur-xl rounded-2xl border border-sky-200 shadow-2xl shadow-sky-900/15 animate-in fade-in-0 zoom-in-95 duration-200 select-none`}
-      style={{
-        // Visual indicator that this is ~1/4 screen size window on standard viewports
-        minHeight: '280px',
-      }}
+      className={`fixed top-12 sm:top-13 ${
+        anchorSide === 'left' ? 'left-2.5 sm:left-5 lg:left-6' : 'right-2.5 sm:right-5 lg:right-6'
+      } z-[130] w-[86vw] max-w-[290px] sm:w-[300px] md:w-[320px] max-h-[78vh] overflow-y-auto overscroll-contain bg-white/98 backdrop-blur-xl rounded-2xl border border-sky-300/90 shadow-2xl shadow-slate-950/25 animate-in fade-in-0 zoom-in-95 duration-150 select-none`}
     >
       {/* Subtle Top Azure Gradient Strip */}
-      <div className="h-1.5 w-full bg-gradient-to-r from-[#0078D4] via-sky-400 to-[#006600] rounded-t-2xl" />
+      <div className="h-1 w-full bg-gradient-to-r from-[#0078D4] via-sky-400 to-[#006600] rounded-t-2xl" />
 
-      <div className="p-4 sm:p-5 space-y-3.5">
+      <div className="p-3 sm:p-3.5 space-y-2.5">
         {/* Header: Cloud Logo Badge + Title + Close Button */}
-        <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] text-white shadow-xs shrink-0">
-              <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-[#0078D4] to-[#005A9E] text-white shadow-2xs shrink-0">
+              <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
               </svg>
-              <div className="absolute -bottom-1 -right-1">
-                <MaasaiMedallion size={11} />
+              <div className="absolute -bottom-0.5 -right-0.5">
+                <MaasaiMedallion size={9} />
               </div>
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <h3 className="font-black text-sm text-slate-900 leading-tight">
+                <h3 className="font-black text-xs text-slate-900 leading-tight">
                   Student Cloud Dossier
                 </h3>
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-[#0078D4]/10 text-[#0078D4] border border-[#0078D4]/20">
+                <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase tracking-wider bg-[#0078D4]/10 text-[#0078D4] border border-[#0078D4]/20">
                   Live Stats
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 truncate">
-                AZ-900 Learning &amp; Readiness Snapshot
+              <p className="text-[10px] text-slate-500 truncate">
+                AZ-900 Readiness Snapshot
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-0.5 shrink-0">
             <button
               type="button"
               onClick={handleShuffleQuote}
@@ -159,7 +154,7 @@ export const StudentStatsCloudPopup: React.FC<StudentStatsCloudPopupProps> = ({
               title="Shuffle encouraging message"
               aria-label="Shuffle encouraging message"
             >
-              <Shuffle className="w-3.5 h-3.5" />
+              <Shuffle className="w-3 h-3" />
             </button>
             <button
               type="button"
@@ -168,28 +163,28 @@ export const StudentStatsCloudPopup: React.FC<StudentStatsCloudPopupProps> = ({
               title="Close popup"
               aria-label="Close dossier popup"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
         {/* Automatically Random Short Encouraging Message Card */}
-        <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-amber-50 via-sky-50 to-emerald-50/50 p-3 border border-amber-200/80 shadow-2xs">
-          <div className="flex items-start gap-2.5">
-            <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-800 shrink-0 mt-0.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-amber-50 via-sky-50 to-emerald-50/50 p-2.5 border border-amber-200/80 shadow-2xs">
+          <div className="flex items-start gap-2">
+            <div className="p-1 rounded-md bg-amber-500/20 text-amber-800 shrink-0 mt-0.5">
+              <Sparkles className="w-3 h-3 text-amber-700" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-1 mb-0.5">
-                <span className="text-[10px] font-black uppercase tracking-wider text-amber-900/80 flex items-center gap-1">
-                  <KenyanFlagMiniEmblem size={11} />
+                <span className="text-[9px] font-black uppercase tracking-wider text-amber-900/80 flex items-center gap-1">
+                  <KenyanFlagMiniEmblem size={10} />
                   <span>Daily Encouragement</span>
                 </span>
-                <span className="text-[9px] text-slate-400 font-semibold">
-                  Randomized
+                <span className="text-[8.5px] text-slate-400 font-semibold">
+                  Random
                 </span>
               </div>
-              <p className="text-xs font-semibold text-slate-800 leading-snug italic">
+              <p className="text-[11px] font-semibold text-slate-800 leading-snug italic">
                 "{ENCOURAGING_MESSAGES[quoteIndex]}"
               </p>
             </div>
@@ -197,25 +192,25 @@ export const StudentStatsCloudPopup: React.FC<StudentStatsCloudPopupProps> = ({
         </div>
 
         {/* 2x2 Student Core Stats Grid */}
-        <div className="grid grid-cols-2 gap-2 text-left">
+        <div className="grid grid-cols-2 gap-1.5 text-left">
           {/* 1. Overall Accuracy */}
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 space-y-1">
-            <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold">
+          <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/90 space-y-0.5">
+            <div className="flex items-center justify-between text-slate-500 text-[9.5px] font-bold">
               <span className="flex items-center gap-1">
-                <Target className="w-3 h-3 text-[#0078D4]" />
+                <Target className="w-2.5 h-2.5 text-[#0078D4]" />
                 <span>Accuracy</span>
               </span>
               <span className="text-slate-400">{totalCorrect}/{totalAnswered}</span>
             </div>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-black text-slate-900">
+              <span className="text-base font-black text-slate-900">
                 {overallAccuracy}%
               </span>
-              <span className={`text-[10px] font-bold ${overallAccuracy >= 75 ? 'text-emerald-600' : 'text-amber-600'}`}>
+              <span className={`text-[9px] font-bold ${overallAccuracy >= 75 ? 'text-emerald-600' : 'text-amber-600'}`}>
                 {overallAccuracy >= 80 ? 'Proficient' : 'Practicing'}
               </span>
             </div>
-            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+            <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-[#0078D4] to-emerald-500 rounded-full transition-all duration-300"
                 style={{ width: `${overallAccuracy}%` }}
@@ -224,98 +219,98 @@ export const StudentStatsCloudPopup: React.FC<StudentStatsCloudPopupProps> = ({
           </div>
 
           {/* 2. Questions Solved & Today's Volume */}
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 space-y-1">
-            <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold">
+          <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/90 space-y-0.5">
+            <div className="flex items-center justify-between text-slate-500 text-[9.5px] font-bold">
               <span className="flex items-center gap-1">
-                <BookOpen className="w-3 h-3 text-sky-600" />
+                <BookOpen className="w-2.5 h-2.5 text-sky-600" />
                 <span>Questions</span>
               </span>
               <span className="text-slate-400">Total</span>
             </div>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-black text-slate-900">
+              <span className="text-base font-black text-slate-900">
                 {totalAnswered}
               </span>
-              <span className="text-[10px] font-bold text-slate-500">
+              <span className="text-[9.5px] font-bold text-slate-500">
                 ({todayAnsweredCount} today)
               </span>
             </div>
-            <p className="text-[9.5px] text-slate-500 truncate">
-              {stats.bookmarks?.length || 0} bookmarked questions
+            <p className="text-[9px] text-slate-500 truncate">
+              {stats.bookmarks?.length || 0} bookmarked
             </p>
           </div>
 
           {/* 3. Active Study Streak */}
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 space-y-1">
-            <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold">
+          <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/90 space-y-0.5">
+            <div className="flex items-center justify-between text-slate-500 text-[9.5px] font-bold">
               <span className="flex items-center gap-1">
-                <Flame className="w-3 h-3 text-amber-500" />
+                <Flame className="w-2.5 h-2.5 text-amber-500" />
                 <span>Streak</span>
               </span>
               <span className="text-amber-600 font-extrabold">Active</span>
             </div>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-black text-amber-600">
+              <span className="text-base font-black text-amber-600">
                 {streakDays}
               </span>
-              <span className="text-[10px] font-bold text-slate-600">
+              <span className="text-[9.5px] font-bold text-slate-600">
                 {streakDays === 1 ? 'Day' : 'Days'}
               </span>
             </div>
-            <p className="text-[9.5px] text-slate-500 truncate">
+            <p className="text-[9px] text-slate-500 truncate">
               Last: {stats.lastActiveDate || 'Today'}
             </p>
           </div>
 
           {/* 4. Modules Mastered */}
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 space-y-1">
-            <div className="flex items-center justify-between text-slate-500 text-[10px] font-bold">
+          <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/90 space-y-0.5">
+            <div className="flex items-center justify-between text-slate-500 text-[9.5px] font-bold">
               <span className="flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-[#006600]" />
+                <ShieldCheck className="w-2.5 h-2.5 text-[#006600]" />
                 <span>Modules</span>
               </span>
               <span className="text-slate-400">of 11</span>
             </div>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg font-black text-emerald-700">
+              <span className="text-base font-black text-emerald-700">
                 {completedModulesCount}
               </span>
-              <span className="text-[10px] font-bold text-slate-500">
+              <span className="text-[9.5px] font-bold text-slate-500">
                 Complete
               </span>
             </div>
-            <p className="text-[9.5px] text-slate-500 truncate">
-              {11 - completedModulesCount} modules to complete
+            <p className="text-[9px] text-slate-500 truncate">
+              {11 - completedModulesCount} remaining
             </p>
           </div>
         </div>
 
         {/* Daily Study Target Mini Bar */}
-        <div className="p-2.5 rounded-xl bg-sky-50/70 border border-sky-200/80 flex items-center justify-between gap-3 text-xs">
+        <div className="p-2 rounded-xl bg-sky-50/70 border border-sky-200/80 flex items-center justify-between gap-2 text-xs">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-              <span className="font-extrabold text-slate-800 text-[11px]">
-                Today's Daily Goal
+            <div className="flex items-center gap-1">
+              <Zap className="w-3 h-3 text-amber-500 shrink-0" />
+              <span className="font-extrabold text-slate-800 text-[10.5px]">
+                Daily Goal
               </span>
               {isGoalReached && (
-                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  Target Met!
+                <span className="px-1.5 py-0.2 rounded-full text-[8.5px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  Met!
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-slate-500 mt-0.5">
-              {todayAnsweredCount} of {safeGoal} questions solved today ({goalProgressPct}%)
+            <p className="text-[9.5px] text-slate-500">
+              {todayAnsweredCount}/{safeGoal} solved today ({goalProgressPct}%)
             </p>
           </div>
-          <div className="shrink-0 text-right font-black text-sm text-[#0078D4]">
+          <div className="shrink-0 text-right font-black text-xs text-[#0078D4]">
             {goalProgressPct}%
           </div>
         </div>
 
         {/* Readiness Tag & Quick Link */}
         <div className="pt-0.5 flex items-center justify-between gap-2">
-          <div className={`px-2 py-1 rounded-lg text-[10px] font-black border truncate ${readinessTier.color}`}>
+          <div className={`px-2 py-0.5 rounded-lg text-[9.5px] font-black border truncate ${readinessTier.color}`}>
             <span>{readinessTier.label}</span>
           </div>
 
@@ -326,7 +321,7 @@ export const StudentStatsCloudPopup: React.FC<StudentStatsCloudPopupProps> = ({
                 onClose();
                 onNavigateToTab('profile');
               }}
-              className="text-[11px] font-bold text-[#0078D4] hover:text-[#005A9E] hover:underline flex items-center gap-1 cursor-pointer shrink-0"
+              className="text-[10.5px] font-bold text-[#0078D4] hover:text-[#005A9E] hover:underline flex items-center gap-1 cursor-pointer shrink-0"
             >
               <span>Full Profile</span>
               <TrendingUp className="w-3 h-3" />
@@ -334,6 +329,7 @@ export const StudentStatsCloudPopup: React.FC<StudentStatsCloudPopupProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

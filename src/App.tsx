@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   BookOpen,
   Award,
@@ -129,7 +129,51 @@ import { getStoredTheme, applyTheme } from './utils/theme';
 import { getStoredFontScalePercent, applyFontScalePercent } from './utils/fontSize';
 import { AccessibilityFontSizeControl } from './components/AccessibilityFontSizeControl';
 
+const QUIZ_SESSION_AUTOSAVE_KEY = 'az900_quiz_session_autosave_v1';
+const AUTOSAVE_INTERVAL_MS = 30_000; // Auto-save every 30 seconds
+
+interface AutoSavedQuizSessionState {
+  currentQuestionIndex: number;
+  lastActiveQuestionId: string | null;
+  consecutiveCorrect: number;
+  consecutiveIncorrect: number;
+  sessionRollingOutcomes: boolean[];
+  dynamicDifficulty: 'Fundamental' | 'Intermediate' | 'Advanced';
+  selectedPathId: number | 'all';
+  selectedModuleId: number | 'all';
+  confirmedFocusPathId: 1 | 2 | 3 | null;
+  sessionAnswerCount: number;
+  savedAt: number;
+}
+
+function loadAutoSavedQuizSession(): Partial<AutoSavedQuizSessionState> | null {
+  try {
+    const raw = localStorage.getItem(QUIZ_SESSION_AUTOSAVE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+  } catch (e) {
+    console.error('Failed to load auto-saved quiz session:', e);
+  }
+  return null;
+}
+
+function extractRecentHistoricalOutcomes(stats: UserStats, limit = 20): boolean[] {
+  try {
+    const allAttempts = Object.values(stats.attempts || {})
+      .flat()
+      .filter((a) => a && typeof a.timestamp === 'number')
+      .sort((a, b) => a.timestamp - b.timestamp);
+    return allAttempts.slice(-limit).map((a) => Boolean(a.isCorrect));
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
+  const initialAutoSavedSession = useMemo(() => loadAutoSavedQuizSession(), []);
   const [activeTab, setActiveTab] = useState<AppTab>('quiz');
 
   // Initialize theme and accessibility font size scale on mount
@@ -211,9 +255,17 @@ export default function App() {
     };
   }, []);
 
-  // Filter selections for Practice Mode (Difficulty filter persisted in localStorage to override dynamic difficulty)
-  const [selectedPathId, setSelectedPathId] = useState<number | 'all'>('all');
-  const [selectedModuleId, setSelectedModuleId] = useState<number | 'all'>('all');
+  // Filter selections for Practice Mode (Restored from 30s auto-save if available)
+  const [selectedPathId, setSelectedPathId] = useState<number | 'all'>(() => {
+    const saved = initialAutoSavedSession?.selectedPathId;
+    if (saved === 'all' || typeof saved === 'number') return saved;
+    return 'all';
+  });
+  const [selectedModuleId, setSelectedModuleId] = useState<number | 'all'>(() => {
+    const saved = initialAutoSavedSession?.selectedModuleId;
+    if (saved === 'all' || typeof saved === 'number') return saved;
+    return 'all';
+  });
   const [selectedDifficultyFilter, setSelectedDifficultyFilterState] = useState<
     'all' | 'Fundamental' | 'Intermediate' | 'Advanced'
   >(() => {
@@ -421,7 +473,9 @@ export default function App() {
   const [retryIncorrectPathId, setRetryIncorrectPathId] = useState<1 | 2 | 3 | null>(null);
   const [retryIncorrectSnapshotIds, setRetryIncorrectSnapshotIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [pendingJumpQuestionId, setPendingJumpQuestionId] = useState<string | null>(null);
+  const [pendingJumpQuestionId, setPendingJumpQuestionId] = useState<string | null>(
+    () => initialAutoSavedSession?.lastActiveQuestionId || null
+  );
   const [showBackendCloudModal, setShowBackendCloudModal] = useState<boolean>(false);
   const [backendModalSection, setBackendModalSection] = useState<HubSection>('auth-progress');
   const [showApiDocumentationModal, setShowApiDocumentationModal] = useState<boolean>(false);
@@ -529,8 +583,13 @@ export default function App() {
     setCurrentQuestionIndex(0);
   };
 
-  // Active question index in filtered list
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+  // Active question index in filtered list (restored from 30s auto-save)
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(() =>
+    typeof initialAutoSavedSession?.currentQuestionIndex === 'number' &&
+    initialAutoSavedSession.currentQuestionIndex >= 0
+      ? initialAutoSavedSession.currentQuestionIndex
+      : 0
+  );
 
   // Quick-Sort order for Practice Tab question list
   const [questionSortOrder, setQuestionSortOrder] = useState<
@@ -600,8 +659,12 @@ export default function App() {
   // Mock exam modal state
   const [showMockExam, setShowMockExam] = useState<boolean>(false);
 
-  // Engagement & Anti-fatigue states
-  const [sessionAnswerCount, setSessionAnswerCount] = useState<number>(0);
+  // Engagement & Anti-fatigue states (restored from 30s auto-save)
+  const [sessionAnswerCount, setSessionAnswerCount] = useState<number>(() =>
+    typeof initialAutoSavedSession?.sessionAnswerCount === 'number'
+      ? initialAutoSavedSession.sessionAnswerCount
+      : 0
+  );
   const [sessionAttempts, setSessionAttempts] = useState<QuestionAttempt[]>([]);
   const [showPostSessionReview, setShowPostSessionReview] = useState<boolean>(false);
   const [showStudyBreak, setShowStudyBreak] = useState<boolean>(false);
@@ -630,6 +693,26 @@ export default function App() {
 
   // Focus Mode state (minimizes UI by hiding nav bar and footer)
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
+  const [focusModeToast, setFocusModeToast] = useState<string | null>(null);
+
+  // Auto-dismiss Focus Mode toast after 3s
+  useEffect(() => {
+    if (!focusModeToast) return;
+    const timer = setTimeout(() => setFocusModeToast(null), 3000);
+    return () => clearTimeout(timer);
+  }, [focusModeToast]);
+
+  const toggleFocusMode = useCallback((_source?: 'shortcut' | 'button') => {
+    setIsFocusMode((prev) => {
+      const next = !prev;
+      setFocusModeToast(
+        next
+          ? "Focus Mode ON • Distraction-free exam UI (Press 'Ctrl+F', 'F', or 'Esc' to exit)"
+          : "Focus Mode OFF • Standard exam layout restored"
+      );
+      return next;
+    });
+  }, []);
 
   // Subtle Audio Feedback Mute state (persisted in localStorage, controlled in footer settings)
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(() => {
@@ -700,10 +783,28 @@ export default function App() {
     }
     return null;
   });
-  const [consecutiveCorrect, setConsecutiveCorrect] = useState<number>(0);
-  const [consecutiveIncorrect, setConsecutiveIncorrect] = useState<number>(0);
-  const [sessionRollingOutcomes, setSessionRollingOutcomes] = useState<boolean[]>([]);
-  const ROLLING_WINDOW_SIZE = 5;
+  const ROLLING_WINDOW_SIZE = 20;
+  const [consecutiveCorrect, setConsecutiveCorrect] = useState<number>(() =>
+    typeof initialAutoSavedSession?.consecutiveCorrect === 'number'
+      ? initialAutoSavedSession.consecutiveCorrect
+      : 0
+  );
+  const [consecutiveIncorrect, setConsecutiveIncorrect] = useState<number>(() =>
+    typeof initialAutoSavedSession?.consecutiveIncorrect === 'number'
+      ? initialAutoSavedSession.consecutiveIncorrect
+      : 0
+  );
+  const [sessionRollingOutcomes, setSessionRollingOutcomes] = useState<boolean[]>(() => {
+    if (
+      Array.isArray(initialAutoSavedSession?.sessionRollingOutcomes) &&
+      initialAutoSavedSession.sessionRollingOutcomes.length > 0
+    ) {
+      return initialAutoSavedSession.sessionRollingOutcomes
+        .slice(-ROLLING_WINDOW_SIZE)
+        .map(Boolean);
+    }
+    return extractRecentHistoricalOutcomes(getInitialStats(), ROLLING_WINDOW_SIZE);
+  });
   const [dynamicDifficulty, setDynamicDifficulty] = useState<
     'Fundamental' | 'Intermediate' | 'Advanced'
   >(() => {
@@ -715,20 +816,68 @@ export default function App() {
     } catch {
       // ignore
     }
+    const autoSavedDiff = initialAutoSavedSession?.dynamicDifficulty;
+    if (
+      autoSavedDiff === 'Fundamental' ||
+      autoSavedDiff === 'Intermediate' ||
+      autoSavedDiff === 'Advanced'
+    ) {
+      return autoSavedDiff;
+    }
     return 'Intermediate'; // Always start at Medium (Intermediate) difficulty
   });
 
   // Learning Path Focus Selection & Explicit Confirmation state for upcoming quiz session
-  const [pendingFocusPathId, setPendingFocusPathId] = useState<1 | 2 | 3>(1);
-  const [confirmedFocusPathId, setConfirmedFocusPathId] = useState<1 | 2 | 3 | null>(null);
+  const [pendingFocusPathId, setPendingFocusPathId] = useState<1 | 2 | 3>(() => {
+    const saved = initialAutoSavedSession?.confirmedFocusPathId;
+    if (saved === 1 || saved === 2 || saved === 3) return saved;
+    return 1;
+  });
+  const [confirmedFocusPathId, setConfirmedFocusPathId] = useState<1 | 2 | 3 | null>(() => {
+    const saved = initialAutoSavedSession?.confirmedFocusPathId;
+    if (saved === 1 || saved === 2 || saved === 3) return saved;
+    return null;
+  });
   const [isPathSelectorExpanded, setIsPathSelectorExpanded] = useState<boolean>(false);
 
-  // Rolling average accuracy across recent answers in the current session
+  // Rolling average accuracy across the last 20 questions in the session
   const rollingAverageAccuracy = useMemo(() => {
     if (sessionRollingOutcomes.length === 0) return null;
     const correctInWindow = sessionRollingOutcomes.filter(Boolean).length;
     return Math.round((correctInWindow / sessionRollingOutcomes.length) * 100);
   }, [sessionRollingOutcomes]);
+
+  // Step-by-step rolling average accuracy series over the last up to 20 questions for the header sparkline
+  const rolling20AccuracySeries = useMemo<number[]>(() => {
+    if (sessionRollingOutcomes.length === 0) return [];
+    let runningCorrect = 0;
+    return sessionRollingOutcomes.map((outcome, idx) => {
+      if (outcome) runningCorrect += 1;
+      return Math.round((runningCorrect / (idx + 1)) * 100);
+    });
+  }, [sessionRollingOutcomes]);
+
+  // Performance trend indicator over the last 20 questions
+  const rolling20Trend = useMemo<{
+    delta: number;
+    direction: 'up' | 'down' | 'steady';
+    label: string;
+  }>(() => {
+    if (rolling20AccuracySeries.length < 2) {
+      return { delta: 0, direction: 'steady', label: 'Calibrating' };
+    }
+    const latest = rolling20AccuracySeries[rolling20AccuracySeries.length - 1];
+    const baselineIdx = Math.max(0, Math.floor(rolling20AccuracySeries.length / 2) - 1);
+    const baseline = rolling20AccuracySeries[baselineIdx];
+    const delta = latest - baseline;
+    if (delta >= 2) {
+      return { delta, direction: 'up', label: `+${delta}% Improving` };
+    }
+    if (delta <= -2) {
+      return { delta, direction: 'down', label: `${delta}% Dipping` };
+    }
+    return { delta, direction: 'steady', label: 'Steady Pace' };
+  }, [rolling20AccuracySeries]);
 
   // Confirm selected Learning Path focus and generate/reset quiz session starting at Medium difficulty
   const handleConfirmLearningPathFocus = (pathToConfirm: 1 | 2 | 3) => {
@@ -779,16 +928,45 @@ export default function App() {
   // Visual Fire-Streak celebration trigger in header
   const [fireStreakTrigger, setFireStreakTrigger] = useState<number>(0);
 
-  // Escape key listener to exit Focus Mode
+  // Global Keyboard Shortcut: 'F' or 'Ctrl+F' / 'Cmd+F' toggles Focus Mode, 'Escape' exits Focus Mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditable =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+
+      // 1. Escape key exits Focus Mode
       if (e.key === 'Escape' && isFocusMode) {
+        e.preventDefault();
         setIsFocusMode(false);
+        setFocusModeToast("Focus Mode OFF • Press 'Ctrl+F' or 'F' to re-enter");
+        return;
+      }
+
+      // 2. Ctrl+F / Cmd+F shortcut (global toggle)
+      const isCtrlOrCmdF =
+        (e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'f' || e.key === 'F');
+
+      // 3. Standalone 'F' shortcut (only outside editable fields to avoid intercepting form input typing)
+      const isStandaloneF =
+        !isEditable && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'f' || e.key === 'F');
+
+      if ((isCtrlOrCmdF && !isEditable) || isStandaloneF) {
+        if (isCtrlOrCmdF) {
+          e.preventDefault(); // Prevent native browser search dialog when toggling focus mode
+        }
+        e.stopPropagation();
+        toggleFocusMode('shortcut');
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFocusMode]);
+  }, [isFocusMode, toggleFocusMode]);
 
   // Scoped Module Confidence Reset Handler
   const handleResetModuleConfidence = (moduleId: number) => {
@@ -1320,6 +1498,91 @@ export default function App() {
 
   const currentQ = filteredQuestions[currentQuestionIndex];
 
+  // Periodic 30-second Auto-Save of current quiz session state (last active question, current streak, rolling accuracy) to localStorage
+  const [lastAutoSavedAt, setLastAutoSavedAt] = useState<number | null>(() =>
+    initialAutoSavedSession?.savedAt || null
+  );
+  const latestQuizSessionRef = React.useRef<AutoSavedQuizSessionState>({
+    currentQuestionIndex,
+    lastActiveQuestionId: currentQ?.id || null,
+    consecutiveCorrect,
+    consecutiveIncorrect,
+    sessionRollingOutcomes,
+    dynamicDifficulty,
+    selectedPathId,
+    selectedModuleId,
+    confirmedFocusPathId,
+    sessionAnswerCount,
+    savedAt: Date.now(),
+  });
+
+  useEffect(() => {
+    latestQuizSessionRef.current = {
+      currentQuestionIndex,
+      lastActiveQuestionId: currentQ?.id || null,
+      consecutiveCorrect,
+      consecutiveIncorrect,
+      sessionRollingOutcomes,
+      dynamicDifficulty,
+      selectedPathId,
+      selectedModuleId,
+      confirmedFocusPathId,
+      sessionAnswerCount,
+      savedAt: Date.now(),
+    };
+  }, [
+    currentQuestionIndex,
+    currentQ?.id,
+    consecutiveCorrect,
+    consecutiveIncorrect,
+    sessionRollingOutcomes,
+    dynamicDifficulty,
+    selectedPathId,
+    selectedModuleId,
+    confirmedFocusPathId,
+    sessionAnswerCount,
+  ]);
+
+  const persistQuizSessionStateNow = useCallback(() => {
+    try {
+      const now = Date.now();
+      const payload: AutoSavedQuizSessionState = {
+        ...latestQuizSessionRef.current,
+        savedAt: now,
+      };
+      localStorage.setItem(QUIZ_SESSION_AUTOSAVE_KEY, JSON.stringify(payload));
+      setLastAutoSavedAt(now);
+    } catch (e) {
+      console.error('Failed to auto-save quiz session state:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    // 1. Periodic 30-second auto-save interval
+    const intervalId = setInterval(() => {
+      persistQuizSessionStateNow();
+    }, AUTOSAVE_INTERVAL_MS);
+
+    // 2. Immediate flush if browser tab closes or hides unexpectedly
+    const handleBeforeUnload = () => {
+      persistQuizSessionStateNow();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        persistQuizSessionStateNow();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [persistQuizSessionStateNow]);
+
   return (
     <ProtectedRoute onUserChange={setAuthenticatedUser}>
       <div className="min-h-screen w-[100vw] max-w-[100vw] overflow-x-hidden bg-[#F8F9FA] text-[#1E293B] relative flex flex-col font-sans">
@@ -1329,8 +1592,8 @@ export default function App() {
         {/* Offline Status Toast Indicator */}
         <OfflineIndicator />
 
-        {/* Global 'Payment Successful' Toast Notification & All-Time High Toast */}
-        {(paymentSuccessToast || allTimeHighToast) && (
+        {/* Global 'Payment Successful' Toast Notification, All-Time High Toast & Focus Mode Toast */}
+        {(paymentSuccessToast || allTimeHighToast || focusModeToast) && (
           <div
             className="fixed top-16 right-4 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none px-2 sm:px-0"
             aria-live="polite"
@@ -1383,6 +1646,25 @@ export default function App() {
                   type="button"
                   onClick={() => setAllTimeHighToast(null)}
                   className="text-[11px] font-bold text-amber-200 hover:text-white cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {focusModeToast && (
+              <div
+                role="status"
+                className="pointer-events-auto p-3.5 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-[#0078D4] text-white border border-sky-400 shadow-xl flex items-center justify-between gap-3 animate-in slide-in-from-top-3 duration-200"
+              >
+                <div className="flex items-center gap-2.5 text-xs font-black">
+                  <Maximize2 className="w-4 h-4 text-amber-300 shrink-0" />
+                  <span>{focusModeToast}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFocusModeToast(null)}
+                  className="text-[11px] font-bold text-sky-200 hover:text-white cursor-pointer"
                 >
                   Dismiss
                 </button>
@@ -1479,13 +1761,13 @@ export default function App() {
               </span>
               <ThemeToggle />
               <button
-                onClick={() => setIsFocusMode(false)}
+                onClick={() => toggleFocusMode('button')}
                 className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition-colors border border-white/20 cursor-pointer"
-                title="Exit Focus Mode (or press Esc)"
+                title="Exit Focus Mode (or press Ctrl+F, F, or Esc)"
               >
                 <Minimize2 className="w-3.5 h-3.5" />
                 <span>Exit Focus</span>
-                <kbd className="hidden sm:inline px-1.5 py-0.5 rounded bg-black/40 text-[10px] text-slate-300">Esc</kbd>
+                <kbd className="hidden sm:inline px-1.5 py-0.5 rounded bg-black/40 text-[10px] text-slate-300">Ctrl+F / F / Esc</kbd>
               </button>
             </div>
           </div>
@@ -2462,6 +2744,161 @@ export default function App() {
                           </span>
                         </div>
 
+                        {/* 20-Question Rolling Average Accuracy Mini Line Chart & Trend Indicator */}
+                        <div
+                          className="px-2.5 py-1 rounded-lg bg-slate-950/45 border border-sky-300/30 text-[11px] flex items-center gap-2 shadow-2xs"
+                          title={`Rolling Average Accuracy Trend over the last ${sessionRollingOutcomes.length}/${ROLLING_WINDOW_SIZE} questions • Current: ${
+                            rollingAverageAccuracy ?? 50
+                          }% (${rolling20Trend.label}). Dashed line marks the 70% AZ-900 pass target.`}
+                        >
+                          {/* Mini SVG Sparkline Chart */}
+                          <div className="relative flex items-center shrink-0">
+                            {(() => {
+                              const chartW = 68;
+                              const chartH = 22;
+                              const padX = 3;
+                              const padY = 3;
+                              const innerW = chartW - padX * 2;
+                              const innerH = chartH - padY * 2;
+                              const pts =
+                                rolling20AccuracySeries.length > 0
+                                  ? rolling20AccuracySeries
+                                  : [50];
+                              const coords = pts.map((val, i) => {
+                                const x =
+                                  pts.length === 1
+                                    ? chartW / 2
+                                    : padX + (i / (pts.length - 1)) * innerW;
+                                const y =
+                                  padY + innerH - (Math.max(0, Math.min(100, val)) / 100) * innerH;
+                                return { x, y, val };
+                              });
+                              const polylinePoints = coords
+                                .map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+                                .join(' ');
+                              const areaPath =
+                                coords.length > 1
+                                  ? `M ${coords[0].x.toFixed(1)},${(padY + innerH).toFixed(1)} L ` +
+                                    coords
+                                      .map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+                                      .join(' L ') +
+                                    ` L ${coords[coords.length - 1].x.toFixed(1)},${(
+                                      padY + innerH
+                                    ).toFixed(1)} Z`
+                                  : '';
+                              const passLineY = padY + innerH - 0.7 * innerH;
+                              const lastCoord = coords[coords.length - 1];
+                              const strokeColor =
+                                rolling20Trend.direction === 'up'
+                                  ? '#34d399'
+                                  : rolling20Trend.direction === 'down'
+                                  ? '#fbbf24'
+                                  : '#38bdf8';
+
+                              return (
+                                <svg
+                                  width={chartW}
+                                  height={chartH}
+                                  viewBox={`0 0 ${chartW} ${chartH}`}
+                                  className="overflow-visible rounded bg-slate-900/70 border border-white/10"
+                                  aria-label="Rolling average accuracy line chart over the last 20 questions"
+                                >
+                                  <defs>
+                                    <linearGradient
+                                      id="rolling20Grad"
+                                      x1="0"
+                                      y1="0"
+                                      x2="0"
+                                      y2="1"
+                                    >
+                                      <stop offset="0%" stopColor={strokeColor} stopOpacity="0.4" />
+                                      <stop offset="100%" stopColor={strokeColor} stopOpacity="0.02" />
+                                    </linearGradient>
+                                  </defs>
+                                  {/* 70% AZ-900 Passing Benchmark Dashed Line */}
+                                  <line
+                                    x1={padX}
+                                    y1={passLineY}
+                                    x2={chartW - padX}
+                                    y2={passLineY}
+                                    stroke="rgba(255,255,255,0.28)"
+                                    strokeWidth="0.8"
+                                    strokeDasharray="2,2"
+                                  />
+                                  {/* Area under rolling accuracy curve */}
+                                  {areaPath && <path d={areaPath} fill="url(#rolling20Grad)" />}
+                                  {/* Rolling accuracy polyline */}
+                                  {coords.length > 1 && (
+                                    <polyline
+                                      fill="none"
+                                      stroke={strokeColor}
+                                      strokeWidth="1.6"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      points={polylinePoints}
+                                    />
+                                  )}
+                                  {/* Latest accuracy endpoint dot */}
+                                  {lastCoord && (
+                                    <circle
+                                      cx={lastCoord.x}
+                                      cy={lastCoord.y}
+                                      r="2.3"
+                                      fill={strokeColor}
+                                      stroke="#0f172a"
+                                      strokeWidth="0.8"
+                                    />
+                                  )}
+                                </svg>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Trend Direction & Delta Badge */}
+                          <div className="flex items-center gap-1">
+                            {rolling20Trend.direction === 'up' ? (
+                              <TrendingUp className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                            ) : rolling20Trend.direction === 'down' ? (
+                              <TrendingDown className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                            ) : (
+                              <ArrowRight className="w-3 h-3 text-sky-300 shrink-0" />
+                            )}
+                            <span
+                              className={`text-[10px] font-black whitespace-nowrap ${
+                                rolling20Trend.direction === 'up'
+                                  ? 'text-emerald-300'
+                                  : rolling20Trend.direction === 'down'
+                                  ? 'text-amber-300'
+                                  : 'text-sky-200'
+                              }`}
+                            >
+                              {rolling20Trend.label}
+                            </span>
+                            <span className="text-[9.5px] text-sky-200/80 font-semibold hidden sm:inline">
+                              (20-Q)
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 30-Second Session Auto-Save Status Indicator */}
+                        <button
+                          type="button"
+                          onClick={persistQuizSessionStateNow}
+                          className="px-2 py-1 rounded-lg bg-black/20 hover:bg-black/35 border border-white/15 text-[10px] font-bold text-sky-100 flex items-center gap-1 transition-colors cursor-pointer"
+                          title={`Quiz session state (Question #${currentQuestionIndex + 1} ${
+                            currentQ?.id || ''
+                          } & Streak: ${consecutiveCorrect}) auto-saves to localStorage every 30 seconds${
+                            lastAutoSavedAt
+                              ? ` • Last saved at ${new Date(lastAutoSavedAt).toLocaleTimeString()}`
+                              : ''
+                          }. Click to save immediately.`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                          <span>
+                            Auto-Save (30s) • Streak: {consecutiveCorrect}
+                          </span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => setIsPathSelectorExpanded((prev) => !prev)}
@@ -2751,7 +3188,7 @@ export default function App() {
                     onAskTutorAboutQuestion={handleAskTutorAboutQuestion}
                     stats={stats}
                     isFocusMode={isFocusMode}
-                    onToggleFocusMode={() => setIsFocusMode(!isFocusMode)}
+                    onToggleFocusMode={() => toggleFocusMode('button')}
                     dynamicDifficulty={effectiveDynamicDifficulty}
                     consecutiveStreak={consecutiveCorrect}
                     isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
