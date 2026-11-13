@@ -41,6 +41,9 @@ import {
   SkipForward,
   Download,
   Anchor,
+  TrendingUp,
+  TrendingDown,
+  Keyboard,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
@@ -118,6 +121,8 @@ interface QuizCardProps {
   onOpenUserGuide?: () => void;
   onSkipQuestion?: (questionId: string) => void;
   onOpenPeerChallenge?: () => void;
+  last5DifficultyImpactDelta?: number;
+  last5AnsweredCount?: number;
 }
 
 const EXAM_SIMULATION_DURATION_SECONDS = 45 * 60; // 45:00 standard AZ-900 exam duration
@@ -472,6 +477,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   onOpenUserGuide,
   onSkipQuestion,
   onOpenPeerChallenge,
+  last5DifficultyImpactDelta = 0,
+  last5AnsweredCount = 0,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
@@ -1540,6 +1547,40 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             )}
           </button>
 
+          {/* Small '+/-' Trend Percentage Indicator Highlighting Last 5 Questions Impact on Dynamic Difficulty */}
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black border tabular-nums shadow-2xs select-none ${
+              last5DifficultyImpactDelta > 0
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                : last5DifficultyImpactDelta < 0
+                ? 'bg-rose-50 text-rose-800 border-rose-300'
+                : 'bg-slate-100 text-slate-700 border-slate-300'
+            }`}
+            title={`Last 5 Questions Impact on Dynamic Difficulty (${last5AnsweredCount}/5 recent questions): ${
+              last5DifficultyImpactDelta > 0
+                ? `+${last5DifficultyImpactDelta}% upward pressure toward Harder (Advanced) scenarios`
+                : last5DifficultyImpactDelta < 0
+                ? `${last5DifficultyImpactDelta}% downward pressure toward Easier (Fundamental) concepts`
+                : '0% neutral baseline (Medium / Intermediate equilibrium)'
+            }`}
+          >
+            {last5DifficultyImpactDelta > 0 ? (
+              <TrendingUp className="w-3 h-3 text-emerald-600 shrink-0" />
+            ) : last5DifficultyImpactDelta < 0 ? (
+              <TrendingDown className="w-3 h-3 text-rose-600 shrink-0" />
+            ) : (
+              <Zap className="w-3 h-3 text-amber-500 shrink-0" />
+            )}
+            <span>
+              {last5DifficultyImpactDelta > 0
+                ? `+${last5DifficultyImpactDelta}%`
+                : last5DifficultyImpactDelta < 0
+                ? `${last5DifficultyImpactDelta}%`
+                : '+0%'}
+            </span>
+            <span className="text-[9.5px] font-bold opacity-75 hidden sm:inline">(5Q)</span>
+          </span>
+
           {/* Persistent Difficulty Level Dropdown Selector in Practice Workspace Toolbar (Overrides Dynamic Difficulty) */}
           {onSelectDifficultyFilter && (
             <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-slate-300 shadow-2xs">
@@ -1647,6 +1688,73 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           <span className="text-xs font-bold text-slate-600 whitespace-nowrap px-1">
             Q {questionIndex + 1}/{totalQuestions}
           </span>
+
+          {/* Focus Mode Indicator in Quiz Header with Hover-Only On-Screen Keyboard Shortcut Guide */}
+          {onToggleFocusMode && (
+            <div className="relative group/cardfocusguide">
+              <button
+                type="button"
+                onClick={onToggleFocusMode}
+                className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                  isFocusMode
+                    ? 'bg-emerald-600 text-white border-emerald-700'
+                    : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
+                }`}
+                aria-label="Focus Mode indicator — hover for keyboard shortcut guide"
+              >
+                {isFocusMode ? (
+                  <Minimize2 className="w-3.5 h-3.5 text-amber-300" />
+                ) : (
+                  <Maximize2 className="w-3.5 h-3.5 text-[#0078D4]" />
+                )}
+                <span className="hidden sm:inline">
+                  {isFocusMode ? 'Focus ON' : 'Focus Mode'}
+                </span>
+              </button>
+
+              {/* Hover-Only On-Screen Keyboard Shortcut Guide */}
+              <div
+                role="tooltip"
+                className="pointer-events-none group-hover/cardfocusguide:pointer-events-auto opacity-0 invisible group-hover/cardfocusguide:opacity-100 group-hover/cardfocusguide:visible transition-all duration-150 absolute right-0 top-full mt-2 w-72 rounded-2xl bg-slate-900/98 text-white border border-sky-400/40 shadow-2xl p-3 z-50 text-left space-y-2"
+              >
+                <div className="flex items-center justify-between border-b border-slate-700 pb-1.5">
+                  <span className="text-[10.5px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1">
+                    <Keyboard className="w-3.5 h-3.5 text-amber-300" />
+                    Keyboard Shortcut Guide
+                  </span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/10 text-amber-200">
+                    Hover Guide
+                  </span>
+                </div>
+                <div className="space-y-1.5 text-[11px]">
+                  <div className="flex items-center justify-between gap-2 bg-white/5 p-1.5 rounded-lg">
+                    <span className="font-bold text-slate-200">Toggle Focus Mode:</span>
+                    <div className="flex items-center gap-1">
+                      <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-amber-300">
+                        F
+                      </kbd>
+                      <span className="text-[9px] text-slate-400">or</span>
+                      <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-amber-300">
+                        Ctrl+F
+                      </kbd>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 bg-white/5 p-1.5 rounded-lg">
+                    <span className="font-bold text-slate-200">Adaptive Difficulty:</span>
+                    <div className="flex items-center gap-1">
+                      <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-emerald-300">
+                        A
+                      </kbd>
+                      <span className="text-[9px] text-slate-400">or</span>
+                      <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-emerald-300">
+                        Alt+A
+                      </kbd>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* STUDY ZONE ACCORDION MENU (Centered Popup Modal in Middle of Page) */}
           <div className="relative">

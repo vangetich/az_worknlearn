@@ -35,6 +35,7 @@ import {
   StickyNote,
   Eye,
   EyeOff,
+  Keyboard,
 } from 'lucide-react';
 import * as d3 from 'd3';
 import { Header, AppTab } from './components/Header';
@@ -54,6 +55,8 @@ import { ExportProgressModal } from './components/ExportProgressModal';
 import { FlashcardsView } from './components/FlashcardsView';
 import { GlobalLeaderboard } from './components/GlobalLeaderboard';
 import { AdaptiveQuizView } from './components/AdaptiveQuizView';
+import { StudyPlannerView } from './components/StudyPlannerView';
+import { AzureImageTutorView } from './components/AzureImageTutorView';
 import { ReviewHistoryView } from './components/ReviewHistoryView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { GlassyStudyHubDropdown } from './components/GlassyStudyHubDropdown';
@@ -103,6 +106,7 @@ import {
 } from './components/MotifDecorations';
 import { BUILTIN_QUESTIONS } from './data/questionBank';
 import { LEARNING_PATHS } from './data/curriculum';
+import { CURRICULUM_STUDY_MODULES } from './data/studyNotes';
 import { Question, UserStats, QuestionAttempt } from './types/quiz';
 import {
   getInitialStats,
@@ -658,6 +662,10 @@ export default function App() {
 
   // Mock exam modal state
   const [showMockExam, setShowMockExam] = useState<boolean>(false);
+  const [adaptiveFocusPathId, setAdaptiveFocusPathId] = useState<1 | 2 | 3 | null>(null);
+  const [adaptiveFocusModuleId, setAdaptiveFocusModuleId] = useState<number | null>(null);
+  const [showFoundationalPrimerInPractice, setShowFoundationalPrimerInPractice] =
+    useState<boolean>(true);
 
   // Engagement & Anti-fatigue states (restored from 30s auto-save)
   const [sessionAnswerCount, setSessionAnswerCount] = useState<number>(() =>
@@ -879,6 +887,53 @@ export default function App() {
     return { delta, direction: 'steady', label: 'Steady Pace' };
   }, [rolling20AccuracySeries]);
 
+  // Last 5 questions '+/-' trend percentage indicator highlighting impact on dynamic difficulty level
+  const last5QuestionsImpact = useMemo<{
+    count: number;
+    correctCount: number;
+    accuracyPercent: number;
+    deltaPercent: number;
+    formattedDelta: string;
+    direction: 'up' | 'down' | 'steady';
+    impactSummary: string;
+  }>(() => {
+    const last5 = sessionRollingOutcomes.slice(-5);
+    if (last5.length === 0) {
+      return {
+        count: 0,
+        correctCount: 0,
+        accuracyPercent: 50,
+        deltaPercent: 0,
+        formattedDelta: '+0%',
+        direction: 'steady',
+        impactSummary: 'Neutral baseline (0/5 answered)',
+      };
+    }
+    const correctCount = last5.filter(Boolean).length;
+    const accuracyPercent = Math.round((correctCount / last5.length) * 100);
+    // Relative to 50% Medium equilibrium baseline: +50% max upward pressure, -50% max downward pressure
+    const deltaPercent = accuracyPercent - 50;
+    const formattedDelta =
+      deltaPercent > 0 ? `+${deltaPercent}%` : deltaPercent < 0 ? `${deltaPercent}%` : '+0%';
+    const direction = deltaPercent > 0 ? 'up' : deltaPercent < 0 ? 'down' : 'steady';
+    const impactSummary =
+      deltaPercent >= 25
+        ? `Escalating difficulty upward (${correctCount}/${last5.length} correct in last 5)`
+        : deltaPercent <= -10
+        ? `Stepping difficulty downward (${correctCount}/${last5.length} correct in last 5)`
+        : `Maintaining current difficulty (${correctCount}/${last5.length} correct in last 5)`;
+
+    return {
+      count: last5.length,
+      correctCount,
+      accuracyPercent,
+      deltaPercent,
+      formattedDelta,
+      direction,
+      impactSummary,
+    };
+  }, [sessionRollingOutcomes]);
+
   // Confirm selected Learning Path focus and generate/reset quiz session starting at Medium difficulty
   const handleConfirmLearningPathFocus = (pathToConfirm: 1 | 2 | 3) => {
     setConfirmedFocusPathId(pathToConfirm);
@@ -961,6 +1016,26 @@ export default function App() {
         }
         e.stopPropagation();
         toggleFocusMode('shortcut');
+        return;
+      }
+
+      // 4. 'A' or 'Alt+A' shortcut toggles Adaptive Difficulty ON/OFF
+      const isAltA = e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'a' || e.key === 'A');
+      const isStandaloneA =
+        !isEditable && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'a' || e.key === 'A');
+
+      if ((isAltA && !isEditable) || isStandaloneA) {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDynamicDifficultyEnabled((prev) => {
+          const next = !prev;
+          setFocusModeToast(
+            next
+              ? "Adaptive Difficulty ON • Auto-adjusting difficulty from your last 5–20 answers ('A' or 'Alt+A')"
+              : "Adaptive Difficulty PAUSED • Difficulty level held steady ('A' or 'Alt+A' to re-enable)"
+          );
+          return next;
+        });
       }
     };
 
@@ -1733,6 +1808,13 @@ export default function App() {
             onLogout={() => {
               setShowExitSessionModal(true);
             }}
+            isFocusMode={isFocusMode}
+            onToggleFocusMode={() => toggleFocusMode('button')}
+            isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
+            onToggleDynamicDifficulty={() =>
+              setIsDynamicDifficultyEnabled((prev) => !prev)
+            }
+            effectiveDynamicDifficulty={effectiveDynamicDifficulty}
           />
         )}
 
@@ -1740,18 +1822,41 @@ export default function App() {
       {isFocusMode && (
         <div className="sticky top-4 z-50 px-4 max-w-4xl w-full mx-auto animate-in slide-in-from-top-3 duration-200">
           <div className="bg-slate-900/95 text-white backdrop-blur-md rounded-2xl p-3.5 px-5 shadow-2xl border border-slate-700/80 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+            <div className="relative group/floatingfocus flex items-center gap-3 cursor-pointer">
               <span className="flex h-3 w-3 relative shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
               </span>
               <div>
                 <span className="text-xs font-black tracking-wider uppercase text-emerald-400 block">
-                  Focus Mode Active
+                  Focus Mode Active (Hover for Shortcuts)
                 </span>
                 <span className="text-xs text-slate-300 hidden sm:inline">
                   Navigation bar and footer hidden • Test-like exam concentration
                 </span>
+              </div>
+
+              {/* Hover-Only Keyboard Shortcut Guide inside Floating Focus Mode Banner */}
+              <div
+                role="tooltip"
+                className="pointer-events-none group-hover/floatingfocus:pointer-events-auto opacity-0 invisible group-hover/floatingfocus:opacity-100 group-hover/floatingfocus:visible transition-all duration-150 absolute left-0 top-full mt-3 w-76 sm:w-80 rounded-2xl bg-slate-950 text-white border border-sky-400/50 shadow-2xl p-3.5 z-50 text-left space-y-2"
+              >
+                <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
+                    <Keyboard className="w-3.5 h-3.5 text-amber-300" />
+                    On-Screen Keyboard Shortcuts
+                  </span>
+                </div>
+                <div className="space-y-1.5 text-[11px]">
+                  <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg">
+                    <span>Toggle Focus Mode:</span>
+                    <span className="font-mono font-black text-amber-300">F / Ctrl+F / Esc</span>
+                  </div>
+                  <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg">
+                    <span>Toggle Adaptive Difficulty:</span>
+                    <span className="font-mono font-black text-emerald-300">A / Alt+A</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2723,9 +2828,9 @@ export default function App() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        {/* Rolling-Average Adaptive Difficulty Pill */}
+                        {/* Rolling-Average Adaptive Difficulty Pill + Last 5 Questions '+/-' Trend Percentage Indicator */}
                         <div
-                          className="px-2.5 py-1 rounded-lg bg-black/25 border border-white/15 text-[11px] flex items-center gap-1.5"
+                          className="px-2.5 py-1 rounded-lg bg-black/25 border border-white/15 text-[11px] flex flex-wrap items-center gap-1.5"
                           title="Adaptive difficulty starts at Medium (Intermediate) and dynamically increases or decreases based on your rolling average of recent answers in this session."
                         >
                           <Zap className="w-3.5 h-3.5 text-amber-300 shrink-0" />
@@ -2737,11 +2842,102 @@ export default function App() {
                               ? 'Medium (Intermediate)'
                               : 'Hard (Advanced)'}
                           </span>
+                          {/* Small '+/-' Trend Percentage Indicator for Last 5 Questions Impact */}
+                          <span
+                            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-black tabular-nums border ${
+                              last5QuestionsImpact.direction === 'up'
+                                ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/40'
+                                : last5QuestionsImpact.direction === 'down'
+                                ? 'bg-rose-500/25 text-rose-200 border-rose-400/40'
+                                : 'bg-white/15 text-sky-100 border-white/20'
+                            }`}
+                            title={`Last 5 Questions Impact on Dynamic Difficulty: ${last5QuestionsImpact.formattedDelta} (${last5QuestionsImpact.impactSummary})`}
+                          >
+                            {last5QuestionsImpact.direction === 'up' ? (
+                              <TrendingUp className="w-2.5 h-2.5 text-emerald-300 shrink-0" />
+                            ) : last5QuestionsImpact.direction === 'down' ? (
+                              <TrendingDown className="w-2.5 h-2.5 text-rose-300 shrink-0" />
+                            ) : null}
+                            <span>{last5QuestionsImpact.formattedDelta} (5Q)</span>
+                          </span>
                           <span className="px-1.5 py-0.2 rounded bg-white/15 text-[10px] font-black text-amber-200">
                             {rollingAverageAccuracy !== null
                               ? `Rolling Avg: ${rollingAverageAccuracy}% (${sessionRollingOutcomes.length}/${ROLLING_WINDOW_SIZE})`
                               : 'Starts at Medium'}
                           </span>
+                        </div>
+
+                        {/* Focus Mode Indicator in Quiz Session Header with Hover-Only Keyboard Shortcut Guide */}
+                        <div className="relative group/sessionfocusguide">
+                          <button
+                            type="button"
+                            onClick={() => toggleFocusMode('button')}
+                            className="px-2.5 py-1 rounded-lg bg-black/25 hover:bg-black/40 border border-white/20 text-[10.5px] font-black text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+                            aria-label="Focus Mode indicator — hover to view keyboard shortcuts"
+                          >
+                            <Maximize2 className="w-3 h-3 text-amber-300 shrink-0" />
+                            <span>Focus Mode</span>
+                            <kbd className="px-1 py-0.2 rounded bg-white/15 font-mono text-[9.5px] text-sky-200">
+                              F
+                            </kbd>
+                          </button>
+
+                          {/* On-Screen Keyboard Shortcut Guide (Visible ONLY when hovering over 'Focus Mode' indicator) */}
+                          <div
+                            role="tooltip"
+                            className="pointer-events-none group-hover/sessionfocusguide:pointer-events-auto opacity-0 invisible group-hover/sessionfocusguide:opacity-100 group-hover/sessionfocusguide:visible transition-all duration-150 absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-2xl bg-slate-950/98 text-white border border-sky-400/50 shadow-2xl p-3.5 z-50 text-left space-y-2"
+                          >
+                            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                              <span className="text-[10.5px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
+                                <Keyboard className="w-3.5 h-3.5 text-amber-300" />
+                                Header Keyboard Shortcut Guide
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-200 text-[9px] font-bold">
+                                Hover Guide
+                              </span>
+                            </div>
+                            <div className="space-y-1.5 text-[11px]">
+                              <div className="p-2 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between gap-2">
+                                <div>
+                                  <div className="font-extrabold text-white">Focus Mode Toggle</div>
+                                  <div className="text-[10px] text-slate-300">
+                                    Distraction-free exam view (Esc exits)
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-amber-300">
+                                    F
+                                  </kbd>
+                                  <span className="text-[9px] text-slate-400">or</span>
+                                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-amber-300">
+                                    Ctrl+F
+                                  </kbd>
+                                </div>
+                              </div>
+                              <div className="p-2 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between gap-2">
+                                <div>
+                                  <div className="font-extrabold text-white">
+                                    Adaptive Difficulty Toggle
+                                  </div>
+                                  <div className="text-[10px] text-slate-300">
+                                    Currently:{' '}
+                                    <span className="text-emerald-300 font-bold">
+                                      {isDynamicDifficultyEnabled ? 'Enabled (Auto)' : 'Paused'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-emerald-300">
+                                    A
+                                  </kbd>
+                                  <span className="text-[9px] text-slate-400">or</span>
+                                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-emerald-300">
+                                    Alt+A
+                                  </kbd>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
 
                         {/* 20-Question Rolling Average Accuracy Mini Line Chart & Trend Indicator */}
@@ -3139,6 +3335,167 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Adaptive Module Learning Path Engine Banner (Remediation for Struggling Modules & Scenario Escalation for Excelling Modules) */}
+                {currentQ && (() => {
+                  const activeModId = currentQ.moduleId;
+                  const modQuestions = questions.filter((q) => q.moduleId === activeModId);
+                  const modAttempts = modQuestions
+                    .flatMap((q) => stats.attempts?.[q.id] || [])
+                    .sort((a, b) => a.timestamp - b.timestamp);
+                  const recentModAttempts = modAttempts.slice(-4);
+                  const recentWrongCount = recentModAttempts.filter((a) => !a.isCorrect).length;
+                  const recentCorrectCount = recentModAttempts.filter((a) => a.isCorrect).length;
+
+                  const isStrugglingInModule =
+                    recentModAttempts.length >= 2 && recentWrongCount >= 2;
+                  const isExcellingInModule =
+                    !isStrugglingInModule &&
+                    recentModAttempts.length >= 2 &&
+                    recentCorrectCount >= 2 &&
+                    recentModAttempts[recentModAttempts.length - 1]?.isCorrect &&
+                    recentModAttempts[recentModAttempts.length - 2]?.isCorrect;
+
+                  if (!isStrugglingInModule && !isExcellingInModule) return null;
+
+                  const studyMod = CURRICULUM_STUDY_MODULES.find(
+                    (m) => m.moduleId === activeModId
+                  );
+
+                  if (isStrugglingInModule) {
+                    return (
+                      <div className="mb-4 rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 via-white to-orange-50/70 p-4 shadow-sm space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="flex items-start gap-2.5">
+                            <span className="p-2 rounded-xl bg-amber-500 text-slate-950 shrink-0 mt-0.5">
+                              <AlertTriangle className="w-4 h-4" />
+                            </span>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-950">
+                                  Adaptive Path Remediation • Module {activeModId}
+                                </span>
+                                <span className="text-xs font-extrabold text-slate-900">
+                                  {currentQ.moduleTitle}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-600 mt-1">
+                                You missed {recentWrongCount} of your last {recentModAttempts.length} questions in Module {activeModId}. Review the foundational explanation below and lock onto targeted Fundamental questions for this module before moving on.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setShowFoundationalPrimerInPractice((prev) => !prev)
+                              }
+                              className="px-2.5 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 text-xs font-bold hover:bg-amber-100 transition-colors cursor-pointer"
+                            >
+                              {showFoundationalPrimerInPractice
+                                ? 'Hide Foundational Primer'
+                                : 'Show Foundational Primer'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedPathId(currentQ.learningPathId);
+                                setSelectedModuleId(activeModId);
+                                setSelectedDifficultyFilter('Fundamental');
+                                setCurrentQuestionIndex(0);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold transition-colors cursor-pointer shadow-2xs"
+                            >
+                              Target Module {activeModId} Fundamentals
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAdaptiveFocusPathId(currentQ.learningPathId);
+                                setAdaptiveFocusModuleId(activeModId);
+                                setActiveTab('adaptive');
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-300 text-xs font-extrabold transition-colors cursor-pointer"
+                            >
+                              Open Adaptive Remediation Engine
+                            </button>
+                          </div>
+                        </div>
+
+                        {showFoundationalPrimerInPractice && studyMod && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-amber-200/80">
+                            {studyMod.units.slice(0, 2).map((unit) => (
+                              <div
+                                key={unit.id}
+                                className="p-3 rounded-xl bg-white border border-amber-200/90 space-y-1"
+                              >
+                                <div className="text-xs font-extrabold text-slate-900">
+                                  {unit.unitTitle}
+                                </div>
+                                <p className="text-[11px] text-slate-600 leading-relaxed">
+                                  {unit.conceptExplanation}
+                                </p>
+                                <div className="text-[11px] font-bold text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-200/60">
+                                  Exam Takeaway: {unit.examTakeaway}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="mb-4 rounded-2xl border-2 border-emerald-300 bg-gradient-to-r from-emerald-50 via-teal-50/70 to-sky-50 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-start gap-2.5">
+                        <span className="p-2 rounded-xl bg-emerald-600 text-white shrink-0 mt-0.5">
+                          <Zap className="w-4 h-4" />
+                        </span>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-200 text-emerald-950">
+                              Adaptive Mastery Escalation • Module {activeModId}
+                            </span>
+                            <span className="text-xs font-extrabold text-slate-900">
+                              Excelling in {currentQ.moduleTitle}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 mt-0.5">
+                            Strong accuracy streak detected in Module {activeModId}! Ready to step up to complex, multi-service Advanced architecture scenarios?
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPathId(currentQ.learningPathId);
+                            setSelectedModuleId(activeModId);
+                            setSelectedDifficultyFilter('Advanced');
+                            setCurrentQuestionIndex(0);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition-colors cursor-pointer shadow-2xs"
+                        >
+                          Challenge Advanced Scenarios (Mod {activeModId})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdaptiveFocusPathId(currentQ.learningPathId);
+                            setAdaptiveFocusModuleId(activeModId);
+                            setActiveTab('adaptive');
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-emerald-300 text-xs font-extrabold transition-colors cursor-pointer"
+                        >
+                          Adaptive Escalation Mode
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div
                   key={`filtered-results-${searchQuery}-${currentQ?.id || currentQuestionIndex}`}
                   className="animate-quiz-card-fade-in-up"
@@ -3238,6 +3595,8 @@ export default function App() {
                       setPeerChallengeModuleId(currentQ.moduleId);
                       setShowPeerChallengeModal(true);
                     }}
+                    last5DifficultyImpactDelta={last5QuestionsImpact.deltaPercent}
+                    last5AnsweredCount={last5QuestionsImpact.count}
                   />
                 ) : (
                   <div className="bg-white rounded-xl border border-slate-200 card-elevation p-12 text-center space-y-4">
@@ -3306,7 +3665,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB: ADAPTIVE QUIZ MODE (DYNAMIC DIFFICULTY BALANCER) */}
+        {/* TAB: ADAPTIVE QUIZ MODE (DYNAMIC DIFFICULTY BALANCER & MODULE LEARNING PATH ENGINE) */}
         {activeTab === 'adaptive' && (
           <div className="responsive-tab-page-shell max-w-6xl mx-auto">
             <AdaptiveQuizView
@@ -3317,6 +3676,51 @@ export default function App() {
               onNavigateToPractice={() => setActiveTab('quiz')}
               onOpenPersonalizedReview={() => setShowReviewSession(true)}
               onSelectModuleForPractice={handleSelectModuleFromTracker}
+              initialFocusPathId={adaptiveFocusPathId}
+              initialFocusModuleId={adaptiveFocusModuleId}
+            />
+          </div>
+        )}
+
+        {/* TAB: PERSONALIZED STUDY PLANNER (TARGET EXAM DATE & CONFIDENCE SCHEDULE) */}
+        {activeTab === 'planner' && (
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+            <StudyPlannerView
+              stats={stats}
+              onSelectModulePractice={(modId) => {
+                handleSelectModuleFromTracker(modId);
+              }}
+              onLaunchAdaptiveModule={(modId, pathId) => {
+                setAdaptiveFocusPathId(pathId);
+                setAdaptiveFocusModuleId(modId);
+                setActiveTab('adaptive');
+              }}
+              onLaunchMockSimulation={() => setShowMockExam(true)}
+              onOpenStudyGuideModule={(modId) => {
+                const foundPath = LEARNING_PATHS.find((p) =>
+                  p.modules.some((m) => m.id === modId)
+                );
+                if (foundPath) setSelectedPathId(foundPath.id);
+                setSelectedModuleId(modId);
+                setActiveTab('study-decks');
+              }}
+            />
+          </div>
+        )}
+
+        {/* TAB: IMAGE TUTOR (MICROSOFT CERTIFIED: AZURE FUNDAMENTALS VISUAL DIAGRAMS FOR ALL 12 MODULES) */}
+        {activeTab === 'image-tutor' && (
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+            <AzureImageTutorView
+              stats={stats}
+              onPracticeModule={(modId) => {
+                handleSelectModuleFromTracker(modId);
+              }}
+              onOpenStudyDecksModule={(modId, pathId) => {
+                setSelectedPathId(pathId);
+                setSelectedModuleId(modId);
+                setActiveTab('study-decks');
+              }}
             />
           </div>
         )}
@@ -3369,7 +3773,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB: TIMED MOCK EXAM */}
+        {/* TAB: TIMED MOCK EXAM SIMULATION (50-60 QUESTIONS) */}
         {activeTab === 'mock' && (
           <div className="responsive-tab-page-shell max-w-5xl mx-auto space-y-6">
             <div className="bg-white rounded-xl border border-slate-200 card-elevation p-5 sm:p-8 max-w-3xl mx-auto text-center space-y-6">
@@ -3379,28 +3783,28 @@ export default function App() {
 
               <div>
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                  Official Exam Simulation
+                  Official Exam Simulation • 50–60 Questions
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">
-                  AZ-900 Azure Fundamentals Mock Exam
+                  AZ-900 Timed Mock Exam Simulation
                 </h2>
                 <p className="text-sm text-slate-600 max-w-lg mx-auto mt-2 leading-relaxed">
-                  Experience the realistic test interface: 45 minutes, weighted domain coverage, and instant score report scaled out of 1000 points.
+                  Experience the realistic Microsoft Pearson VUE exam simulation: 50 to 60 timed questions across all three learning paths (60 minutes), scaled score out of 1000 points, and a detailed post-exam performance breakdown by Learning Path and Module.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700">
                 <div className="space-y-1">
-                  <span className="font-bold text-slate-900 block">Exam Duration:</span>
-                  <span className="text-slate-600">45 Minutes Countdown</span>
+                  <span className="font-bold text-slate-900 block">Simulation Format:</span>
+                  <span className="text-slate-600">50–60 Questions • 60 Minutes</span>
                 </div>
                 <div className="space-y-1">
-                  <span className="font-bold text-slate-900 block">Passing Mark:</span>
-                  <span className="text-slate-600">700 / 1000 Scaled Points</span>
+                  <span className="font-bold text-slate-900 block">Passing Score:</span>
+                  <span className="text-slate-600">700 / 1000 Scaled Points (70%)</span>
                 </div>
                 <div className="space-y-1">
-                  <span className="font-bold text-slate-900 block">Exam Weight Balance:</span>
-                  <span className="text-slate-600">Paths 1, 2, &amp; 3 Official Weights</span>
+                  <span className="font-bold text-slate-900 block">Domain Breakdown:</span>
+                  <span className="text-slate-600">Detailed Path 1, 2 &amp; 3 Report</span>
                 </div>
               </div>
 
@@ -3410,7 +3814,14 @@ export default function App() {
                   className="px-6 sm:px-8 py-3.5 rounded-xl bg-gradient-to-r from-[#0078D4] to-[#005A9E] hover:from-[#005A9E] hover:to-[#004578] text-white font-bold text-sm shadow-md hover:shadow-lg transition-all inline-flex items-center gap-2 cursor-pointer"
                 >
                   <Award className="w-5 h-5 text-amber-300 shrink-0" />
-                  <span>Begin Timed Mock Exam Now</span>
+                  <span>Launch 50–60Q Mock Exam Simulation</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('planner')}
+                  className="px-5 py-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-sm transition-all inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <span>Open Study Planner</span>
+                  <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -3578,7 +3989,7 @@ export default function App() {
                 hour: '2-digit',
                 minute: '2-digit',
               }),
-              title: `Timed Mock Exam (${total} Questions)`,
+              title: `Timed Mock Exam Simulation (${total} Questions)`,
               mode: 'mock',
               totalQuestions: total,
               correctCount: correct,
@@ -3586,6 +3997,16 @@ export default function App() {
               passed: scorePercent >= 70,
               missedQuestions: [],
             });
+          }}
+          onLaunchAdaptiveForPath={(pathId) => {
+            setShowMockExam(false);
+            setAdaptiveFocusPathId(pathId);
+            setAdaptiveFocusModuleId(null);
+            setActiveTab('adaptive');
+          }}
+          onOpenStudyPlanner={() => {
+            setShowMockExam(false);
+            setActiveTab('planner');
           }}
           onClose={() => setShowMockExam(false)}
         />
