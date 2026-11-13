@@ -329,6 +329,34 @@ body {
   background: #94a3b8;
 }
 
+/* Hidden scrollbar with smooth, intuitive scrolling (Azure Cloud Gateway & compact scroll boxes) */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+html.gateway-no-scrollbar,
+body.gateway-no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+html.gateway-no-scrollbar::-webkit-scrollbar,
+body.gateway-no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Subtle entrance animations for Instant Feedback & Breakdown */
 @keyframes feedbackSlideUp {
   0% {

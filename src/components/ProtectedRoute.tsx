@@ -127,6 +127,22 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const [adminConfirmPassword, setAdminConfirmPassword] = useState<string>('Az900Admin!2026');
   const [showAdminPassword, setShowAdminPassword] = useState<boolean>(false);
 
+  // Hide the right-side browser scrollbar on the Azure Cloud Gateway screen while keeping scrolling smooth
+  useEffect(() => {
+    const isGatewayActive = !user;
+    if (isGatewayActive) {
+      document.documentElement.classList.add('gateway-no-scrollbar');
+      document.body.classList.add('gateway-no-scrollbar');
+    } else {
+      document.documentElement.classList.remove('gateway-no-scrollbar');
+      document.body.classList.remove('gateway-no-scrollbar');
+    }
+    return () => {
+      document.documentElement.classList.remove('gateway-no-scrollbar');
+      document.body.classList.remove('gateway-no-scrollbar');
+    };
+  }, [user]);
+
   const allModulesList = useMemo(
     () =>
       LEARNING_PATHS.flatMap((p) =>
@@ -793,7 +809,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen bg-[#0F172A] text-white flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen bg-[#0F172A] text-white flex flex-col items-center justify-center p-6 no-scrollbar scroll-smooth">
         <div className="flex items-center gap-3 px-5 py-3.5 rounded-2xl bg-slate-900/90 border border-sky-500/30 shadow-xl">
           <Loader2 className="w-5 h-5 text-sky-400 animate-spin" />
           <span className="text-sm font-bold tracking-wide text-slate-200">
@@ -807,7 +823,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Force auth redirect to Login / Registration Screen when Supabase/Postgres `user` state is null
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0B1120] text-slate-100 relative flex flex-col justify-between overflow-x-hidden font-sans">
+      <div className="min-h-screen bg-[#0B1120] text-slate-100 relative flex flex-col justify-between overflow-x-hidden font-sans no-scrollbar scroll-smooth">
         <AfricanWatermarkPattern opacity={0.05} />
         <KitengeRibbon height={4} />
 
@@ -945,7 +961,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                   </button>
 
                   {showFullModuleMatrix && (
-                    <div className="mt-2 rounded-xl border border-slate-700/90 bg-slate-950/90 max-h-60 overflow-y-auto divide-y divide-slate-800/80 text-[11px]">
+                    <div className="mt-2 rounded-xl border border-slate-700/90 bg-slate-950/90 max-h-60 overflow-y-auto no-scrollbar scroll-smooth overscroll-contain divide-y divide-slate-800/80 text-[11px]">
                       {allModulesList.map((mod) => {
                         const isFree = mod.id <= 4;
                         return (
@@ -1566,7 +1582,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                               </span>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto no-scrollbar scroll-smooth overscroll-contain">
                               {advancedModulesList.map((mod) => {
                                 const isChecked = selectedSingleModules.includes(mod.id);
                                 return (

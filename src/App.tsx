@@ -87,6 +87,11 @@ import { PaymentGatekeeper } from './components/PaymentGatekeeper';
 import { SubscriptionTierSelection } from './components/SubscriptionTierSelection';
 import { PeerChallengeModal } from './components/PeerChallengeModal';
 import { PracticeControlOverflowMenu } from './components/PracticeControlOverflowMenu';
+import {
+  useQuizFocusTimer,
+  QuizFocusTimerPill,
+  QuizBreakTriviaModal,
+} from './components/QuizFocusTimer';
 import { downloadNotesAndMemoryAnchorsMarkdown } from './utils/exportNotesMarkdown';
 import { usePostgresDatabase } from './hooks/usePostgresDatabase';
 import { authService } from './services/authService';
@@ -749,6 +754,7 @@ export default function App() {
   // Focus Mode state (minimizes UI by hiding nav bar and footer)
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
   const [focusModeToast, setFocusModeToast] = useState<string | null>(null);
+  const quizFocusTimer = useQuizFocusTimer();
 
   // Auto-dismiss Focus Mode toast after 3s
   useEffect(() => {
@@ -2112,10 +2118,11 @@ export default function App() {
               />
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap justify-end">
               <span className="text-xs font-bold text-slate-400">
                 Question {currentQuestionIndex + 1} of {filteredQuestions.length}
               </span>
+              <QuizFocusTimerPill timer={quizFocusTimer} compact />
               <ThemeToggle />
               <button
                 onClick={() => toggleFocusMode('button')}
@@ -3149,6 +3156,9 @@ export default function App() {
                             align="right"
                           />
                         </div>
+
+                        {/* Quiz Session Pomodoro Focus Timer (25m block -> 5m break & Azure trivia) */}
+                        <QuizFocusTimerPill timer={quizFocusTimer} />
 
                         {/* 20-Question Rolling Average Accuracy Mini Line Chart & Trend Indicator */}
                         <div
@@ -4470,6 +4480,9 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Pomodoro 5-Minute Break Suggestion & Azure Trivia Modal */}
+      <QuizBreakTriviaModal timer={quizFocusTimer} />
 
       {/* Touch-Friendly Practice Control Overflow Menu for Mobile Devices (Sort, Diff, Heatmap, Maps & Study Zone) */}
       <PracticeControlOverflowMenu
