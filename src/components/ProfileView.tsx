@@ -31,6 +31,7 @@ import {
   User,
   AtSign,
   Upload,
+  BarChart3,
 } from 'lucide-react';
 import { UserStats } from '../types/quiz';
 import { BADGE_DEFINITIONS, BadgeTier, BadgeCategory } from './BadgeSystem';
@@ -45,6 +46,7 @@ import { triggerAchievementOverlay } from './AchievementOverlay';
 import { AppTab } from './Header';
 import { StreakActivityGraph } from './StreakActivityGraph';
 import { StudyStreakCalendar } from './StudyStreakCalendar';
+import { ProfileAnalyticsTab } from './ProfileAnalyticsTab';
 import { DailyStudyReminder } from './DailyStudyReminder';
 import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
 import { SubscriptionPanel } from './SubscriptionPanel';
@@ -171,8 +173,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     return getUserMfaSettings(uid, storedUser?.email || `${candidateUsername}@az900.cloud`);
   });
 
-  // Top-level ProfileView Tab ('overview' | 'gaps')
-  const [profileMainTab, setProfileMainTab] = useState<'overview' | 'gaps'>('overview');
+  // Top-level ProfileView Tab ('overview' | 'analytics' | 'gaps')
+  const [profileMainTab, setProfileMainTab] = useState<'overview' | 'analytics' | 'gaps'>('overview');
   const [expandedGapModuleId, setExpandedGapModuleId] = useState<number | null>(null);
 
   // Compact Azure Cloud Explorer Menus Window state in Profile tab
@@ -576,6 +578,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <button
             type="button"
             role="tab"
+            aria-selected={profileMainTab === 'analytics'}
+            onClick={() => setProfileMainTab('analytics')}
+            className={`px-3.5 py-2 rounded-lg text-xs sm:text-sm font-extrabold flex items-center gap-2 transition-all cursor-pointer ${
+              profileMainTab === 'analytics'
+                ? 'bg-[#0078D4] text-white shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 shrink-0" />
+            <span>Analytics</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
             aria-selected={profileMainTab === 'gaps'}
             onClick={() => setProfileMainTab('gaps')}
             className={`px-3.5 py-2 rounded-lg text-xs sm:text-sm font-extrabold flex items-center gap-2 transition-all cursor-pointer ${
@@ -604,29 +621,33 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-500 px-2">
+        <div className="flex items-center gap-3 text-xs text-slate-500 px-2">
           <span className="hidden sm:inline font-medium">
-            {totalUnresolvedAcrossModules > 0
+            {profileMainTab === 'analytics'
+              ? `30-Day Question Completion vs. ${stats.dailyGoal || 10} Qs/day Target`
+              : totalUnresolvedAcrossModules > 0
               ? `Highest unresolved mistakes in Module ${moduleKnowledgeGaps[0]?.moduleId}: ${moduleKnowledgeGaps[0]?.moduleTitle}`
               : 'All 12 Azure service modules monitored for unresolved mistakes'}
           </span>
           {profileMainTab === 'overview' && (
             <button
               type="button"
-              onClick={() => setProfileMainTab('gaps')}
-              className="text-rose-600 hover:text-rose-700 font-extrabold inline-flex items-center gap-1 cursor-pointer"
+              onClick={() => setProfileMainTab('analytics')}
+              className="text-[#0078D4] hover:text-[#005A9E] font-extrabold inline-flex items-center gap-1 cursor-pointer"
             >
-              <span>Inspect Knowledge Gaps Table</span>
+              <span>30-Day Goal Analytics</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
 
-      {/* =====================================================================
-          USER SETTINGS PANEL: APPLICATION-WIDE ACCESSIBILITY FONT SIZE CONTROL
-         ===================================================================== */}
-      <AccessibilityFontSizeControl variant="panel" />
+      {profileMainTab === 'overview' && (
+        <>
+          {/* =====================================================================
+              USER SETTINGS PANEL: APPLICATION-WIDE ACCESSIBILITY FONT SIZE CONTROL
+             ===================================================================== */}
+          <AccessibilityFontSizeControl variant="panel" />
 
       {/* =====================================================================
           PERSONAL ACCOUNT MFA SECURITY SETUP PANEL (INDEPENDENT OF ADMIN 2FA)
@@ -686,6 +707,26 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           onNavigateToPractice();
         }}
       />
+        </>
+      )}
+
+      {/* =====================================================================
+          DEDICATED TOP-LEVEL 'ANALYTICS' SUB-TAB VIEW
+         ===================================================================== */}
+      {profileMainTab === 'analytics' && (
+        <div className="space-y-4 sm:space-y-5">
+          <ProfileAnalyticsTab
+            stats={stats}
+            onOpenManageGoal={onOpenManageGoal}
+            onNavigateToPractice={onNavigateToPractice}
+          />
+          <DailyAccuracyTrajectoryChart stats={stats} />
+          <StudyStreakCalendar
+            stats={stats}
+            onOpenManageGoal={onOpenManageGoal}
+          />
+        </div>
+      )}
 
       {/* =====================================================================
           DEDICATED TOP-LEVEL 'KNOWLEDGE GAPS' TAB VIEW
@@ -1376,6 +1417,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </section>
       )}
 
+      {profileMainTab === 'overview' && (
+      <>
       {/* =====================================================================
           AZURE CLOUD EXPLORER MENUS WINDOW (PROFILE TAB)
           Functionally compact & CSS-responsive across Mobile, Tablet & Laptop
@@ -2905,6 +2948,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           })}
         </div>
       </div>
+      </>
+      )}
 
       {/* Personal Learner Account TOTP MFA Security Setup Modal */}
       <MfaSecuritySetupModal

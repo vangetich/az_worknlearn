@@ -509,6 +509,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [markdownExportToast, setMarkdownExportToast] = useState<string | null>(null);
   const [retryNoticeMessage, setRetryNoticeMessage] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [isSpeakingWhyCorrect, setIsSpeakingWhyCorrect] = useState<boolean>(false);
+  const [ttsFeedbackError, setTtsFeedbackError] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const [shareCopiedToast, setShareCopiedToast] = useState<boolean>(false);
   const [showQuickStudy, setShowQuickStudy] = useState<boolean>(false);
@@ -1016,6 +1018,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
+    setIsSpeakingWhyCorrect(false);
+    setTtsFeedbackError(null);
   }, [question.id, stats?.confidenceScores]);
 
   const handleRateConfidence = (level: number) => {
@@ -1212,6 +1216,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     }
 
     window.speechSynthesis.cancel();
+    setIsSpeakingWhyCorrect(false);
 
     const optionsText = question.options
       .map((o) => `Option ${o.letter}: ${o.text}`)
@@ -1230,6 +1235,38 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     };
 
     setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleToggleSpeakWhyCorrect = () => {
+    setTtsFeedbackError(null);
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      setTtsFeedbackError('Text-to-speech (Web Speech API) is not supported in this browser.');
+      return;
+    }
+
+    if (isSpeakingWhyCorrect) {
+      window.speechSynthesis.cancel();
+      setIsSpeakingWhyCorrect(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+
+    const speechText = `Why Option ${question.correctAnswer} is correct: ${question.whyCorrect}`;
+    const utterance = new SpeechSynthesisUtterance(speechText);
+    utterance.rate = 0.96;
+    utterance.pitch = 1.0;
+
+    utterance.onend = () => {
+      setIsSpeakingWhyCorrect(false);
+    };
+    utterance.onerror = () => {
+      setIsSpeakingWhyCorrect(false);
+    };
+
+    setIsSpeakingWhyCorrect(true);
     window.speechSynthesis.speak(utterance);
   };
 
@@ -3417,13 +3454,53 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
             {/* Why It's Correct */}
             <div className="bg-emerald-50/50 rounded-xl p-5 border border-emerald-200 animate-cascade-2">
-              <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm mb-2">
-                <CheckCircle className="w-4 h-4 text-emerald-600" />
-                <span>Why Option {question.correctAnswer} is Correct:</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <span>Why Option {question.correctAnswer} is Correct:</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleToggleSpeakWhyCorrect}
+                  aria-label={
+                    isSpeakingWhyCorrect
+                      ? 'Stop reading why option is correct aloud'
+                      : 'Read why option is correct aloud'
+                  }
+                  aria-pressed={isSpeakingWhyCorrect}
+                  title={
+                    isSpeakingWhyCorrect
+                      ? 'Stop reading explanation'
+                      : 'Hear explanation read aloud (Web Speech API)'
+                  }
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold border transition-all cursor-pointer ${
+                    isSpeakingWhyCorrect
+                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs ring-2 ring-emerald-400/40'
+                      : 'bg-white hover:bg-emerald-100/70 text-emerald-800 border-emerald-300 shadow-2xs'
+                  }`}
+                >
+                  {isSpeakingWhyCorrect ? (
+                    <>
+                      <Square className="w-3.5 h-3.5 fill-current animate-pulse" />
+                      <span>Stop Audio</span>
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Listen</span>
+                    </>
+                  )}
+                </button>
               </div>
               <p className="text-sm text-slate-800 leading-relaxed font-normal">
                 {question.whyCorrect}
               </p>
+              {ttsFeedbackError && (
+                <p className="mt-2 text-xs font-semibold text-rose-700">
+                  {ttsFeedbackError}
+                </p>
+              )}
             </div>
 
             {/* Analyze Distractors (Azure Architectural Misconception Mapper) OR 1-Sentence Concept Summary Toggle */}

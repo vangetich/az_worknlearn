@@ -16,6 +16,11 @@ import {
   ShieldCheck,
   Layers,
   ListChecks,
+  Clock,
+  Gauge,
+  Pause,
+  Play,
+  Trophy,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Question, UserStats } from '../types/quiz';
@@ -67,6 +72,15 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
   const [resolvedInCurrentSession, setResolvedInCurrentSession] = useState<Set<string>>(new Set());
   const [filterMode, setFilterMode] = useState<'all' | 'pending' | 'resolved'>('all');
 
+  // Session Timer & Efficiency Score state
+  const [sessionElapsedSeconds, setSessionElapsedSeconds] = useState<number>(0);
+  const [isTimerPaused, setIsTimerPaused] = useState<boolean>(false);
+  const [showCompletionSummary, setShowCompletionSummary] = useState<boolean>(false);
+  const [retestStats, setRetestStats] = useState<{ totalAttempts: number; wrongAttempts: number }>({
+    totalAttempts: 0,
+    wrongAttempts: 0,
+  });
+
   // Whenever the modal opens, snapshot the current unresolved wrong questions
   // so that questions reviewed in PREVIOUS sessions are excluded, while questions
   // reviewed in THIS session can show a "Removed from Future Sessions ✓" badge until closed.
@@ -88,6 +102,10 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
       setActiveRetestId(null);
       setCurrentStepIndex(0);
       setFilterMode('all');
+      setSessionElapsedSeconds(0);
+      setIsTimerPaused(false);
+      setShowCompletionSummary(false);
+      setRetestStats({ totalAttempts: 0, wrongAttempts: 0 });
     }
     // Only snapshot when modal transitions to open
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,12 +152,112 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
     return items;
   }, [sessionSnapshotItems, stats, allQuestions, resolvedInCurrentSession]);
 
-  if (!isOpen) return null;
-
   const totalMissedCount = missedQuestionsList.length;
   const verifiedCount = missedQuestionsList.filter((m) => m.isResolved).length;
   const pendingCount = totalMissedCount - verifiedCount;
   const totalHistoricallyReviewedCount = (stats.reviewedMistakeIds || []).length;
+
+  // Live 1-second Session Timer while reviewing unresolved questions
+  useEffect(() => {
+    if (
+      !isOpen ||
+      isTimerPaused ||
+      showCompletionSummary ||
+      totalMissedCount === 0 ||
+      pendingCount === 0
+    ) {
+      return;
+    }
+    const timer = setInterval(() => {
+      setSessionElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isOpen, isTimerPaused, showCompletionSummary, totalMissedCount, pendingCount]);
+
+  // Automatically reveal Efficiency Score summary when every question in the session is resolved
+  useEffect(() => {
+    if (isOpen && totalMissedCount > 0 && pendingCount === 0 && verifiedCount > 0) {
+      setShowCompletionSummary(true);
+    }
+  }, [isOpen, totalMissedCount, pendingCount, verifiedCount]);
+
+  const efficiencySummary = useMemo(() => {
+    const safeTotal = Math.max(1, totalMissedCount);
+    const completionPct = Math.round((verifiedCount / safeTotal) * 100);
+    const avgSecondsPerQuestion =
+      verifiedCount > 0
+        ? Math.max(1, Math.round(sessionElapsedSeconds / verifiedCount))
+        : sessionElapsedSeconds;
+
+    const retestAccuracyPct =
+      retestStats.totalAttempts > 0
+        ? Math.round(
+            ((retestStats.totalAttempts - retestStats.wrongAttempts) /
+              retestStats.totalAttempts) *
+              100
+          )
+        : 100;
+
+    // Score Breakdown (Total 100 pts): Mastery Coverage (50) + Verification Accuracy (25) + Review Pace (25)
+    const masteryPoints = Math.round((verifiedCount / safeTotal) * 50);
+    const accuracyPoints = Math.round((retestAccuracyPct / 100) * 25);
+
+    let pacePoints = 0;
+    if (verifiedCount > 0) {
+      if (avgSecondsPerQuestion >= 15 && avgSecondsPerQuestion <= 75) {
+        pacePoints = 25;
+      } else if (avgSecondsPerQuestion < 15) {
+        pacePoints = 20;
+      } else {
+        pacePoints = Math.max(8, Math.round(25 - (avgSecondsPerQuestion - 75) / 10));
+      }
+    }
+
+    const score = Math.min(100, Math.max(0, masteryPoints + accuracyPoints + pacePoints));
+    const tier =
+      score >= 90
+        ? {
+            label: 'Elite Review Efficiency',
+            badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+            ringColor: 'text-emerald-600',
+          }
+        : score >= 75
+        ? {
+            label: 'High Efficiency',
+            badgeClass: 'bg-sky-100 text-sky-900 border-sky-300',
+            ringColor: 'text-[#0078D4]',
+          }
+        : score >= 55
+        ? {
+            label: 'Steady Mastery Pace',
+            badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
+            ringColor: 'text-amber-600',
+          }
+        : {
+            label: 'Deep-Dive Review',
+            badgeClass: 'bg-slate-100 text-slate-800 border-slate-300',
+            ringColor: 'text-slate-700',
+          };
+
+    return {
+      score,
+      completionPct,
+      avgSecondsPerQuestion,
+      retestAccuracyPct,
+      masteryPoints,
+      accuracyPoints,
+      pacePoints,
+      tier,
+    };
+  }, [totalMissedCount, verifiedCount, sessionElapsedSeconds, retestStats]);
+
+  if (!isOpen) return null;
+
+  const formatSessionTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
 
   const filteredList = missedQuestionsList.filter((item) => {
     if (filterMode === 'pending') return !item.isResolved;
@@ -180,6 +298,10 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
     if (!chosen) return;
 
     const isCorrect = chosen === question.correctAnswer;
+    setRetestStats((prev) => ({
+      totalAttempts: prev.totalAttempts + 1,
+      wrongAttempts: prev.wrongAttempts + (isCorrect ? 0 : 1),
+    }));
     setRetestResults((prev) => ({
       ...prev,
       [question.id]: {
@@ -550,6 +672,34 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
                 <span className="px-2.5 py-0.5 rounded-md text-xs font-black bg-amber-400 text-slate-950">
                   {pendingCount} Active Mistake{pendingCount === 1 ? '' : 's'}
                 </span>
+                {totalMissedCount > 0 && (
+                  <div
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-mono font-black border ${
+                      isTimerPaused || showCompletionSummary
+                        ? 'bg-slate-800/90 text-slate-200 border-slate-600'
+                        : 'bg-sky-500/20 text-sky-100 border-sky-400/50'
+                    }`}
+                    title="Live Review Session Timer"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{formatSessionTime(sessionElapsedSeconds)}</span>
+                    {!showCompletionSummary && pendingCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setIsTimerPaused((p) => !p)}
+                        className="ml-0.5 p-0.5 rounded hover:bg-white/15 text-amber-300 cursor-pointer"
+                        title={isTimerPaused ? 'Resume session timer' : 'Pause session timer'}
+                        aria-label={isTimerPaused ? 'Resume session timer' : 'Pause session timer'}
+                      >
+                        {isTimerPaused ? (
+                          <Play className="w-3 h-3 fill-current" />
+                        ) : (
+                          <Pause className="w-3 h-3" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <p className="text-xs text-blue-200/90">
                 Presenting only the questions you got wrong with full architectural explanations. Reviewed questions are automatically removed from future sessions.
@@ -558,7 +708,7 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {totalMissedCount > 0 && (
+            {totalMissedCount > 0 && !showCompletionSummary && (
               <div className="flex items-center p-0.5 rounded-xl bg-white/10 border border-white/15 text-xs font-bold">
                 <button
                   type="button"
@@ -613,6 +763,15 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Total Mastered &amp; Removed All-Time: {totalHistoricallyReviewedCount}</span>
             </div>
+            {totalMissedCount > 0 && (
+              <div className="flex items-center gap-1.5 text-amber-800 font-mono font-bold">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>
+                  {formatSessionTime(sessionElapsedSeconds)}
+                  {verifiedCount > 0 ? ` (${efficiencySummary.avgSecondsPerQuestion}s/Q)` : ''}
+                </span>
+              </div>
+            )}
           </div>
 
           {presentationMode === 'list' && totalMissedCount > 0 && (
@@ -656,7 +815,187 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
 
         {/* Scrollable Content Container */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5">
-          {totalMissedCount === 0 ? (
+          {showCompletionSummary && totalMissedCount > 0 ? (
+            /* Session Completion & Efficiency Score Summary View */
+            <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/70 via-white to-sky-50/70 p-6 sm:p-7 space-y-6 shadow-xs animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-[#0078D4] text-white flex items-center justify-center shadow-md shrink-0">
+                    <Trophy className="w-6 h-6 text-amber-300" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg sm:text-xl font-black text-slate-900">
+                        {pendingCount === 0
+                          ? 'Review Session Complete!'
+                          : 'Review Session Summary'}
+                      </h3>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${efficiencySummary.tier.badgeClass}`}
+                      >
+                        {efficiencySummary.tier.label}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                      You reviewed <strong>{verifiedCount}</strong> of{' '}
+                      <strong>{totalMissedCount}</strong> missed question
+                      {totalMissedCount === 1 ? '' : 's'} in{' '}
+                      <strong className="font-mono">
+                        {formatSessionTime(sessionElapsedSeconds)}
+                      </strong>
+                      .
+                    </p>
+                  </div>
+                </div>
+
+                {/* Efficiency Score Hero Badge */}
+                <div className="px-5 py-3 rounded-2xl bg-slate-900 text-white border border-sky-400/40 shadow-md flex items-center gap-3 shrink-0 self-start sm:self-center">
+                  <Gauge className="w-7 h-7 text-amber-400 shrink-0" />
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-sky-300 block">
+                      Efficiency Score
+                    </span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-black font-mono text-white">
+                        {efficiencySummary.score}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">/ 100</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4 Efficiency Metric Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
+                    Total Session Time
+                  </span>
+                  <span className="text-xl font-black font-mono text-slate-900 mt-1 block">
+                    {formatSessionTime(sessionElapsedSeconds)}
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-semibold">
+                    Elapsed duration
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-white border border-emerald-200 shadow-2xs">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 block">
+                    Questions Mastered
+                  </span>
+                  <span className="text-xl font-black font-mono text-emerald-700 mt-1 block">
+                    {verifiedCount}/{totalMissedCount}
+                  </span>
+                  <span className="text-[11px] text-emerald-800 font-semibold">
+                    {efficiencySummary.completionPct}% queue cleared
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-white border border-sky-200 shadow-2xs">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#0078D4] block">
+                    Review Pace
+                  </span>
+                  <span className="text-xl font-black font-mono text-[#0078D4] mt-1 block">
+                    {efficiencySummary.avgSecondsPerQuestion}s/Q
+                  </span>
+                  <span className="text-[11px] text-slate-600 font-semibold">
+                    Target: 15–75s/Q
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-white border border-amber-200 shadow-2xs">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 block">
+                    Re-Test Accuracy
+                  </span>
+                  <span className="text-xl font-black font-mono text-amber-700 mt-1 block">
+                    {efficiencySummary.retestAccuracyPct}%
+                  </span>
+                  <span className="text-[11px] text-amber-900 font-semibold">
+                    {retestStats.totalAttempts > 0
+                      ? `${retestStats.totalAttempts - retestStats.wrongAttempts}/${retestStats.totalAttempts} verified`
+                      : 'Direct mastery'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Efficiency Score Formula Breakdown */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-extrabold text-slate-800">
+                    Efficiency Score Breakdown ({efficiencySummary.score} / 100 pts)
+                  </span>
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Mastery (50) + Pace (25) + Verification (25)
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="space-y-1">
+                    <div className="flex justify-between font-bold text-slate-700">
+                      <span>Mistakes Cleared</span>
+                      <span className="font-mono text-emerald-700">
+                        {efficiencySummary.masteryPoints}/50
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full transition-all"
+                        style={{ width: `${(efficiencySummary.masteryPoints / 50) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between font-bold text-slate-700">
+                      <span>Focused Pace</span>
+                      <span className="font-mono text-[#0078D4]">
+                        {efficiencySummary.pacePoints}/25
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                      <div
+                        className="h-full bg-[#0078D4] rounded-full transition-all"
+                        style={{ width: `${(efficiencySummary.pacePoints / 25) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between font-bold text-slate-700">
+                      <span>Re-Test Accuracy</span>
+                      <span className="font-mono text-amber-600">
+                        {efficiencySummary.accuracyPoints}/25
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500 rounded-full transition-all"
+                        style={{ width: `${(efficiencySummary.accuracyPoints / 25) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowCompletionSummary(false)}
+                  className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>
+                    {pendingCount > 0 ? 'Resume Remaining Questions' : 'Inspect Reviewed Cards'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-5 py-2.5 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-black shadow-md inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <span>Return to Study Studio</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ) : totalMissedCount === 0 ? (
             /* Empty state when user has no unresolved missed questions */
             <div className="text-center py-12 px-4 space-y-4 max-w-md mx-auto">
               <div className="w-16 h-16 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-700 flex items-center justify-center mx-auto shadow-sm">
@@ -756,13 +1095,25 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full sm:w-auto px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold transition-colors cursor-pointer shadow-2xs"
-          >
-            Done with Review Session
-          </button>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            {totalMissedCount > 0 && !showCompletionSummary && (
+              <button
+                type="button"
+                onClick={() => setShowCompletionSummary(true)}
+                className="px-4 py-2 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white font-extrabold transition-colors cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+              >
+                <Gauge className="w-4 h-4 text-amber-300" />
+                <span>Complete &amp; View Efficiency Score</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full sm:w-auto px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold transition-colors cursor-pointer shadow-2xs"
+            >
+              Done with Review Session
+            </button>
+          </div>
         </div>
     </ResponsiveModalContainer>
   );
