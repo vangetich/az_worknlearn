@@ -1,4 +1,5 @@
-import { Question } from '../types/quiz';
+import { Question, UserStats } from '../types/quiz';
+import { LEARNING_PATHS } from './curriculum';
 
 export type ServiceCategoryKey =
   | 'Cloud Foundations'
@@ -1702,6 +1703,600 @@ export function doesModuleMatchThemeSearch(
   const tokens = q.split(/\s+/).filter(Boolean);
   return tokens.every((tok) => searchableText.includes(tok));
 }
+
+export { MODULE_PRIMARY_TAG_ORDER, THEME_ID_TO_TAG };
+
+export const THREAD_PATH_NAMES: Record<ThreadTagId, { title: string; tagline: string }> = {
+  Scaling: {
+    title: 'Scaling & Elasticity Path',
+    tagline: 'Master how Vertical Scale-Up and Horizontal Scale-Out/Elasticity evolve from Cloud Concepts into Compute, Networking, Storage, FinOps, and Autoscale.',
+  },
+  Reliability: {
+    title: 'Reliability-First Path',
+    tagline: 'Sequence the blast-radius isolation chain across Availability Zones, Region Pairs, LRS/ZRS/GRS redundancy, SLAs, and Service Health.',
+  },
+  Security: {
+    title: 'Security-First Path',
+    tagline: 'Prioritize Zero Trust, Entra ID AuthN vs. RBAC AuthZ, Azure Policy guardrails, Defense-in-Depth, and control-plane governance.',
+  },
+  Responsibility: {
+    title: 'Shared Responsibility Path',
+    tagline: 'Follow the IaaS, PaaS, and SaaS ownership boundary from foundational cloud models through Compute, Storage, Identity, and Governance.',
+  },
+  FinOps: {
+    title: 'FinOps & Economics Path',
+    tagline: 'Trace CapEx-to-OpEx cost drivers across Serverless consumption, Storage Access Tiers, Reserved Instances, TCO/Pricing Calculators, and Advisor right-sizing.',
+  },
+  'Hybrid/IaC': {
+    title: 'Hybrid & Declarative IaC Path',
+    tagline: 'Connect hybrid/multi-cloud architectures with VPN/ExpressRoute, Azure File Sync, ARM/Bicep idempotent templates, and Azure Arc control.',
+  },
+};
+
+export interface GlobalThreadSummaryItem {
+  tagId: ThreadTagId;
+  theme: AzureThemeThread;
+  label: string;
+  pathTitle: string;
+  primaryFocusModuleIds: number[];
+  secondaryFocusModuleIds: number[];
+  supportingFocusModuleIds: number[];
+  totalConnectedModuleIds: number[];
+  questionCount: number;
+  primaryFrequencyPct: number;
+  curriculumCoveragePct: number;
+}
+
+const ALL_THREAD_TAGS: ThreadTagId[] = [
+  'Scaling',
+  'Reliability',
+  'Security',
+  'Responsibility',
+  'FinOps',
+  'Hybrid/IaC',
+];
+
+export function getGlobalThemeSummaryData(questions: Question[] = []): GlobalThreadSummaryItem[] {
+  const questionCountByTag: Record<ThreadTagId, number> = {
+    Scaling: 0,
+    Reliability: 0,
+    Security: 0,
+    Responsibility: 0,
+    FinOps: 0,
+    'Hybrid/IaC': 0,
+  };
+
+  for (const q of questions) {
+    const tags = getThreadTagsForQuestion(q, 3);
+    const seenForQ = new Set<ThreadTagId>();
+    for (const t of tags) {
+      if (!seenForQ.has(t.id)) {
+        seenForQ.add(t.id);
+        questionCountByTag[t.id] += 1;
+      }
+    }
+  }
+
+  return ALL_THREAD_TAGS.map((tagId) => {
+    const meta = THREAD_TAG_META[tagId];
+    const theme =
+      AZURE_THEME_THREADS.find((t) => t.id === meta.themeId) || AZURE_THEME_THREADS[0];
+
+    const primaryFocusModuleIds: number[] = [];
+    const secondaryFocusModuleIds: number[] = [];
+    const supportingFocusModuleIds: number[] = [];
+    const connectedSet = new Set<number>();
+
+    for (let modId = 1; modId <= 12; modId++) {
+      const order = MODULE_PRIMARY_TAG_ORDER[modId] || [];
+      const rankIdx = order.indexOf(tagId);
+      const hasConnection = theme.moduleConnections.some((c) => c.moduleId === modId);
+
+      if (rankIdx === 0) {
+        primaryFocusModuleIds.push(modId);
+        connectedSet.add(modId);
+      } else if (rankIdx === 1) {
+        secondaryFocusModuleIds.push(modId);
+        connectedSet.add(modId);
+      } else if (rankIdx >= 2 || hasConnection) {
+        supportingFocusModuleIds.push(modId);
+        connectedSet.add(modId);
+      }
+    }
+
+    const totalConnectedModuleIds = Array.from(connectedSet).sort((a, b) => a - b);
+
+    return {
+      tagId,
+      theme,
+      label: meta.label,
+      pathTitle: THREAD_PATH_NAMES[tagId].title,
+      primaryFocusModuleIds,
+      secondaryFocusModuleIds,
+      supportingFocusModuleIds,
+      totalConnectedModuleIds,
+      questionCount: questionCountByTag[tagId],
+      primaryFrequencyPct: Math.round((primaryFocusModuleIds.length / 12) * 100),
+      curriculumCoveragePct: Math.round((totalConnectedModuleIds.length / 12) * 100),
+    };
+  }).sort(
+    (a, b) =>
+      b.primaryFocusModuleIds.length - a.primaryFocusModuleIds.length ||
+      b.totalConnectedModuleIds.length - a.totalConnectedModuleIds.length
+  );
+}
+
+export interface ModuleFocusBreakdown {
+  moduleId: number;
+  primaryTag: ThreadTagId;
+  secondaryTag: ThreadTagId;
+  supportingTag?: ThreadTagId;
+  questionCount: number;
+}
+
+export function getAllModulesThemeBreakdown(questions: Question[] = []): ModuleFocusBreakdown[] {
+  const countsByMod: Record<number, number> = {};
+  for (const q of questions) {
+    countsByMod[q.moduleId] = (countsByMod[q.moduleId] || 0) + 1;
+  }
+
+  const rows: ModuleFocusBreakdown[] = [];
+  for (let modId = 1; modId <= 12; modId++) {
+    const order = MODULE_PRIMARY_TAG_ORDER[modId] || ['Scaling', 'Reliability'];
+    rows.push({
+      moduleId: modId,
+      primaryTag: order[0],
+      secondaryTag: order[1] || order[0],
+      supportingTag: order[2],
+      questionCount: countsByMod[modId] || 0,
+    });
+  }
+  return rows;
+}
+
+export interface ThreadCentricPathStep {
+  stepNumber: number;
+  moduleId: number;
+  pathId: 1 | 2 | 3;
+  moduleTitle: string;
+  focusRank: 1 | 2 | 3 | 4;
+  focusTierLabel: 'Primary Focus' | 'Core Carryover' | 'Supporting Focus';
+  serviceCategory: ServiceCategoryKey | 'Cross-Curriculum';
+  earlierRecallPrompt: string;
+  serviceApplication: string;
+  examTrapGuard: string;
+  azureServices: string[];
+  questionCountForTheme: number;
+}
+
+export interface ThreadCentricLearningPath {
+  tagId: ThreadTagId;
+  theme: AzureThemeThread;
+  pathName: string;
+  pathTagline: string;
+  steps: ThreadCentricPathStep[];
+  excludedModuleIds: number[];
+}
+
+export function buildThreadCentricLearningPath(
+  tagId: ThreadTagId,
+  sequenceMode: 'priority' | 'curriculum',
+  moduleCatalog: Array<{ id: number; pathId: 1 | 2 | 3; title: string; keyTerms: string[] }>,
+  questions: Question[] = [],
+  includeSupporting = true
+): ThreadCentricLearningPath {
+  const meta = THREAD_TAG_META[tagId];
+  const theme =
+    AZURE_THEME_THREADS.find((t) => t.id === meta.themeId) || AZURE_THEME_THREADS[0];
+
+  const questionMatchesByModule: Record<number, number> = {};
+  for (const q of questions) {
+    const qTags = getThreadTagsForQuestion(q, 3);
+    if (qTags.some((t) => t.id === tagId)) {
+      questionMatchesByModule[q.moduleId] = (questionMatchesByModule[q.moduleId] || 0) + 1;
+    }
+  }
+
+  const rawSteps: Array<Omit<ThreadCentricPathStep, 'stepNumber'>> = [];
+  const includedIds = new Set<number>();
+
+  for (const mod of moduleCatalog) {
+    const order = MODULE_PRIMARY_TAG_ORDER[mod.id] || [];
+    const rankIdx = order.indexOf(tagId);
+    const conn = theme.moduleConnections.find((c) => c.moduleId === mod.id);
+
+    if (rankIdx === -1 && !conn) {
+      continue;
+    }
+
+    const focusRank: 1 | 2 | 3 | 4 =
+      rankIdx === 0 ? 1 : rankIdx === 1 ? 2 : rankIdx === 2 ? 3 : 4;
+
+    if (!includeSupporting && focusRank > 2) {
+      continue;
+    }
+
+    includedIds.add(mod.id);
+    const ctx = getThreadContextForModule(theme.id, mod.id);
+
+    const focusTierLabel: ThreadCentricPathStep['focusTierLabel'] =
+      focusRank === 1
+        ? 'Primary Focus'
+        : focusRank === 2
+        ? 'Core Carryover'
+        : 'Supporting Focus';
+
+    rawSteps.push({
+      moduleId: mod.id,
+      pathId: mod.pathId,
+      moduleTitle: mod.title,
+      focusRank,
+      focusTierLabel,
+      serviceCategory: conn?.serviceCategory || 'Cross-Curriculum',
+      earlierRecallPrompt: ctx.earlierConnection,
+      serviceApplication: ctx.explanationSummary,
+      examTrapGuard: ctx.examRule,
+      azureServices: conn?.azureServices || mod.keyTerms.slice(0, 4),
+      questionCountForTheme: questionMatchesByModule[mod.id] || 0,
+    });
+  }
+
+  rawSteps.sort((a, b) => {
+    if (sequenceMode === 'curriculum') {
+      return a.moduleId - b.moduleId;
+    }
+    return a.focusRank - b.focusRank || a.moduleId - b.moduleId;
+  });
+
+  const steps: ThreadCentricPathStep[] = rawSteps.map((step, idx) => ({
+    ...step,
+    stepNumber: idx + 1,
+  }));
+
+  const excludedModuleIds = moduleCatalog
+    .map((m) => m.id)
+    .filter((id) => !includedIds.has(id));
+
+  return {
+    tagId,
+    theme,
+    pathName: THREAD_PATH_NAMES[tagId].title,
+    pathTagline: THREAD_PATH_NAMES[tagId].tagline,
+    steps,
+    excludedModuleIds,
+  };
+}
+
+export interface ThreadMasteryBadgeConfig {
+  badgeId: string;
+  tagId: ThreadTagId;
+  themeId: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  tier: 'silver' | 'gold' | 'diamond';
+  iconName: string;
+  accentColor: string;
+  proverbQuote: string;
+}
+
+export const THREAD_MASTERY_BADGES: ThreadMasteryBadgeConfig[] = [
+  {
+    badgeId: 'theme-scaling-specialist',
+    tagId: 'Scaling',
+    themeId: 'scaling-elasticity',
+    title: 'Scaling Specialist',
+    subtitle: 'Vertical, Horizontal & Elasticity Thread',
+    description:
+      'Reached 80%+ mastery across all modules connected to Vertical vs. Horizontal Scaling & Elasticity.',
+    tier: 'gold',
+    iconName: 'TrendingUp',
+    accentColor: '#0078D4',
+    proverbQuote:
+      '“Smooth seas do not make skillful sailors—elastic architectures bend with every wave.”',
+  },
+  {
+    badgeId: 'theme-resiliency-guardian',
+    tagId: 'Reliability',
+    themeId: 'blast-radius-resiliency',
+    title: 'Resiliency Guardian',
+    subtitle: 'Blast-Radius Isolation Thread',
+    description:
+      'Reached 80%+ mastery across all modules covering HA, Availability Zones, Region Pairs, and LRS/ZRS/GRS.',
+    tier: 'diamond',
+    iconName: 'ShieldCheck',
+    accentColor: '#059669',
+    proverbQuote:
+      '“One pillar does not hold the whole roof; build across zones to outlast the storm.”',
+  },
+  {
+    badgeId: 'theme-zero-trust-sentinel',
+    tagId: 'Security',
+    themeId: 'control-vs-data-plane',
+    title: 'Zero Trust Sentinel',
+    subtitle: 'Control Plane & Governance Thread',
+    description:
+      'Reached 80%+ mastery across all modules governing Entra ID, RBAC, Azure Policy, Locks, and Defense-in-Depth.',
+    tier: 'diamond',
+    iconName: 'Lock',
+    accentColor: '#7C3AED',
+    proverbQuote:
+      '“Trust is built through verification at every gate of the homestead.”',
+  },
+  {
+    badgeId: 'theme-ownership-master',
+    tagId: 'Responsibility',
+    themeId: 'shared-responsibility',
+    title: 'Cloud Ownership Master',
+    subtitle: 'Shared Responsibility Boundary Thread',
+    description:
+      'Reached 80%+ mastery across all modules tracing IaaS, PaaS, SaaS boundaries and data/identity custody.',
+    tier: 'gold',
+    iconName: 'Layers',
+    accentColor: '#D97706',
+    proverbQuote:
+      '“Knowing where your stewardship ends and your partner’s begins keeps the harvest safe.”',
+  },
+  {
+    badgeId: 'theme-finops-economist',
+    tagId: 'FinOps',
+    themeId: 'lifecycle-cost-economics',
+    title: 'FinOps Economist',
+    subtitle: 'Lifecycle & Consumption Economics Thread',
+    description:
+      'Reached 80%+ mastery across all modules covering CapEx vs. OpEx, Storage Access Tiers, Calculators, and Cost Management.',
+    tier: 'silver',
+    iconName: 'Target',
+    accentColor: '#C2410C',
+    proverbQuote:
+      '“Wise stewardship measures both what is spent today and what grows tomorrow.”',
+  },
+  {
+    badgeId: 'theme-hybrid-architect',
+    tagId: 'Hybrid/IaC',
+    themeId: 'hybrid-declarative-control',
+    title: 'Hybrid Control Architect',
+    subtitle: 'Hybrid Arc & Declarative IaC Thread',
+    description:
+      'Reached 80%+ mastery across all modules uniting Hybrid/Multi-Cloud, VPN/ExpressRoute, ARM/Bicep, and Azure Arc.',
+    tier: 'gold',
+    iconName: 'Compass',
+    accentColor: '#0284C7',
+    proverbQuote:
+      '“A single steady compass guides caravans across both mountain and valley.”',
+  },
+];
+
+export function getRelatedModuleIdsForThread(tagId: ThreadTagId): number[] {
+  const meta = THREAD_TAG_META[tagId];
+  const theme = AZURE_THEME_THREADS.find((t) => t.id === meta.themeId);
+  const set = new Set<number>();
+
+  if (theme) {
+    theme.moduleConnections.forEach((c) => set.add(c.moduleId));
+  }
+  Object.entries(MODULE_PRIMARY_TAG_ORDER).forEach(([modIdStr, tags]) => {
+    if (tags.includes(tagId)) {
+      set.add(Number(modIdStr));
+    }
+  });
+
+  return Array.from(set).sort((a, b) => a - b);
+}
+
+export type ThreadModuleInsightStatus =
+  | 'mastered'
+  | 'developing'
+  | 'bottleneck'
+  | 'unattempted';
+
+export interface ThreadModulePerformance {
+  moduleId: number;
+  pathId: 1 | 2 | 3;
+  moduleTitle: string;
+  serviceCategory: string;
+  roleInThread: 'Origin Anchor' | 'Core Carryover' | 'Exam Payoff' | 'Thread Focus';
+  correct: number;
+  total: number;
+  accuracyPct: number | null;
+  isAt80Threshold: boolean;
+  gapTo80Pct: number;
+  unresolvedMistakesCount: number;
+  dominantTrapType: string | null;
+  status: ThreadModuleInsightStatus;
+  earlierRecallPrompt: string;
+  examTrapGuard: string;
+  questionCountInThread: number;
+}
+
+export interface ThreadInsightReport {
+  tagId: ThreadTagId;
+  theme: AzureThemeThread;
+  badge: ThreadMasteryBadgeConfig;
+  badgeUnlocked: boolean;
+  badgeProgressPct: number;
+  modulesAt80Count: number;
+  attemptedModulesCount: number;
+  totalModulesCount: number;
+  totalAttempts: number;
+  totalCorrect: number;
+  aggregatedAccuracyPct: number | null;
+  unresolvedMistakesCount: number;
+  modules: ThreadModulePerformance[];
+  bottleneckModules: ThreadModulePerformance[];
+  activeWeakModules: ThreadModulePerformance[];
+  primaryBottleneck: ThreadModulePerformance | null;
+  bottleneckSeverity: 'clear' | 'pending' | 'warning' | 'critical';
+  bottleneckHeadline: string;
+  bottleneckNarrative: string;
+}
+
+export function evaluateInterconnectingThreadInsights(
+  stats: UserStats,
+  questions: Question[] = []
+): ThreadInsightReport[] {
+  const flatModules = LEARNING_PATHS.flatMap((p) =>
+    p.modules.map((m) => ({ ...m, pathId: p.id as 1 | 2 | 3 }))
+  );
+  const moduleById = new Map(flatModules.map((m) => [m.id, m]));
+
+  const reviewedIds = new Set<string>(stats.reviewedMistakeIds || []);
+  const unresolvedByModule: Record<number, { count: number; trapCounts: Record<string, number> }> = {};
+
+  (stats.mistakesHistory || []).forEach((m) => {
+    if (reviewedIds.has(m.questionId)) return;
+    if (!unresolvedByModule[m.moduleId]) {
+      unresolvedByModule[m.moduleId] = { count: 0, trapCounts: {} };
+    }
+    unresolvedByModule[m.moduleId].count += 1;
+    if (m.trapType) {
+      unresolvedByModule[m.moduleId].trapCounts[m.trapType] =
+        (unresolvedByModule[m.moduleId].trapCounts[m.trapType] || 0) + 1;
+    }
+  });
+
+  // Pre-compute question counts matching each (tagId, moduleId)
+  const qCountsByTagAndModule: Record<string, number> = {};
+  for (const q of questions) {
+    const qTags = getThreadTagsForQuestion(q, 3);
+    for (const t of qTags) {
+      const key = `${t.id}:${q.moduleId}`;
+      qCountsByTagAndModule[key] = (qCountsByTagAndModule[key] || 0) + 1;
+    }
+  }
+
+  return THREAD_MASTERY_BADGES.map((badge) => {
+    const tagId = badge.tagId;
+    const theme =
+      AZURE_THEME_THREADS.find((t) => t.id === badge.themeId) || AZURE_THEME_THREADS[0];
+    const relatedModuleIds = getRelatedModuleIdsForThread(tagId);
+
+    const modules: ThreadModulePerformance[] = relatedModuleIds.map((modId) => {
+      const modInfo = moduleById.get(modId);
+      const mastery = stats.moduleMastery?.[modId] || { correct: 0, total: 0 };
+      const accuracyPct =
+        mastery.total > 0 ? Math.round((mastery.correct / mastery.total) * 100) : null;
+      const isAt80Threshold = accuracyPct !== null && accuracyPct >= 80;
+      const gapTo80Pct = accuracyPct === null ? 80 : Math.max(0, 80 - accuracyPct);
+
+      const status: ThreadModuleInsightStatus =
+        accuracyPct === null
+          ? 'unattempted'
+          : accuracyPct >= 80
+          ? 'mastered'
+          : accuracyPct >= 60
+          ? 'developing'
+          : 'bottleneck';
+
+      const ctx = getThreadContextForModule(theme.id, modId);
+      const unresolvedInfo = unresolvedByModule[modId];
+      let dominantTrapType: string | null = null;
+      if (unresolvedInfo) {
+        const sortedTraps = Object.entries(unresolvedInfo.trapCounts).sort(
+          (a, b) => b[1] - a[1]
+        );
+        if (sortedTraps.length > 0) dominantTrapType = sortedTraps[0][0];
+      }
+
+      return {
+        moduleId: modId,
+        pathId: modInfo?.pathId || (modId <= 3 ? 1 : modId <= 7 ? 2 : 3),
+        moduleTitle: modInfo?.title || ctx.moduleLink?.moduleTitle || `Module ${modId}`,
+        serviceCategory: ctx.moduleLink?.serviceCategory || 'Cross-Curriculum',
+        roleInThread: ctx.moduleLink?.roleInThread || 'Thread Focus',
+        correct: mastery.correct,
+        total: mastery.total,
+        accuracyPct,
+        isAt80Threshold,
+        gapTo80Pct,
+        unresolvedMistakesCount: unresolvedInfo?.count || 0,
+        dominantTrapType,
+        status,
+        earlierRecallPrompt: ctx.earlierConnection,
+        examTrapGuard: ctx.examRule,
+        questionCountInThread: qCountsByTagAndModule[`${tagId}:${modId}`] || 0,
+      };
+    });
+
+    const totalAttempts = modules.reduce((acc, m) => acc + m.total, 0);
+    const totalCorrect = modules.reduce((acc, m) => acc + m.correct, 0);
+    const aggregatedAccuracyPct =
+      totalAttempts > 0 ? Math.round((totalCorrect / totalAttempts) * 100) : null;
+    const attemptedModulesCount = modules.filter((m) => m.total > 0).length;
+    const modulesAt80Count = modules.filter((m) => m.isAt80Threshold).length;
+    const totalModulesCount = modules.length;
+    const unresolvedMistakesCount = modules.reduce(
+      (acc, m) => acc + m.unresolvedMistakesCount,
+      0
+    );
+
+    const badgeUnlocked =
+      totalModulesCount > 0 && modulesAt80Count === totalModulesCount;
+    const badgeProgressPct = Math.round(
+      (modulesAt80Count / Math.max(1, totalModulesCount)) * 100
+    );
+
+    const activeWeakModules = modules
+      .filter((m) => m.accuracyPct !== null && m.accuracyPct < 80)
+      .sort(
+        (a, b) =>
+          (a.accuracyPct ?? 100) - (b.accuracyPct ?? 100) ||
+          b.unresolvedMistakesCount - a.unresolvedMistakesCount ||
+          a.moduleId - b.moduleId
+      );
+
+    const unattemptedModules = modules.filter((m) => m.accuracyPct === null);
+    const bottleneckModules = [...activeWeakModules, ...unattemptedModules];
+    const primaryBottleneck = bottleneckModules[0] || null;
+
+    let bottleneckSeverity: ThreadInsightReport['bottleneckSeverity'] = 'clear';
+    let bottleneckHeadline = `${badge.title} unlocked — all ${totalModulesCount} thread modules at 80%+ mastery`;
+    let bottleneckNarrative = `Every module connected to ${theme.shortTitle} meets or exceeds the 80% exam mastery benchmark.`;
+
+    if (!badgeUnlocked && primaryBottleneck) {
+      if (activeWeakModules.length > 0) {
+        const lowest = activeWeakModules[0];
+        const acc = lowest.accuracyPct ?? 0;
+        bottleneckSeverity = acc < 60 ? 'critical' : 'warning';
+        bottleneckHeadline = `Bottleneck in M${lowest.moduleId}: ${lowest.moduleTitle} (${acc}% accuracy)`;
+        bottleneckNarrative =
+          `Module ${lowest.moduleId} (${lowest.serviceCategory}) is holding ${theme.shortTitle} back by ${lowest.gapTo80Pct} pts toward the 80% threshold` +
+          (lowest.dominantTrapType
+            ? `, driven mainly by "${lowest.dominantTrapType}".`
+            : `. ${lowest.examTrapGuard}`);
+      } else {
+        bottleneckSeverity = 'pending';
+        bottleneckHeadline = `${unattemptedModules.length} thread module${
+          unattemptedModules.length === 1 ? '' : 's'
+        } awaiting practice (Next: M${primaryBottleneck.moduleId})`;
+        bottleneckNarrative = `Practiced modules in ${theme.shortTitle} are already at 80%+. Attempt Module ${primaryBottleneck.moduleId} (${primaryBottleneck.moduleTitle}) at 80%+ to advance toward ${badge.title}.`;
+      }
+    }
+
+    return {
+      tagId,
+      theme,
+      badge,
+      badgeUnlocked,
+      badgeProgressPct,
+      modulesAt80Count,
+      attemptedModulesCount,
+      totalModulesCount,
+      totalAttempts,
+      totalCorrect,
+      aggregatedAccuracyPct,
+      unresolvedMistakesCount,
+      modules,
+      bottleneckModules,
+      activeWeakModules,
+      primaryBottleneck,
+      bottleneckSeverity,
+      bottleneckHeadline,
+      bottleneckNarrative,
+    };
+  });
+}
+
 
 
 

@@ -23,6 +23,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { UserStats } from '../types/quiz';
+import { THREAD_MASTERY_BADGES, getRelatedModuleIdsForThread } from '../data/azureThemesData';
 import { MaasaiMedallion, KitengeRibbon } from './MotifDecorations';
 
 export type BadgeTier = 'bronze' | 'silver' | 'gold' | 'diamond';
@@ -379,6 +380,38 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     },
     tipToUnlock: 'Complete a 5-question Daily Harambee Challenge drill with at least 4/5 (80%+) accuracy.',
   },
+  ...THREAD_MASTERY_BADGES.map((cfg): BadgeDefinition => {
+    const relatedIds = getRelatedModuleIdsForThread(cfg.tagId);
+    const badgeIconMap: Record<string, string> = {
+      Scaling: 'Zap',
+      Reliability: 'ShieldCheck',
+      Security: 'ShieldAlert',
+      Responsibility: 'Layers',
+      FinOps: 'Target',
+      'Hybrid/IaC': 'Compass',
+    };
+    const countModulesAt80 = (stats: UserStats) =>
+      relatedIds.filter((modId) => {
+        const m = stats.moduleMastery?.[modId];
+        return m && m.total > 0 && Math.round((m.correct / m.total) * 100) >= 80;
+      }).length;
+
+    return {
+      id: cfg.badgeId,
+      title: cfg.title,
+      subtitle: cfg.subtitle,
+      description: cfg.description,
+      category: 'mastery',
+      tier: cfg.tier,
+      iconName: badgeIconMap[cfg.tagId] || 'Award',
+      proverbQuote: cfg.proverbQuote,
+      targetValue: relatedIds.length,
+      unit: 'modules at 80%+',
+      isUnlocked: (stats) => relatedIds.length > 0 && countModulesAt80(stats) === relatedIds.length,
+      getCurrentValue: (stats) => countModulesAt80(stats),
+      tipToUnlock: `Reach 80%+ accuracy in all ${relatedIds.length} modules linked to ${cfg.tagId} (M${relatedIds.join(', M')}).`,
+    };
+  }),
 ];
 
 export interface EvaluatedBadge extends BadgeDefinition {

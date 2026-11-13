@@ -65,21 +65,35 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [showRadarModal, setShowRadarModal] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const portalMenuRef = useRef<HTMLDivElement>(null);
+  const radarModalRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
+  // Close on outside click (check both trigger container and portaled menu/modal) or Escape
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const inTrigger = dropdownRef.current?.contains(target);
+      const inPortalMenu = portalMenuRef.current?.contains(target);
+      const inRadarModal = radarModalRef.current?.contains(target);
+      if (!inTrigger && !inPortalMenu && !inRadarModal) {
         setIsOpen(false);
       }
     };
-    if (isOpen) {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        setShowRadarModal(false);
+      }
+    };
+    if (isOpen || showRadarModal) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, showRadarModal]);
 
   const overallAccuracy =
     stats.totalAnswered > 0
@@ -131,11 +145,12 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
     setActiveTab('analytics');
     setIsOpen(false);
     setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('az900_open_analytics_radar'));
       const el = document.getElementById('domain-confidence-radar-section');
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-    }, 150);
+    }, 120);
   };
 
   return (
@@ -189,6 +204,7 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
               onClick={() => setIsOpen(false)}
             >
               <div
+                ref={portalMenuRef}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-[min(28rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl bg-white/98 backdrop-blur-xl border border-sky-200/80 shadow-2xl shadow-blue-500/15 p-3.5 sm:p-4 space-y-2.5 animate-in zoom-in-95 duration-150 overflow-y-auto overscroll-contain scrollbar-thin text-left"
               >
@@ -627,6 +643,7 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
             onClick={() => setShowRadarModal(false)}
           >
             <div
+              ref={radarModalRef}
               onClick={(e) => e.stopPropagation()}
               className="bg-white w-full max-w-[min(56rem,calc(100vw-1.25rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] my-auto rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
             >

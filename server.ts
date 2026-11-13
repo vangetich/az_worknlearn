@@ -2218,6 +2218,138 @@ Include:
   }
 });
 
+// API: AI-driven study hours remaining projection based on past session pace & per-module progress
+app.post('/api/ai/study-pace-projection', async (req, res) => {
+  try {
+    const { paceSummary, modulesTelemetry } = req.body || {};
+    if (!Array.isArray(modulesTelemetry) || modulesTelemetry.length === 0) {
+      return res.status(400).json({ error: 'modulesTelemetry array is required.' });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.json({
+        aiPowered: false,
+        paceProfileLabel: paceSummary?.defaultProfileLabel || 'Telemetry Pace Model',
+        overallCoachingNote:
+          'Calculated from your past session timing, question accuracy, and unresolved module gaps.',
+        recommendedDailyMinutes: Math.max(
+          15,
+          Math.min(90, Math.round(((paceSummary?.dailyGoal || 10) * (paceSummary?.avgSecondsPerQuestion || 45)) / 60))
+        ),
+        moduleProjections: modulesTelemetry.map((m: any) => ({
+          moduleId: Number(m.moduleId),
+          estimatedHoursRemaining: Number(m.baselineHoursRemaining || 0),
+          rationale: m.defaultRationale || 'Projected from your historical session pace and module accuracy.',
+        })),
+      });
+    }
+
+    const promptText = `Analyze this AZ-900 student's historical study session pace and current 12-module progress, then output calibrated study-hours-remaining projections for each module.
+
+Student Session Pace Telemetry:
+- Observed average speed: ${paceSummary?.avgSecondsPerQuestion ?? 45} seconds/question (${paceSummary?.questionsPerHour ?? 80} questions/hr)
+- Past timed sessions analyzed: ${paceSummary?.sessionsAnalyzed ?? 0}
+- Overall cumulative questions answered: ${paceSummary?.totalAnswered ?? 0}
+- Overall accuracy: ${paceSummary?.overallAccuracyPct ?? 0}%
+- Study streak days: ${paceSummary?.streakDays ?? 1}
+- Daily question goal: ${paceSummary?.dailyGoal ?? 10} questions/day
+
+Module Telemetry (Modules 1 to 12):
+${modulesTelemetry
+  .map(
+    (m: any) =>
+      `- M${m.moduleId} (${m.title}, Path ${m.pathId}, Weight: ${m.examWeight}): accuracy=${
+        m.accuracyPct === null ? 'unattempted' : `${m.accuracyPct}%`
+      }, attempts=${m.attemptedCount}/${m.totalQuestionsInBank}, completed=${
+        m.isCompleted ? 'yes' : 'no'
+      }, unresolvedMistakes=${m.unresolvedMistakes}, baselineEstimate=${m.baselineHoursRemaining}h`
+  )
+  .join('\n')}
+
+Rules:
+- Respect completed status: if completed=yes and accuracy >= 80 and unresolvedMistakes=0, set estimatedHoursRemaining between 0 and 0.1.
+- Modules with lower accuracy (<75%) or unresolved mistakes require extra targeted review + remediation hours.
+- Weight estimates realistically for AZ-900 exam prep (typically 0.0 to 3.5 hours per module depending on remaining gaps and user speed).
+- Provide a short, specific, encouraging 1-sentence rationale per module referencing real numbers.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-4-hydrogen',
+      contents: promptText,
+      config: {
+        systemInstruction:
+          'You are an adaptive Microsoft Azure AZ-900 study pacing strategist. Produce realistic, encouraging, data-grounded study-hour projections in strict JSON matching the schema.',
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            paceProfileLabel: {
+              type: Type.STRING,
+              description: 'Concise 2-4 word learner pace archetype, e.g. Steady Exam Sprinter',
+            },
+            overallCoachingNote: {
+              type: Type.STRING,
+              description: '1-2 sentence personalized coaching summary grounded in session pace and bottleneck modules.',
+            },
+            recommendedDailyMinutes: {
+              type: Type.INTEGER,
+              description: 'Recommended daily focused study duration in minutes (15-120).',
+            },
+            moduleProjections: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  moduleId: { type: Type.INTEGER },
+                  estimatedHoursRemaining: { type: Type.NUMBER },
+                  rationale: { type: Type.STRING },
+                },
+                required: ['moduleId', 'estimatedHoursRemaining', 'rationale'],
+              },
+            },
+          },
+          required: [
+            'paceProfileLabel',
+            'overallCoachingNote',
+            'recommendedDailyMinutes',
+            'moduleProjections',
+          ],
+        },
+      },
+    });
+
+    const parsed = JSON.parse((response.text ?? '{}').trim());
+    const normalizedModules = Array.isArray(parsed.moduleProjections)
+      ? parsed.moduleProjections.map((item: any) => ({
+          moduleId: Number(item.moduleId),
+          estimatedHoursRemaining: Math.max(
+            0,
+            Math.min(6, Math.round(Number(item.estimatedHoursRemaining || 0) * 10) / 10)
+          ),
+          rationale: String(item.rationale || ''),
+        }))
+      : [];
+
+    res.json({
+      aiPowered: true,
+      paceProfileLabel: String(parsed.paceProfileLabel || 'AI-Calibrated Study Pace'),
+      overallCoachingNote: String(
+        parsed.overallCoachingNote ||
+          'Projections calibrated from your session velocity and per-module accuracy.'
+      ),
+      recommendedDailyMinutes: Math.max(
+        15,
+        Math.min(120, Number(parsed.recommendedDailyMinutes || 30))
+      ),
+      moduleProjections: normalizedModules,
+    });
+  } catch (error: any) {
+    console.error('Error generating AI study pace projection:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to compute AI study pace projection.',
+    });
+  }
+});
+
 // Mount Vite or static server
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';

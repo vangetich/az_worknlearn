@@ -55,6 +55,7 @@ import { getUserMfaSettings, UserMfaSettings } from '../utils/totpSecurity';
 import { authService } from '../services/authService';
 import { getUnresolvedMistakesMap } from '../utils/storage';
 import { BUILTIN_QUESTIONS } from '../data/questionBank';
+import { ThreadMasteryBadgesPanel } from './ThreadMasteryBadgesPanel';
 
 export interface CandidateAvatarPreset {
   id: string;
@@ -2697,6 +2698,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
       {/* 30-Day Daily Accuracy Percentage Line Chart (Recharts) */}
       <DailyAccuracyTrajectoryChart stats={stats} />
+
+      {/* =====================================================================
+          INTERCONNECTING THREAD MASTERY BADGES (80%+ ACROSS ALL THREAD MODULES)
+         ===================================================================== */}
+      <ThreadMasteryBadgesPanel
+        stats={stats}
+        onPracticeModule={(modId, pathId) => {
+          if (onSelectModule) {
+            onSelectModule(modId, pathId ?? 'all');
+          }
+          onNavigateToPractice();
+        }}
+        onInspectThread={() => {
+          setActiveTab?.('azure-themes');
+        }}
+        onOpenAzureThemes={
+          setActiveTab ? () => setActiveTab('azure-themes') : undefined
+        }
+      />
 
       {/* =====================================================================
           COMPACT & RESPONSIVE BADGES & MILESTONE ACHIEVEMENTS SECTION

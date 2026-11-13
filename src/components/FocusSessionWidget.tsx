@@ -56,12 +56,18 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
   const [showSettingsPopover, setShowSettingsPopover] = useState<boolean>(false);
   const [showBreakAlert, setShowBreakAlert] = useState<boolean>(false);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const triggerButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Close popover on click outside
+  // Close popover on click outside (excluding trigger button so toggle click works cleanly)
   useEffect(() => {
     if (!showSettingsPopover) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(target) &&
+        (!triggerButtonRef.current || !triggerButtonRef.current.contains(target))
+      ) {
         setShowSettingsPopover(false);
       }
     };
@@ -174,6 +180,7 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
     <div className={`relative ${className}`}>
       {/* Header Pill Button */}
       <button
+        ref={triggerButtonRef}
         type="button"
         onClick={() => setShowSettingsPopover((prev) => !prev)}
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-50 to-blue-50/80 hover:from-sky-100 hover:to-blue-100 text-slate-800 border border-sky-200/90 text-xs font-bold transition-all shadow-2xs cursor-pointer group shrink-0"

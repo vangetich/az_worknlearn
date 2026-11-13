@@ -69,6 +69,23 @@ export const DomainConfidenceTracker: React.FC<DomainConfidenceProps> = ({
   const [selectedPathFilter, setSelectedPathFilter] = useState<1 | 2 | 3 | 'all'>('all');
   const [sectionFilter, setSectionFilter] = useState<AnalyticsSectionFilter>('all');
 
+  React.useEffect(() => {
+    const handleOpenRadar = () => {
+      setActiveWindowTab('radar');
+      setIsWindowExpanded(true);
+      setTimeout(() => {
+        const el = document.getElementById('domain-confidence-radar-section');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 80);
+    };
+    window.addEventListener('az900_open_analytics_radar', handleOpenRadar);
+    return () => {
+      window.removeEventListener('az900_open_analytics_radar', handleOpenRadar);
+    };
+  }, []);
+
   // Compute confidence metrics filtered by the selected time range
   const filteredMetrics = useMemo(() => {
     const days = timeRange === '7d' ? 7 : 30;

@@ -14,23 +14,37 @@ import {
   SlidersHorizontal,
   Search,
   X,
+  BarChart3,
+  Route,
+  Activity,
+  Network,
 } from 'lucide-react';
-import { UserStats } from '../types/quiz';
+import { Question, UserStats } from '../types/quiz';
 import { LEARNING_PATHS } from '../data/curriculum';
+import { BUILTIN_QUESTIONS } from '../data/questionBank';
 import {
   AZURE_THEME_THREADS,
   AzureThemeThread,
   ServiceCategoryKey,
   ThemeModuleLink,
+  ThreadTagId,
+  THEME_ID_TO_TAG,
   doesModuleMatchThemeSearch,
+  evaluateInterconnectingThreadInsights,
 } from '../data/azureThemesData';
 import { ScalingArchitectureDiagram } from './ScalingArchitectureDiagram';
 import { AzureThemesDeepDive } from './AzureThemesDeepDive';
 import { ThemeMasteryTimeline } from './ThemeMasteryTimeline';
+import { GlobalThemeSummaryView } from './GlobalThemeSummaryView';
+import { ThreadCentricLearningPathsView } from './ThreadCentricLearningPathsView';
+import { ThreadInsightsView } from './ThreadInsightsView';
+import { AzureConceptMapView } from './AzureConceptMapView';
 
 interface AzureThemesViewProps {
   stats: UserStats;
+  questions?: Question[];
   onPracticeModule: (moduleId: number) => void;
+  onPracticeQuestion?: (questionId: string, moduleId: number) => void;
   onOpenImageTutor?: () => void;
   onOpenStudyDecksModule?: (moduleId: number, pathId: 1 | 2 | 3) => void;
   initialThemeId?: string | null;
@@ -39,13 +53,27 @@ interface AzureThemesViewProps {
 
 export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
   stats,
+  questions = BUILTIN_QUESTIONS,
   onPracticeModule,
+  onPracticeQuestion,
   onOpenImageTutor,
   onOpenStudyDecksModule,
   initialThemeId,
   initialModuleId,
 }) => {
-  const [viewMode, setViewMode] = useState<'overview' | 'deep-dive'>('overview');
+  const [viewMode, setViewMode] = useState<
+    'overview' | 'concept-map' | 'insights' | 'global-summary' | 'learning-paths' | 'deep-dive'
+  >('overview');
+  const unlockedThreadBadgesCount = useMemo(
+    () =>
+      evaluateInterconnectingThreadInsights(stats, questions).filter(
+        (r) => r.badgeUnlocked
+      ).length,
+    [stats, questions]
+  );
+  const [selectedPathTagId, setSelectedPathTagId] = useState<ThreadTagId>(
+    (initialThemeId && THEME_ID_TO_TAG[initialThemeId]) || 'Security'
+  );
   const [themeSearchQuery, setThemeSearchQuery] = useState<string>('');
   const [selectedThemeId, setSelectedThemeId] = useState<string>(
     initialThemeId || AZURE_THEME_THREADS[0].id
@@ -182,16 +210,16 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end gap-3 shrink-0">
-            {/* Mode Switcher: Thread Overview vs Deep-Dive Scaling Mapper */}
+            {/* Mode Switcher: Thread Overview, Global Summary, Thread Paths & Deep-Dive Mode */}
             <div
-              className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+              className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
               role="group"
               aria-label="Azure Themes View Mode"
             >
               <button
                 type="button"
                 onClick={() => setViewMode('overview')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
                   viewMode === 'overview'
                     ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs border border-slate-200 dark:border-slate-600'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
@@ -202,8 +230,65 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
               </button>
               <button
                 type="button"
+                onClick={() => setViewMode('concept-map')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
+                  viewMode === 'concept-map'
+                    ? 'bg-[#0078D4] text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Network className="w-3.5 h-3.5" />
+                <span>Concept Map</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('insights')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
+                  viewMode === 'insights'
+                    ? 'bg-[#0078D4] text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>Thread Insights</span>
+                <span
+                  className={`text-[10px] font-bold tabular-nums ${
+                    viewMode === 'insights'
+                      ? 'text-sky-100'
+                      : 'text-slate-400 dark:text-slate-500'
+                  }`}
+                >
+                  · {unlockedThreadBadgesCount}/6
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('global-summary')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
+                  viewMode === 'global-summary'
+                    ? 'bg-[#0078D4] text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Global Summary</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('learning-paths')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
+                  viewMode === 'learning-paths'
+                    ? 'bg-[#0078D4] text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Route className="w-3.5 h-3.5" />
+                <span>Thread Paths</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setViewMode('deep-dive')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
                   viewMode === 'deep-dive'
                     ? 'bg-[#0078D4] text-white shadow-2xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
@@ -353,7 +438,98 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
         )}
       </section>
 
-      {viewMode === 'deep-dive' ? (
+      {viewMode === 'concept-map' ? (
+        <AzureConceptMapView
+          stats={stats}
+          questions={questions}
+          searchQuery={themeSearchQuery}
+          onClearSearch={() => setThemeSearchQuery('')}
+          onPracticeModule={onPracticeModule}
+          onPracticeQuestion={onPracticeQuestion}
+          onOpenStudyDecksModule={onOpenStudyDecksModule}
+          onInspectTheme={(themeId, modId) => {
+            const matched = AZURE_THEME_THREADS.find((t) => t.id === themeId);
+            if (matched) {
+              setSelectedThemeId(matched.id);
+              setSelectedCategoryFilter('All');
+              setSelectedModuleId(
+                modId && matched.moduleConnections.some((c) => c.moduleId === modId)
+                  ? modId
+                  : matched.moduleConnections[0].moduleId
+              );
+            }
+            setViewMode('overview');
+          }}
+        />
+      ) : viewMode === 'insights' ? (
+        <ThreadInsightsView
+          stats={stats}
+          questions={questions}
+          searchQuery={themeSearchQuery}
+          onClearSearch={() => setThemeSearchQuery('')}
+          onPracticeModule={onPracticeModule}
+          onInspectTheme={(themeId, modId) => {
+            const matched = AZURE_THEME_THREADS.find((t) => t.id === themeId);
+            if (matched) {
+              setSelectedThemeId(matched.id);
+              setSelectedCategoryFilter('All');
+              setSelectedModuleId(
+                modId && matched.moduleConnections.some((c) => c.moduleId === modId)
+                  ? modId
+                  : matched.moduleConnections[0].moduleId
+              );
+            }
+            setViewMode('overview');
+          }}
+        />
+      ) : viewMode === 'global-summary' ? (
+        <GlobalThemeSummaryView
+          stats={stats}
+          questions={questions}
+          searchQuery={themeSearchQuery}
+          onClearSearch={() => setThemeSearchQuery('')}
+          onOpenThreadPath={(tagId) => {
+            setSelectedPathTagId(tagId);
+            setViewMode('learning-paths');
+          }}
+          onInspectTheme={(themeId, modId) => {
+            const matched = AZURE_THEME_THREADS.find((t) => t.id === themeId);
+            if (matched) {
+              setSelectedThemeId(matched.id);
+              setSelectedCategoryFilter('All');
+              setSelectedModuleId(
+                modId && matched.moduleConnections.some((c) => c.moduleId === modId)
+                  ? modId
+                  : matched.moduleConnections[0].moduleId
+              );
+            }
+            setViewMode('overview');
+          }}
+          onPracticeModule={onPracticeModule}
+        />
+      ) : viewMode === 'learning-paths' ? (
+        <ThreadCentricLearningPathsView
+          selectedTagId={selectedPathTagId}
+          onSelectTagId={setSelectedPathTagId}
+          stats={stats}
+          questions={questions}
+          searchQuery={themeSearchQuery}
+          onClearSearch={() => setThemeSearchQuery('')}
+          onPracticeModule={onPracticeModule}
+          onOpenStudyDecksModule={onOpenStudyDecksModule}
+          onInspectInOverview={(themeId, modId) => {
+            const matched = AZURE_THEME_THREADS.find((t) => t.id === themeId);
+            if (matched) {
+              setSelectedThemeId(matched.id);
+              setSelectedCategoryFilter('All');
+              if (matched.moduleConnections.some((c) => c.moduleId === modId)) {
+                setSelectedModuleId(modId);
+              }
+            }
+            setViewMode('overview');
+          }}
+        />
+      ) : viewMode === 'deep-dive' ? (
         <AzureThemesDeepDive
           stats={stats}
           initialModuleId={initialModuleId ?? selectedModuleId}
@@ -392,17 +568,32 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
             <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
               {activeTheme.examPayoffSummary}
             </p>
-            {activeTheme.id === 'scaling-elasticity' && (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => setViewMode('deep-dive')}
-                className="w-full sm:w-auto px-3 py-1.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                onClick={() => {
+                  const tag = THEME_ID_TO_TAG[activeTheme.id];
+                  if (tag) setSelectedPathTagId(tag);
+                  setViewMode('learning-paths');
+                }}
+                className="px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 dark:hover:bg-slate-600 text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                <span>Open Compute · Network · Storage Deep-Dive Mode</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <Route className="w-3.5 h-3.5" />
+                <span>Open Thread Path</span>
               </button>
-            )}
+
+              {activeTheme.id === 'scaling-elasticity' && (
+                <button
+                  type="button"
+                  onClick={() => setViewMode('deep-dive')}
+                  className="px-3 py-1.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>Compute · Network · Storage Deep-Dive</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

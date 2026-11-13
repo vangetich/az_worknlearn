@@ -4086,10 +4086,20 @@ export default function App() {
           <div className="responsive-tab-page-shell max-w-6xl mx-auto">
             <AzureThemesView
               stats={stats}
+              questions={questions}
               initialThemeId={azureThemesFocus?.themeId}
               initialModuleId={azureThemesFocus?.moduleId}
               onPracticeModule={(modId) => {
                 handleSelectModuleFromTracker(modId);
+              }}
+              onPracticeQuestion={(questionId, moduleId) => {
+                setSelectedPathId('all');
+                setSelectedModuleId(moduleId);
+                setOnlyBookmarks(false);
+                setOnlyAiGenerated(false);
+                setShowPostSessionReview(false);
+                setPendingJumpQuestionId(questionId);
+                setActiveTab('quiz');
               }}
               onOpenImageTutor={() => setActiveTab('image-tutor')}
               onOpenStudyDecksModule={(modId, pathId) => {

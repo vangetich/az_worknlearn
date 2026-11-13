@@ -527,6 +527,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [showQuickStudy, setShowQuickStudy] = useState<boolean>(false);
   const [showStudyZoneMenu, setShowStudyZoneMenu] = useState<boolean>(false);
   const studyZoneMenuRef = React.useRef<HTMLDivElement>(null);
+  const studyZoneButtonRef = React.useRef<HTMLButtonElement>(null);
 
   const handlePinCurrentAnchor = () => {
     saveMemoryAnchor({
@@ -738,9 +739,11 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   React.useEffect(() => {
     if (!showStudyZoneMenu) return;
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
       if (
         studyZoneMenuRef.current &&
-        !studyZoneMenuRef.current.contains(event.target as Node)
+        !studyZoneMenuRef.current.contains(target) &&
+        (!studyZoneButtonRef.current || !studyZoneButtonRef.current.contains(target))
       ) {
         setShowStudyZoneMenu(false);
       }
@@ -1808,6 +1811,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           {/* STUDY ZONE ACCORDION MENU (Centered Popup Modal in Middle of Page) */}
           <div className="relative">
             <button
+              ref={studyZoneButtonRef}
               type="button"
               onClick={() => setShowStudyZoneMenu((prev) => !prev)}
               className={`px-3.5 py-1.5 rounded-xl border text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
