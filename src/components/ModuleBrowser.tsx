@@ -11,6 +11,8 @@ import {
 import { LEARNING_PATHS } from '../data/curriculum';
 import { UserStats } from '../types/quiz';
 import { fireModuleCompletionConfetti } from '../utils/confetti';
+import { getThreadTagsForModule } from '../data/azureThemesData';
+import { ThreadTagBadge } from './ThreadTagBadge';
 
 const ALL_CURRICULUM_MODULES = LEARNING_PATHS.flatMap((p) => p.modules);
 
@@ -23,6 +25,7 @@ interface ModuleBrowserProps {
   questionCountByModule: Record<number, number>;
   onToggleModuleComplete?: (moduleId: number) => void;
   onHideSidebar?: () => void;
+  onOpenAzureTheme?: (themeId: string, moduleId: number) => void;
 }
 
 export const ModuleBrowser: React.FC<ModuleBrowserProps> = ({
@@ -34,6 +37,7 @@ export const ModuleBrowser: React.FC<ModuleBrowserProps> = ({
   questionCountByModule,
   onToggleModuleComplete,
   onHideSidebar,
+  onOpenAzureTheme,
 }) => {
   // On mobile/tablet (< lg), allow collapsing the full module tree to save vertical screen space
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
@@ -244,10 +248,12 @@ export const ModuleBrowser: React.FC<ModuleBrowserProps> = ({
                         ? Math.round((modStat.correct / modStat.total) * 100)
                         : null;
 
+                    const modThreadTags = getThreadTagsForModule(mod.id, 3);
+
                     return (
                       <div
                         key={mod.id}
-                        className={`w-full px-2 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between gap-1.5 transition-colors ${
+                        className={`w-full px-2 py-1.5 rounded-lg text-xs font-medium flex flex-col gap-1 transition-colors ${
                           isModSelected
                             ? 'bg-[#0078D4] text-white font-semibold'
                             : isModCompleted
@@ -255,71 +261,92 @@ export const ModuleBrowser: React.FC<ModuleBrowserProps> = ({
                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                         }`}
                       >
-                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                          {onToggleModuleComplete && (
+                        <div className="flex items-center justify-between gap-1.5 w-full">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            {onToggleModuleComplete && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!isModCompleted) {
+                                    fireModuleCompletionConfetti(mod.title);
+                                  }
+                                  onToggleModuleComplete(mod.id);
+                                }}
+                                className={`w-3.5 h-3.5 rounded flex items-center justify-center border shrink-0 transition-all cursor-pointer ${
+                                  isModCompleted
+                                    ? 'bg-emerald-600 border-emerald-600 text-white scale-110 shadow-xs'
+                                    : isModSelected
+                                    ? 'border-white/80 bg-transparent hover:scale-105'
+                                    : 'border-slate-300 bg-white hover:border-[#0078D4] hover:scale-105'
+                                }`}
+                                aria-label={
+                                  isModCompleted
+                                    ? `Mark Module ${mod.id} incomplete`
+                                    : `Mark Module ${mod.id} complete`
+                                }
+                              >
+                                {isModCompleted && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </button>
+                            )}
+
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!isModCompleted) {
-                                  fireModuleCompletionConfetti(mod.title);
-                                }
-                                onToggleModuleComplete(mod.id);
+                              onClick={() => {
+                                onSelectPath(path.id);
+                                onSelectModule(mod.id);
+                                setIsMobileOpen(false);
                               }}
-                              className={`w-3.5 h-3.5 rounded flex items-center justify-center border shrink-0 transition-all cursor-pointer ${
-                                isModCompleted
-                                  ? 'bg-emerald-600 border-emerald-600 text-white scale-110 shadow-xs'
-                                  : isModSelected
-                                  ? 'border-white/80 bg-transparent hover:scale-105'
-                                  : 'border-slate-300 bg-white hover:border-[#0078D4] hover:scale-105'
-                              }`}
-                              aria-label={
-                                isModCompleted
-                                  ? `Mark Module ${mod.id} incomplete`
-                                  : `Mark Module ${mod.id} complete`
-                              }
+                              className="text-left truncate flex-1 text-[11px] cursor-pointer"
                             >
-                              {isModCompleted && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              M{mod.id}: {mod.title}
                             </button>
-                          )}
+                          </div>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onSelectPath(path.id);
-                              onSelectModule(mod.id);
-                              setIsMobileOpen(false);
-                            }}
-                            className="text-left truncate flex-1 text-[11px] cursor-pointer"
-                          >
-                            M{mod.id}: {mod.title}
-                          </button>
-                        </div>
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          {modAccuracy !== null && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            {modAccuracy !== null && (
+                              <span
+                                className={`text-[10px] font-mono font-bold ${
+                                  isModSelected
+                                    ? 'text-sky-100'
+                                    : modAccuracy >= 70
+                                    ? 'text-emerald-700'
+                                    : 'text-rose-600'
+                                }`}
+                              >
+                                {modAccuracy}%
+                              </span>
+                            )}
                             <span
-                              className={`text-[10px] font-mono font-bold ${
+                              className={`px-1.5 py-0.2 rounded text-[10px] ${
                                 isModSelected
-                                  ? 'text-sky-100'
-                                  : modAccuracy >= 70
-                                  ? 'text-emerald-700'
-                                  : 'text-rose-600'
+                                  ? 'bg-white/20 text-white'
+                                  : 'bg-slate-100 text-slate-500'
                               }`}
                             >
-                              {modAccuracy}%
+                              {qCount}Q
                             </span>
-                          )}
-                          <span
-                            className={`px-1.5 py-0.2 rounded text-[10px] ${
-                              isModSelected
-                                ? 'bg-white/20 text-white'
-                                : 'bg-slate-100 text-slate-500'
-                            }`}
-                          >
-                            {qCount}Q
-                          </span>
+                          </div>
                         </div>
+
+                        {modThreadTags.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1 pl-5">
+                            {modThreadTags.map((tag) => (
+                              <ThreadTagBadge
+                                key={tag.id}
+                                tag={tag}
+                                size="xs"
+                                onDarkPrimaryBg={isModSelected}
+                                titlePrefix={`Module ${mod.id} Thread`}
+                                onClick={
+                                  onOpenAzureTheme
+                                    ? (clickedTag) => onOpenAzureTheme(clickedTag.themeId, mod.id)
+                                    : undefined
+                                }
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

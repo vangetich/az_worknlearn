@@ -29,6 +29,7 @@ import {
   Maximize2,
   BarChart3,
   Pencil,
+  GitBranch,
 } from 'lucide-react';
 import {
   MaasaiMedallion,
@@ -165,6 +166,7 @@ export type AppTab =
   | 'adaptive'
   | 'planner'
   | 'image-tutor'
+  | 'azure-themes'
   | 'flashcards'
   | 'history'
   | 'mock'
@@ -1205,6 +1207,19 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {activeTab === 'image-tutor' ? <WarriorSpearBadge size={12} /> : <ImageIcon className="w-3 h-3 text-[#0078D4] dark:text-sky-300" />}
               <span>Image Tutor</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('azure-themes')}
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                activeTab === 'azure-themes'
+                  ? 'bg-gradient-to-r from-[#0078D4] via-sky-700 to-[#005A9E] text-white shadow-sm ring-1 ring-amber-300 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
+              }`}
+              title="Azure Themes: Interconnecting theories woven across all 12 AZ-900 modules and Azure service categories"
+            >
+              {activeTab === 'azure-themes' ? <WarriorSpearBadge size={12} /> : <GitBranch className="w-3 h-3 text-[#0078D4] dark:text-sky-300" />}
+              <span>Azure Themes</span>
             </button>
 
             {/* Adaptive Quiz Mode with glowing Zap */}

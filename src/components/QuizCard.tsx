@@ -43,6 +43,7 @@ import {
   Anchor,
   TrendingUp,
   TrendingDown,
+  GitBranch,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
@@ -63,6 +64,9 @@ import {
   isMemoryAnchorSaved,
 } from '../utils/exportNotesMarkdown';
 import { KeyboardShortcutGuidePopover } from './KeyboardShortcutGuide';
+import { getThreadTagsForQuestion, ThreadTagMeta } from '../data/azureThemesData';
+import { ThreadTagBadge } from './ThreadTagBadge';
+import { ThreadContextModal } from './ThreadContextModal';
 
 interface QuizCardProps {
   question: Question;
@@ -127,6 +131,7 @@ interface QuizCardProps {
   onUpdateSavedNote?: (questionId: string, text: string) => void;
   onOpenAccessibilitySettings?: () => void;
   externalOpenNotesDrawerTrigger?: number;
+  onOpenAzureTheme?: (themeId: string, moduleId?: number) => void;
 }
 
 const EXAM_SIMULATION_DURATION_SECONDS = 45 * 60; // 45:00 standard AZ-900 exam duration
@@ -487,7 +492,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   onUpdateSavedNote,
   onOpenAccessibilitySettings,
   externalOpenNotesDrawerTrigger = 0,
+  onOpenAzureTheme,
 }) => {
+  const questionThreadTags = React.useMemo(
+    () => getThreadTagsForQuestion(question, 3),
+    [question]
+  );
+  const [activeThreadModalTag, setActiveThreadModalTag] = useState<ThreadTagMeta | null>(null);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
   const [skipFeedbackToast, setSkipFeedbackToast] = useState<string | null>(null);
@@ -2734,6 +2745,38 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               onSpeakingChange={setIsSpeaking}
             />
 
+            {/* Interconnecting AZ-900 Thread Tags Bar */}
+            {questionThreadTags.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50/90 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 mr-0.5 whitespace-nowrap">
+                    <GitBranch className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-400 shrink-0" />
+                    <span>Woven Threads:</span>
+                  </span>
+                  {questionThreadTags.map((tag) => (
+                    <ThreadTagBadge
+                      key={tag.id}
+                      tag={tag}
+                      size="sm"
+                      customTooltip={`${tag.label} — Click to view how ${tag.label} applies fundamentally in Module ${question.moduleId}`}
+                      onClick={(clickedTag) => setActiveThreadModalTag(clickedTag)}
+                    />
+                  ))}
+                </div>
+                {onOpenAzureTheme && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onOpenAzureTheme(questionThreadTags[0].themeId, question.moduleId)
+                    }
+                    className="text-[11px] font-semibold text-[#0078D4] dark:text-sky-400 hover:underline whitespace-nowrap cursor-pointer"
+                  >
+                    Inspect in Azure Themes →
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Scenario Narrative Box (Full-Width Text Layout) */}
             <div className="relative w-full bg-slate-50/80 rounded-xl p-4 sm:p-5 border-l-4 border-[#0078D4] border-t border-r border-b border-slate-200/60 shadow-xs space-y-3">
               {/* Top Header Row: Scenario Context Label + Analyze Distractors / ELI5 / Knowledge Check Toggles */}
@@ -3863,6 +3906,17 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       question={question}
       isOpen={showShareModal}
       onClose={() => setShowShareModal(false)}
+    />
+
+    {/* Mini-Modal Explaining How Clicked Theme Applies in Current Module */}
+    <ThreadContextModal
+      isOpen={Boolean(activeThreadModalTag)}
+      tag={activeThreadModalTag}
+      moduleId={question.moduleId}
+      learningPathId={question.learningPathId}
+      moduleTitle={question.moduleTitle}
+      onClose={() => setActiveThreadModalTag(null)}
+      onOpenInAzureThemes={onOpenAzureTheme}
     />
   </div>
 );

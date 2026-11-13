@@ -56,6 +56,7 @@ import { GlobalLeaderboard } from './components/GlobalLeaderboard';
 import { AdaptiveQuizView } from './components/AdaptiveQuizView';
 import { StudyPlannerView } from './components/StudyPlannerView';
 import { AzureImageTutorView } from './components/AzureImageTutorView';
+import { AzureThemesView } from './components/AzureThemesView';
 import { ReviewHistoryView } from './components/ReviewHistoryView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { DailyGoalMilestoneOverlay } from './components/DailyGoalMilestoneOverlay';
@@ -204,6 +205,15 @@ function extractRecentHistoricalOutcomes(stats: UserStats, limit = 20): boolean[
 export default function App() {
   const initialAutoSavedSession = useMemo(() => loadAutoSavedQuizSession(), []);
   const [activeTab, setActiveTab] = useState<AppTab>('quiz');
+  const [azureThemesFocus, setAzureThemesFocus] = useState<{
+    themeId: string;
+    moduleId?: number;
+  } | null>(null);
+
+  const handleOpenAzureTheme = (themeId: string, moduleId?: number) => {
+    setAzureThemesFocus({ themeId, moduleId });
+    setActiveTab('azure-themes');
+  };
 
   // Initialize theme and accessibility font size scale on mount
   useEffect(() => {
@@ -3049,6 +3059,7 @@ export default function App() {
                       questionCountByModule={questionCountByModule}
                       onToggleModuleComplete={handleToggleModuleComplete}
                       onHideSidebar={() => setIsMenuHidden(true)}
+                      onOpenAzureTheme={handleOpenAzureTheme}
                     />
                   )}
                 </div>
@@ -3869,6 +3880,7 @@ export default function App() {
                         onUpdateSavedNote={handleUpdateSavedNote}
                         onOpenAccessibilitySettings={() => setShowAccessibilityModal(true)}
                         externalOpenNotesDrawerTrigger={externalOpenNotesDrawerTrigger}
+                        onOpenAzureTheme={handleOpenAzureTheme}
                       />
                     </div>
                     <PersonalStudyNotesSidebar
@@ -4004,6 +4016,26 @@ export default function App() {
               onPracticeModule={(modId) => {
                 handleSelectModuleFromTracker(modId);
               }}
+              onOpenStudyDecksModule={(modId, pathId) => {
+                setSelectedPathId(pathId);
+                setSelectedModuleId(modId);
+                setActiveTab('study-decks');
+              }}
+            />
+          </div>
+        )}
+
+        {/* TAB: AZURE THEMES (INTERCONNECTING WOVEN THEORIES ACROSS ALL 12 MODULES) */}
+        {activeTab === 'azure-themes' && (
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+            <AzureThemesView
+              stats={stats}
+              initialThemeId={azureThemesFocus?.themeId}
+              initialModuleId={azureThemesFocus?.moduleId}
+              onPracticeModule={(modId) => {
+                handleSelectModuleFromTracker(modId);
+              }}
+              onOpenImageTutor={() => setActiveTab('image-tutor')}
               onOpenStudyDecksModule={(modId, pathId) => {
                 setSelectedPathId(pathId);
                 setSelectedModuleId(modId);
