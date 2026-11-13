@@ -20,6 +20,15 @@ import {
   syncModuleProgressToFirestore,
   subscribeToCrossDeviceProgress,
 } from '../lib/firebase';
+import { getInitialStats } from '../utils/storage';
+import {
+  enqueueOfflineQuizSession,
+  flushOfflineSessionsToPostgres,
+  getPendingOfflineSessions,
+  OFFLINE_SYNC_STATUS_EVENT,
+  QUIZ_SESSION_COMPLETED_EVENT,
+} from '../utils/offlineSyncQueue';
+import { QuizSessionRecord } from '../types/quiz';
 
 export interface PostgresProgressSummary {
   overall_mastery_score: number;
@@ -61,6 +70,7 @@ export interface UsePostgresDatabaseResult {
     selectedAnswer: 'A' | 'B' | 'C' | 'D',
     recordSession?: boolean
   ) => Promise<any>;
+  pendingOfflineCount: number;
   refreshAll: () => Promise<void>;
 }
 
@@ -86,6 +96,9 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
   const [channelOffline, setChannelOffline] = useState<boolean>(false);
+  const [pendingOfflineCount, setPendingOfflineCount] = useState<number>(() =>
+    getPendingOfflineSessions().length
+  );
 
   const resolveActiveUserId = useCallback(() => {
     return (
@@ -309,28 +322,107 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
     [resolveActiveUserId, fetchCurriculumModules]
   );
 
+  const flushPendingOfflineSessions = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setPendingOfflineCount(getPendingOfflineSessions().length);
+      return 0;
+    }
+    const pending = getPendingOfflineSessions();
+    if (pending.length === 0) {
+      setPendingOfflineCount(0);
+      return 0;
+    }
+
+    const activeUserId = resolveActiveUserId();
+    const moduleMastery = getInitialStats().moduleMastery || {};
+    setIsSyncing(true);
+    try {
+      const pushed = await flushOfflineSessionsToPostgres(async (item) => {
+        await syncAllPostgresUserProgress({
+          userId: activeUserId,
+          moduleMastery,
+          session: {
+            questionsAnswered: item.questionsAnswered,
+            correctCount: item.correctCount,
+          },
+        });
+      });
+      setPendingOfflineCount(getPendingOfflineSessions().length);
+      if (pushed > 0) {
+        await fetchCurriculumModules();
+        setLastSyncedAt(Date.now());
+      }
+      return pushed;
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [resolveActiveUserId, fetchCurriculumModules]);
+
   useEffect(() => {
     fetchCurriculumModules();
-  }, [fetchCurriculumModules]);
+    flushPendingOfflineSessions().catch(() => {});
+  }, [fetchCurriculumModules, flushPendingOfflineSessions]);
 
-  // Listen for browser online/offline events, window focus (device switch), auth changes,
+  // Listen for browser online/offline events, offline session queue changes, window focus,
   // Firestore cross-device onSnapshot, and Supabase real-time channel status
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
       setChannelOffline(false);
+      flushPendingOfflineSessions().catch(() => {});
       fetchCurriculumModules();
     };
     const handleOffline = () => {
       setIsOnline(false);
+      setPendingOfflineCount(getPendingOfflineSessions().length);
     };
     const handleAuthChange = () => {
       setBackendUser(authService.getStoredBackendUser());
       fetchCurriculumModules();
+      flushPendingOfflineSessions().catch(() => {});
     };
     const handleVisibilityOrFocus = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        if (typeof navigator === 'undefined' || navigator.onLine) {
+          flushPendingOfflineSessions().catch(() => {});
+        }
         fetchCurriculumModules();
+      }
+    };
+    const handleOfflineSyncStatus = () => {
+      setPendingOfflineCount(getPendingOfflineSessions().length);
+    };
+    const handleQuizSessionCompleted = async (e: Event) => {
+      const customEvent = e as CustomEvent<QuizSessionRecord>;
+      const session = customEvent.detail;
+      if (!session) return;
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        enqueueOfflineQuizSession(session);
+        setPendingOfflineCount(getPendingOfflineSessions().length);
+        return;
+      }
+
+      const activeUserId = resolveActiveUserId();
+      const moduleMastery = getInitialStats().moduleMastery || {};
+      try {
+        await syncAllPostgresUserProgress({
+          userId: activeUserId,
+          moduleMastery,
+          session: {
+            questionsAnswered: Math.max(1, session.totalQuestions),
+            correctCount: Math.max(0, session.correctCount),
+          },
+        });
+        setLastSyncedAt(Date.now());
+        // If any older queued sessions exist alongside this live one, flush them too
+        if (getPendingOfflineSessions().length > 0) {
+          flushPendingOfflineSessions().catch(() => {});
+        }
+      } catch {
+        // Network or backend unreachable: enqueue for automatic push when restored
+        enqueueOfflineQuizSession(session);
+        setPendingOfflineCount(getPendingOfflineSessions().length);
       }
     };
 
@@ -339,6 +431,8 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
     window.addEventListener('az900-auth-session-change', handleAuthChange);
     window.addEventListener('visibilitychange', handleVisibilityOrFocus);
     window.addEventListener('focus', handleVisibilityOrFocus);
+    window.addEventListener(OFFLINE_SYNC_STATUS_EVENT, handleOfflineSyncStatus);
+    window.addEventListener(QUIZ_SESSION_COMPLETED_EVENT, handleQuizSessionCompleted);
 
     // Periodic 45-second background reconciliation for simultaneous mobile + laptop study
     const reconcileInterval = setInterval(() => {
@@ -347,6 +441,7 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
         document.visibilityState === 'visible' &&
         (typeof navigator === 'undefined' || navigator.onLine)
       ) {
+        flushPendingOfflineSessions().catch(() => {});
         fetchCurriculumModules();
       }
     }, 45000);
@@ -399,6 +494,8 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
       window.removeEventListener('az900-auth-session-change', handleAuthChange);
       window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener(OFFLINE_SYNC_STATUS_EVENT, handleOfflineSyncStatus);
+      window.removeEventListener(QUIZ_SESSION_COMPLETED_EVENT, handleQuizSessionCompleted);
       if (unsubFirestoreProgress) {
         unsubFirestoreProgress();
       }
@@ -406,7 +503,7 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
         supabase.removeChannel(channel);
       }
     };
-  }, [fetchCurriculumModules]);
+  }, [fetchCurriculumModules, flushPendingOfflineSessions, resolveActiveUserId]);
 
   const realtimeStatus: SupabaseRealtimeStatus =
     !isOnline || channelOffline || Boolean(error)
@@ -434,6 +531,7 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
     writeModuleProgress,
     syncAllModuleProgress,
     submitQuestionAnswer,
+    pendingOfflineCount,
     refreshAll: fetchCurriculumModules,
   };
 }

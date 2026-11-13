@@ -27,6 +27,8 @@ import {
   Calendar,
   Image as ImageIcon,
   Maximize2,
+  BarChart3,
+  Pencil,
 } from 'lucide-react';
 import {
   MaasaiMedallion,
@@ -39,6 +41,7 @@ import { LEARNING_PATHS } from '../data/curriculum';
 import { DailyStudyStreak } from './DailyStudyStreak';
 import { PWAInstallButton } from './PWAInstallButton';
 import { DailyGoalAlertsModal } from './DailyGoalAlertsModal';
+import { EditDailyGoalModal } from './EditDailyGoalModal';
 import { ThemeToggle } from './ThemeToggle';
 import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
 import { GlobalSearchBar } from './GlobalSearchBar';
@@ -84,8 +87,8 @@ const DailyStudyGoalRing: React.FC<{
           ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-400 ring-1 ring-emerald-400/50 animate-goal-celebrate'
           : 'bg-orange-50/90 hover:bg-orange-100 text-orange-900 border-orange-200/90'
       }`}
-      title={`Daily Study Goal: ${todayAnsweredCount}/${safeGoal} questions solved today (${percentage}%)${isGoalReached ? ' — Daily Goal Reached!' : ''} • Click to configure daily session target`}
-      aria-label={`Daily Study Goal progress: ${todayAnsweredCount} of ${safeGoal} questions (${percentage}%)`}
+      title={`Daily Study Goal: ${todayAnsweredCount}/${safeGoal} questions solved today (${percentage}%)${isGoalReached ? ' — Daily Goal Reached!' : ''} • Click to open Edit Daily Goal`}
+      aria-label={`Edit Daily Study Goal: ${todayAnsweredCount} of ${safeGoal} questions (${percentage}%)`}
     >
       {/* Subtle Celebration Sparkles when Daily Study Goal is Reached */}
       {isGoalReached && (
@@ -138,10 +141,19 @@ const DailyStudyGoalRing: React.FC<{
       </div>
       <div className="flex flex-col items-start leading-none">
         <span className="text-[9px] uppercase tracking-wider font-black opacity-80 hidden sm:inline">
-          {isGoalReached ? 'Goal Met ✨' : 'Daily Goal'}
+          {isGoalReached
+            ? 'Goal Met ✨'
+            : percentage >= 50
+            ? '50% Milestone ✓'
+            : percentage >= 25
+            ? '25% Milestone ✓'
+            : 'Daily Goal'}
         </span>
-        <span className="text-[11px] font-black tabular-nums">
-          {todayAnsweredCount}/{safeGoal}
+        <span className="text-[11px] font-black tabular-nums flex items-center gap-1">
+          <span>
+            {todayAnsweredCount}/{safeGoal}
+          </span>
+          <Pencil className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 transition-opacity" />
         </span>
       </div>
     </button>
@@ -160,6 +172,7 @@ export type AppTab =
   | 'assistant'
   | 'study-decks'
   | 'analytics'
+  | 'trends'
   | 'cohort'
   | 'leaderboard'
   | 'wisdom'
@@ -200,6 +213,7 @@ interface HeaderProps {
   consecutiveCorrect?: number;
   onOpenAccessibilitySettings?: () => void;
   unresolvedMistakesCount?: number;
+  pendingOfflineCount?: number;
 }
 
 const PATH_COMPACT_INTEL: Record<
@@ -260,7 +274,9 @@ export const Header: React.FC<HeaderProps> = ({
   consecutiveCorrect = 0,
   onOpenAccessibilitySettings,
   unresolvedMistakesCount,
+  pendingOfflineCount = 0,
 }) => {
+  const [showEditDailyGoalModal, setShowEditDailyGoalModal] = useState<boolean>(false);
   const [showGoalAlertsModal, setShowGoalAlertsModal] = useState<boolean>(false);
   const [showLocalAccessibilityModal, setShowLocalAccessibilityModal] = useState<boolean>(false);
   const { config: shortcutConfig, platform: detectedPlatform } = useKeyboardShortcutsConfig();
@@ -583,6 +599,11 @@ export const Header: React.FC<HeaderProps> = ({
                 <WifiOff className="w-3.5 h-3.5 text-rose-600" />
               )}
               <span className="hidden md:inline capitalize">{realtimeStatus}</span>
+              {pendingOfflineCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9.5px] font-black">
+                  {pendingOfflineCount}
+                </span>
+              )}
             </div>
 
             <div className="hidden md:block">
@@ -607,7 +628,7 @@ export const Header: React.FC<HeaderProps> = ({
             <DailyStudyGoalRing
               todayAnsweredCount={todayAnsweredCount}
               dailyGoal={dailyGoal}
-              onClick={() => setShowGoalAlertsModal(true)}
+              onClick={() => setShowEditDailyGoalModal(true)}
               compact={true}
             />
 
@@ -751,6 +772,14 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="hidden xl:inline">PG Offline</span>
                 </>
               )}
+              {pendingOfflineCount > 0 && (
+                <span
+                  className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black"
+                  title={`${pendingOfflineCount} completed offline quiz session(s) queued to push to Postgres`}
+                >
+                  {pendingOfflineCount} queued
+                </span>
+              )}
             </div>
 
             {onSelectPath && (
@@ -889,7 +918,7 @@ export const Header: React.FC<HeaderProps> = ({
             <DailyStudyGoalRing
               todayAnsweredCount={todayAnsweredCount}
               dailyGoal={dailyGoal}
-              onClick={() => setShowGoalAlertsModal(true)}
+              onClick={() => setShowEditDailyGoalModal(true)}
               compact={false}
             />
 
@@ -1062,13 +1091,13 @@ export const Header: React.FC<HeaderProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      setShowGoalAlertsModal(true);
+                      setShowEditDailyGoalModal(true);
                       setIsMobileDetailsOpen(false);
                     }}
                     className="px-2 py-0.5 rounded-md bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 font-bold flex items-center gap-1 cursor-pointer"
                   >
                     <Target className="w-3 h-3 text-orange-600" />
-                    <span>Set Goal</span>
+                    <span>Edit Goal</span>
                   </button>
                   {onOpenReviewSession && (
                     <button
@@ -1254,6 +1283,23 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Analytics</span>
             </button>
 
+            <button
+              onClick={() => setActiveTab('trends')}
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                activeTab === 'trends'
+                  ? 'bg-gradient-to-r from-[#0078D4] to-cyan-700 text-white shadow-sm ring-1 ring-sky-200 font-black'
+                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
+              }`}
+              title="Performance Trends: Recharts historical accuracy per module and learning path over time"
+            >
+              {activeTab === 'trends' ? (
+                <WarriorSpearBadge size={12} />
+              ) : (
+                <BarChart3 className="w-3 h-3 text-[#0078D4] dark:text-sky-300" />
+              )}
+              <span>Performance Trends</span>
+            </button>
+
             {/* New Cohort Performance Visualization Tab (D3.js Global Harambee Azure Cohort Benchmark) */}
             <button
               onClick={() => setActiveTab('cohort')}
@@ -1358,7 +1404,17 @@ export const Header: React.FC<HeaderProps> = ({
         }}
       />
 
-      {/* Dedicated Daily Goal & Custom Alerts Modal (Pops up in lower central position) */}
+      {/* Focused Edit Daily Goal Sub-Modal (Triggered from Header's Daily Study Goal Tracker) */}
+      <EditDailyGoalModal
+        stats={stats}
+        todayAnsweredCount={todayAnsweredCount}
+        isOpen={showEditDailyGoalModal}
+        onClose={() => setShowEditDailyGoalModal(false)}
+        onUpdateStats={onUpdateStats}
+        onOpenFullReminders={() => setShowGoalAlertsModal(true)}
+      />
+
+      {/* Dedicated Daily Goal & Custom Alerts Modal */}
       <DailyGoalAlertsModal
         stats={stats}
         isOpen={showGoalAlertsModal}

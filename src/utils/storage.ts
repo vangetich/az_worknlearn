@@ -1,4 +1,8 @@
 import { UserStats, QuestionAttempt, QuizSessionRecord } from '../types/quiz';
+import {
+  enqueueOfflineQuizSession,
+  QUIZ_SESSION_COMPLETED_EVENT,
+} from './offlineSyncQueue';
 
 const STORAGE_KEY = 'az900_quiz_builder_stats_v1';
 
@@ -527,6 +531,15 @@ export function saveQuizSession(session: QuizSessionRecord): QuizSessionRecord[]
 
   try {
     localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(updated));
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      enqueueOfflineQuizSession(session);
+    } else if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent<QuizSessionRecord>(QUIZ_SESSION_COMPLETED_EVENT, {
+          detail: session,
+        })
+      );
+    }
   } catch (e) {
     console.error('Failed to save quiz session to localStorage', e);
   }

@@ -104,7 +104,7 @@ body {
   color: var(--theme-text-primary);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
-  transition: background-color 0.25s ease, color 0.25s ease;
+  transition: background-color 0.3s ease, color 0.25s ease, border-color 0.25s ease;
 }
 
 /* Midnight Azure High-Contrast Overrides */
@@ -112,11 +112,34 @@ body {
   color-scheme: dark;
 }
 
+[data-theme="midnight-azure"] body,
+[data-theme="midnight-azure"] header,
+[data-theme="midnight-azure"] main,
+[data-theme="midnight-azure"] footer,
+[data-theme="midnight-azure"] nav,
+[data-theme="midnight-azure"] .card-elevation {
+  transition: background-color 0.3s ease, color 0.25s ease, border-color 0.25s ease, box-shadow 0.3s ease;
+}
+
+[data-theme="midnight-azure"] .bg-\[\#F8F9FA\] {
+  background-color: var(--theme-bg-body) !important;
+}
+
+[data-theme="midnight-azure"] .text-\[\#1E293B\] {
+  color: var(--theme-text-primary) !important;
+}
+
 [data-theme="midnight-azure"] .bg-white {
   background-color: var(--theme-bg-card) !important;
 }
 
-[data-theme="midnight-azure"] .bg-slate-50 {
+[data-theme="midnight-azure"] .bg-white\/98 {
+  background-color: rgba(11, 21, 38, 0.98) !important;
+}
+
+[data-theme="midnight-azure"] .bg-slate-50,
+[data-theme="midnight-azure"] .bg-slate-50\/80,
+[data-theme="midnight-azure"] .bg-slate-50\/90 {
   background-color: var(--theme-bg-surface-subtle) !important;
 }
 
@@ -124,10 +147,42 @@ body {
   background-color: #15243b !important;
 }
 
+[data-theme="midnight-azure"] .bg-sky-50,
+[data-theme="midnight-azure"] .bg-sky-50\/80,
+[data-theme="midnight-azure"] .bg-sky-50\/90,
+[data-theme="midnight-azure"] .bg-blue-50 {
+  background-color: rgba(14, 41, 75, 0.85) !important;
+}
+
+[data-theme="midnight-azure"] .bg-emerald-50,
+[data-theme="midnight-azure"] .bg-emerald-50\/90 {
+  background-color: rgba(6, 78, 59, 0.45) !important;
+}
+
+[data-theme="midnight-azure"] .bg-amber-50,
+[data-theme="midnight-azure"] .bg-amber-50\/90,
+[data-theme="midnight-azure"] .bg-orange-50,
+[data-theme="midnight-azure"] .bg-orange-50\/90 {
+  background-color: rgba(120, 53, 15, 0.42) !important;
+}
+
+[data-theme="midnight-azure"] .bg-rose-50,
+[data-theme="midnight-azure"] .bg-rose-50\/90 {
+  background-color: rgba(136, 19, 55, 0.45) !important;
+}
+
 [data-theme="midnight-azure"] .border-slate-200,
 [data-theme="midnight-azure"] .border-slate-200\/80,
+[data-theme="midnight-azure"] .border-slate-200\/90,
 [data-theme="midnight-azure"] .border-slate-100 {
   border-color: var(--theme-border) !important;
+}
+
+[data-theme="midnight-azure"] .border-sky-200,
+[data-theme="midnight-azure"] .border-sky-200\/80,
+[data-theme="midnight-azure"] .border-sky-200\/90,
+[data-theme="midnight-azure"] .border-sky-300 {
+  border-color: var(--theme-border-azure) !important;
 }
 
 [data-theme="midnight-azure"] .border-slate-300 {
@@ -147,6 +202,11 @@ body {
 [data-theme="midnight-azure"] .text-slate-500,
 [data-theme="midnight-azure"] .text-slate-400 {
   color: var(--theme-text-muted) !important;
+}
+
+[data-theme="midnight-azure"] .text-\[\#0078D4\],
+[data-theme="midnight-azure"] .text-\[\#005A9E\] {
+  color: var(--theme-accent-azure) !important;
 }
 
 [data-theme="midnight-azure"] header {
@@ -1061,6 +1121,42 @@ html[data-high-contrast="true"] input:focus-visible {
   animation: dailyGoalCelebrate 2.4s ease-in-out infinite;
 }
 
+@keyframes milestoneBadgePopIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0) scale(0.72);
+  }
+  55% {
+    opacity: 1;
+    transform: translate3d(0, -5px, 0) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes milestoneHaloPulse {
+  0%, 100% {
+    transform: scale(0.95) rotate(0deg);
+    opacity: 0.65;
+  }
+  50% {
+    transform: scale(1.08) rotate(12deg);
+    opacity: 1;
+  }
+}
+
+.animate-milestone-badge-pop {
+  animation: milestoneBadgePopIn 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+.animate-milestone-halo {
+  animation: milestoneHaloPulse 2.4s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-ember-drift-1,
   .animate-ember-drift-2,
@@ -1068,7 +1164,9 @@ html[data-high-contrast="true"] input:focus-visible {
   .animate-ember-drift-4,
   .animate-five-streak-header-pulse,
   .animate-five-streak-header-pulse-intense,
-  .animate-goal-celebrate {
+  .animate-goal-celebrate,
+  .animate-milestone-badge-pop,
+  .animate-milestone-halo {
     animation: none !important;
   }
 }

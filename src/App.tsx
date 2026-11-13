@@ -58,6 +58,7 @@ import { StudyPlannerView } from './components/StudyPlannerView';
 import { AzureImageTutorView } from './components/AzureImageTutorView';
 import { ReviewHistoryView } from './components/ReviewHistoryView';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { DailyGoalMilestoneOverlay } from './components/DailyGoalMilestoneOverlay';
 import { GlassyStudyHubDropdown } from './components/GlassyStudyHubDropdown';
 import { ResetModuleModal } from './components/ResetModuleModal';
 import { LearningPathOverview } from './components/LearningPathOverview';
@@ -78,6 +79,7 @@ import { ApiDocumentationModal } from './components/ApiDocumentationModal';
 import { CurriculumReadinessModal } from './components/CurriculumReadinessModal';
 import { AdminBackOfficeModal } from './components/AdminBackOfficeModal';
 import { DomainAccuracyHeatmapD3 } from './components/DomainAccuracyHeatmapD3';
+import { PerformanceTrendsView } from './components/PerformanceTrendsView';
 import { CohortPerformanceView } from './components/CohortPerformanceView';
 import { ExitStudySessionModal } from './components/ExitStudySessionModal';
 import { ProtectedRoute, AuthenticatedSupabaseUser } from './components/ProtectedRoute';
@@ -230,6 +232,7 @@ export default function App() {
     lastSyncedAt,
     isLoading: isPostgresLoading,
     isSyncing: isPostgresSyncing,
+    pendingOfflineCount,
   } = usePostgresDatabase();
   const [authenticatedUser, setAuthenticatedUser] =
     useState<AuthenticatedSupabaseUser | null>(null);
@@ -1842,12 +1845,18 @@ export default function App() {
 
   return (
     <ProtectedRoute onUserChange={setAuthenticatedUser}>
-      <div className="min-h-screen w-[100vw] max-w-[100vw] overflow-x-hidden bg-[#F8F9FA] text-[#1E293B] relative flex flex-col font-sans">
+      <div className="min-h-screen w-[100vw] max-w-[100vw] overflow-x-hidden bg-[var(--theme-bg-body)] text-[var(--theme-text-primary)] transition-colors duration-300 relative flex flex-col font-sans">
         {/* Subtle African Kitenge Watermark Background */}
         <AfricanWatermarkPattern opacity={0.04} />
 
-        {/* Offline Status Toast Indicator */}
+        {/* Offline & Postgres Background Sync Status Indicator */}
         <OfflineIndicator />
+
+        {/* Celebratory 25% & 50% Daily Study Goal Milestone Badge Overlay */}
+        <DailyGoalMilestoneOverlay
+          todayAnsweredCount={todayAnsweredCount}
+          dailyGoal={stats.dailyGoal || 10}
+        />
 
         {/* Global Notifications Stack: Payment, All-Time High, Focus Mode & Fundamentals Reset Alert */}
         {(paymentSuccessToast ||
@@ -2069,6 +2078,7 @@ export default function App() {
             consecutiveCorrect={consecutiveCorrect}
             onOpenAccessibilitySettings={() => setShowAccessibilityModal(true)}
             unresolvedMistakesCount={unresolvedMistakesCount}
+            pendingOfflineCount={pendingOfflineCount}
           />
         )}
 
@@ -3784,7 +3794,31 @@ export default function App() {
                           setCurrentQuestionIndex(0);
                         }}
                         onOpenStudyRoom={() => setShowStudyRoom(true)}
-                        onFinishSession={() => setShowPostSessionReview(true)}
+                        onFinishSession={() => {
+                          if (sessionAttempts.length > 0) {
+                            const correctCount = sessionAttempts.filter((a) => a.isCorrect).length;
+                            const totalCount = sessionAttempts.length;
+                            const scorePercent = Math.round((correctCount / totalCount) * 100);
+                            saveQuizSession({
+                              id: `session-practice-${Date.now()}`,
+                              timestamp: Date.now(),
+                              dateStr: new Date().toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }),
+                              title: `Practice Quiz Session (${totalCount} Questions)`,
+                              mode: 'practice',
+                              totalQuestions: totalCount,
+                              correctCount,
+                              scorePercent,
+                              passed: scorePercent >= 70,
+                              missedQuestions: [],
+                            });
+                          }
+                          setShowPostSessionReview(true);
+                        }}
                         onOpenPersonalizedReview={() => setShowReviewSession(true)}
                         unresolvedMistakesCount={unresolvedMistakesCount}
                         sessionAnsweredCount={sessionAttempts.length}
@@ -4140,6 +4174,27 @@ export default function App() {
               onOpenStudyBreak={() => setShowStudyBreak(true)}
               onOpenExport={() => setShowExportModal(true)}
               onResetModuleConfidence={handleResetModuleConfidence}
+            />
+          </div>
+        )}
+
+        {/* TAB: PERFORMANCE TRENDS (RECHARTS HISTORICAL MODULE & PATH ACCURACY) */}
+        {activeTab === 'trends' && (
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+            <PerformanceTrendsView
+              stats={stats}
+              questions={questions}
+              onPracticeModule={(modId, pathId) => {
+                setRetryIncorrectPathId(null);
+                setRetryIncorrectSnapshotIds([]);
+                setSelectedPathId(pathId);
+                setSelectedModuleId(modId);
+                setOnlyBookmarks(false);
+                setOnlyAiGenerated(false);
+                setCurrentQuestionIndex(0);
+                setShowPostSessionReview(false);
+                setActiveTab('quiz');
+              }}
             />
           </div>
         )}
