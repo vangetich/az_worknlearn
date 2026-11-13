@@ -43,7 +43,6 @@ import {
   Anchor,
   TrendingUp,
   TrendingDown,
-  Keyboard,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
@@ -63,6 +62,7 @@ import {
   saveMemoryAnchor,
   isMemoryAnchorSaved,
 } from '../utils/exportNotesMarkdown';
+import { KeyboardShortcutGuidePopover } from './KeyboardShortcutGuide';
 
 interface QuizCardProps {
   question: Question;
@@ -123,6 +123,10 @@ interface QuizCardProps {
   onOpenPeerChallenge?: () => void;
   last5DifficultyImpactDelta?: number;
   last5AnsweredCount?: number;
+  savedNoteText?: string;
+  onUpdateSavedNote?: (questionId: string, text: string) => void;
+  onOpenAccessibilitySettings?: () => void;
+  externalOpenNotesDrawerTrigger?: number;
 }
 
 const EXAM_SIMULATION_DURATION_SECONDS = 45 * 60; // 45:00 standard AZ-900 exam duration
@@ -479,6 +483,10 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   onOpenPeerChallenge,
   last5DifficultyImpactDelta = 0,
   last5AnsweredCount = 0,
+  savedNoteText,
+  onUpdateSavedNote,
+  onOpenAccessibilitySettings,
+  externalOpenNotesDrawerTrigger = 0,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
@@ -488,8 +496,12 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [showKnowledgeCheck, setShowKnowledgeCheck] = useState<boolean>(false);
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
   const [showQuickNotes, setShowQuickNotes] = useState<boolean>(false);
-  const [questionNoteText, setQuestionNoteText] = useState<string>(() => getQuestionNote(question.id));
-  const [hasNote, setHasNote] = useState<boolean>(() => Boolean(getQuestionNote(question.id)));
+  const [questionNoteText, setQuestionNoteText] = useState<string>(() =>
+    savedNoteText !== undefined ? savedNoteText : getQuestionNote(question.id)
+  );
+  const [hasNote, setHasNote] = useState<boolean>(() =>
+    Boolean((savedNoteText !== undefined ? savedNoteText : getQuestionNote(question.id)).trim())
+  );
   const [noteSavedFeedback, setNoteSavedFeedback] = useState<boolean>(false);
   const [isAnchorPinned, setIsAnchorPinned] = useState<boolean>(() =>
     isMemoryAnchorSaved(`anchor-${question.id}`)
@@ -554,6 +566,19 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       setShowStudyZoneMenu(true);
     }
   }, [externalStudyZoneOpenTrigger]);
+
+  React.useEffect(() => {
+    if (externalOpenNotesDrawerTrigger > 0) {
+      setShowQuickNotes(true);
+    }
+  }, [externalOpenNotesDrawerTrigger]);
+
+  React.useEffect(() => {
+    if (savedNoteText !== undefined && savedNoteText !== questionNoteText) {
+      setQuestionNoteText(savedNoteText);
+      setHasNote(Boolean(savedNoteText.trim()));
+    }
+  }, [savedNoteText]);
 
   // ELI5 (Explain Like I'm 5) analogy toggle state
   const [showEli5Analogy, setShowEli5Analogy] = useState<boolean>(() => {
@@ -1016,6 +1041,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     const nextVal = e.target.value;
     setQuestionNoteText(nextVal);
     saveQuestionNote(question.id, nextVal);
+    if (onUpdateSavedNote) {
+      onUpdateSavedNote(question.id, nextVal);
+    }
     setHasNote(Boolean(nextVal.trim()));
     setNoteSavedFeedback(true);
   };
@@ -1023,6 +1051,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const handleClearInlineNote = () => {
     setQuestionNoteText('');
     saveQuestionNote(question.id, '');
+    if (onUpdateSavedNote) {
+      onUpdateSavedNote(question.id, '');
+    }
     setHasNote(false);
     setNoteSavedFeedback(false);
   };
@@ -1075,6 +1106,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               ? `${prev.trim()} ${newTranscript.trim()}`
               : newTranscript.trim();
             saveQuestionNote(question.id, combined);
+            if (onUpdateSavedNote) {
+              onUpdateSavedNote(question.id, combined);
+            }
             setHasNote(Boolean(combined.trim()));
             setNoteSavedFeedback(true);
             return combined;
@@ -1712,47 +1746,14 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 </span>
               </button>
 
-              {/* Hover-Only On-Screen Keyboard Shortcut Guide */}
-              <div
-                role="tooltip"
-                className="pointer-events-none group-hover/cardfocusguide:pointer-events-auto opacity-0 invisible group-hover/cardfocusguide:opacity-100 group-hover/cardfocusguide:visible transition-all duration-150 absolute right-0 top-full mt-2 w-72 rounded-2xl bg-slate-900/98 text-white border border-sky-400/40 shadow-2xl p-3 z-50 text-left space-y-2"
-              >
-                <div className="flex items-center justify-between border-b border-slate-700 pb-1.5">
-                  <span className="text-[10.5px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1">
-                    <Keyboard className="w-3.5 h-3.5 text-amber-300" />
-                    Keyboard Shortcut Guide
-                  </span>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/10 text-amber-200">
-                    Hover Guide
-                  </span>
-                </div>
-                <div className="space-y-1.5 text-[11px]">
-                  <div className="flex items-center justify-between gap-2 bg-white/5 p-1.5 rounded-lg">
-                    <span className="font-bold text-slate-200">Toggle Focus Mode:</span>
-                    <div className="flex items-center gap-1">
-                      <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-amber-300">
-                        F
-                      </kbd>
-                      <span className="text-[9px] text-slate-400">or</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-amber-300">
-                        Ctrl+F
-                      </kbd>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 bg-white/5 p-1.5 rounded-lg">
-                    <span className="font-bold text-slate-200">Adaptive Difficulty:</span>
-                    <div className="flex items-center gap-1">
-                      <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-emerald-300">
-                        A
-                      </kbd>
-                      <span className="text-[9px] text-slate-400">or</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-emerald-300">
-                        Alt+A
-                      </kbd>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {/* Hover-Only Dynamic Platform-Aware Keyboard Shortcut Guide */}
+              <KeyboardShortcutGuidePopover
+                isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
+                effectiveDynamicDifficulty={dynamicDifficulty || 'Intermediate'}
+                onToggleDynamicDifficulty={onToggleDynamicDifficulty}
+                onOpenAccessibilitySettings={() => onOpenAccessibilitySettings?.()}
+                align="right"
+              />
             </div>
           )}
 
@@ -3774,6 +3775,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       onNoteSaved={(txt) => {
         setQuestionNoteText(txt);
         setHasNote(Boolean(txt.trim()));
+        if (onUpdateSavedNote) {
+          onUpdateSavedNote(question.id, txt);
+        }
       }}
     />
 

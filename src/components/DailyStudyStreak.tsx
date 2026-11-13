@@ -19,12 +19,14 @@ interface DailyStudyStreakProps {
   stats: UserStats;
   onUpdateStats?: (newStats: UserStats) => void;
   fireStreakTrigger?: number;
+  consecutiveCorrect?: number;
 }
 
 export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
   stats,
   onUpdateStats,
   fireStreakTrigger = 0,
+  consecutiveCorrect = 0,
 }) => {
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
   const [isEditingGoal, setIsEditingGoal] = useState<boolean>(false);
@@ -36,32 +38,47 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
   const [isIncrementing, setIsIncrementing] = useState<boolean>(false);
   const [justReachedGoal, setJustReachedGoal] = useState<boolean>(false);
   const [isFireStreakActive, setIsFireStreakActive] = useState<boolean>(false);
+  const [isFiveStreakBurst, setIsFiveStreakBurst] = useState<boolean>(false);
+
+  const isFiveStreakActive = consecutiveCorrect >= 5;
 
   // Trigger fire-streak celebratory animation whenever a quiz question is completed
   const prevTriggerRef = React.useRef<number>(fireStreakTrigger);
   const prevTotalRef = React.useRef<number>(stats.totalAnswered);
+  const prevConsecutiveRef = React.useRef<number>(consecutiveCorrect);
 
-  const triggerFireStreak = React.useCallback(() => {
+  const triggerFireStreak = React.useCallback((boosted = false) => {
     setIsFireStreakActive(true);
+    if (boosted) {
+      setIsFiveStreakBurst(true);
+    }
     const timer = setTimeout(() => {
       setIsFireStreakActive(false);
-    }, 2400);
+      setIsFiveStreakBurst(false);
+    }, boosted ? 3400 : 2400);
     return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
+    if (consecutiveCorrect > prevConsecutiveRef.current && consecutiveCorrect >= 5) {
+      triggerFireStreak(true);
+    }
+    prevConsecutiveRef.current = consecutiveCorrect;
+  }, [consecutiveCorrect, triggerFireStreak]);
+
+  useEffect(() => {
     if (fireStreakTrigger > prevTriggerRef.current) {
-      triggerFireStreak();
+      triggerFireStreak(consecutiveCorrect >= 5);
       prevTriggerRef.current = fireStreakTrigger;
     }
-  }, [fireStreakTrigger, triggerFireStreak]);
+  }, [fireStreakTrigger, consecutiveCorrect, triggerFireStreak]);
 
   useEffect(() => {
     if (stats.totalAnswered > prevTotalRef.current) {
-      triggerFireStreak();
+      triggerFireStreak(consecutiveCorrect >= 5);
       prevTotalRef.current = stats.totalAnswered;
     }
-  }, [stats.totalAnswered, triggerFireStreak]);
+  }, [stats.totalAnswered, consecutiveCorrect, triggerFireStreak]);
 
   // Listen to global question completion event
   useEffect(() => {
@@ -254,7 +271,9 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
       {/* Header Widget: Daily Learning Goal Progress Ring with Fire-Streak & Immediate Goal Save Feedback */}
       <div
         className={`relative flex items-center rounded-xl border transition-all duration-300 ${
-          isFireStreakActive
+          isFiveStreakBurst || (isFireStreakActive && isFiveStreakActive)
+            ? 'bg-gradient-to-r from-amber-200 via-orange-200 to-rose-100 border-orange-500 text-orange-950 shadow-[0_0_26px_rgba(234,88,12,0.7)] ring-2 ring-amber-400 scale-[1.04]'
+            : isFireStreakActive || isFiveStreakActive
             ? 'bg-gradient-to-r from-amber-100 via-orange-100 to-amber-100 border-orange-400 text-orange-950 shadow-[0_0_18px_rgba(249,115,22,0.5)] ring-2 ring-orange-400/80 scale-[1.02]'
             : saveFeedback
             ? 'bg-gradient-to-r from-blue-50 via-emerald-50 to-blue-50 border-[#0078D4] text-slate-900 ring-2 ring-[#0078D4]/40 scale-[1.03]'
@@ -263,44 +282,64 @@ export const DailyStudyStreak: React.FC<DailyStudyStreakProps> = ({
             : 'bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border-orange-200/80 text-orange-950 shadow-2xs'
         }`}
       >
-        {/* Visual Fire-Streak Animation Celebration when user completes a quiz question */}
-        {isFireStreakActive && (
+        {/* Visual Fire-Streak Animation Celebration + CSS Ember Drift (Enhanced at 5+ Consecutive Correct Streak) */}
+        {(isFireStreakActive || isFiveStreakActive) && (
           <div className="absolute inset-0 pointer-events-none overflow-visible z-50">
             {/* 1. Celebratory Momentum Floating Pill */}
-            <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 via-orange-600 to-red-600 text-white text-[11px] font-black shadow-lg shadow-orange-500/50 flex items-center gap-1.5 animate-bounce z-50 border border-yellow-200/50">
-              <Flame className="w-3.5 h-3.5 fill-yellow-200 text-yellow-100 animate-pulse" />
-              <span>Momentum Streak! +1</span>
-              <Sparkles className="w-3 h-3 text-yellow-200" />
-            </div>
+            {(isFireStreakActive || isFiveStreakBurst) && (
+              <div
+                className={`absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1 rounded-full text-white text-[11px] font-black shadow-lg flex items-center gap-1.5 animate-bounce z-50 border border-yellow-200/60 ${
+                  isFiveStreakActive
+                    ? 'bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 shadow-red-500/50'
+                    : 'bg-gradient-to-r from-amber-500 via-orange-600 to-red-600 shadow-orange-500/50'
+                }`}
+              >
+                <Flame className="w-3.5 h-3.5 fill-yellow-200 text-yellow-100 animate-pulse" />
+                <span>
+                  {isFiveStreakActive
+                    ? `${consecutiveCorrect}-Streak Firestorm!`
+                    : 'Momentum Streak! +1'}
+                </span>
+                <Sparkles className="w-3 h-3 text-yellow-200" />
+              </div>
+            )}
 
             {/* 2. Expanding Fiery Shockwave Ring */}
-            <div className="absolute -inset-2 rounded-xl border-2 border-orange-500 animate-ping opacity-75" />
+            {(isFireStreakActive || isFiveStreakBurst) && (
+              <div className="absolute -inset-2 rounded-xl border-2 border-orange-500 animate-ping opacity-75" />
+            )}
 
             {/* 3. Glowing Fiery Aura Pulse */}
-            <div className="absolute -inset-1 rounded-xl bg-orange-400/25 blur-xs animate-pulse" />
+            <div
+              className={`absolute -inset-1 rounded-xl blur-xs animate-pulse ${
+                isFiveStreakActive ? 'bg-orange-500/35' : 'bg-orange-400/25'
+              }`}
+            />
 
-            {/* 4. Rising Embers & Spark Particles */}
-            <span className="absolute -top-3 left-1 text-amber-400 animate-ember-1">
-              <svg className="w-3 h-3 fill-amber-300 drop-shadow-sm" viewBox="0 0 24 24">
+            {/* 4. CSS Ember Drift Particles */}
+            <span className="absolute -top-2 left-2 animate-ember-drift-1">
+              <span className="block w-2 h-2 rounded-full bg-gradient-to-tr from-orange-600 to-amber-300 shadow-[0_0_8px_rgba(249,115,22,0.95)]" />
+            </span>
+            <span className="absolute -top-2 right-2 animate-ember-drift-2">
+              <span className="block w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-red-500 to-yellow-300 shadow-[0_0_10px_rgba(234,88,12,0.95)]" />
+            </span>
+            <span className="absolute -top-3 left-1/2 -translate-x-1/2 animate-ember-drift-3">
+              <svg className="w-3 h-3 fill-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.95)]" viewBox="0 0 24 24">
                 <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
               </svg>
             </span>
-            <span className="absolute -top-4 right-1 text-orange-500 animate-ember-2">
-              <svg className="w-3.5 h-3.5 fill-orange-400 drop-shadow-sm" viewBox="0 0 24 24">
-                <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
-              </svg>
-            </span>
-            <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-yellow-300 animate-ember-3">
-              <svg className="w-2.5 h-2.5 fill-yellow-200" viewBox="0 0 24 24">
-                <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
-              </svg>
-            </span>
-            <span className="absolute top-1 -left-2 text-red-500 animate-ember-1">
-              <span className="block w-2 h-2 rounded-full bg-gradient-to-tr from-red-500 to-orange-400 shadow-xs shadow-orange-500/80" />
-            </span>
-            <span className="absolute top-1 -right-2 text-amber-500 animate-ember-2">
-              <span className="block w-2 h-2 rounded-full bg-gradient-to-tr from-amber-400 to-yellow-300 shadow-xs shadow-amber-400/80" />
-            </span>
+            {isFiveStreakActive && (
+              <>
+                <span className="absolute top-0 left-1/4 animate-ember-drift-4">
+                  <span className="block w-2 h-2 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-200 shadow-[0_0_10px_rgba(245,158,11,1)]" />
+                </span>
+                <span className="absolute top-0 right-1/4 animate-ember-drift-2">
+                  <svg className="w-2.5 h-2.5 fill-orange-400 drop-shadow-[0_0_6px_rgba(249,115,22,0.95)]" viewBox="0 0 24 24">
+                    <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
+                  </svg>
+                </span>
+              </>
+            )}
           </div>
         )}
 

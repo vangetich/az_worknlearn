@@ -35,7 +35,6 @@ import {
   StickyNote,
   Eye,
   EyeOff,
-  Keyboard,
 } from 'lucide-react';
 import * as d3 from 'd3';
 import { Header, AppTab } from './components/Header';
@@ -124,6 +123,7 @@ import {
   saveHarambeeDrillCompletion,
   mergeCloudProgressIntoLocalStats,
   getAllQuestionNotes,
+  saveQuestionNote,
 } from './utils/storage';
 import { HoverInfoFeedback } from './components/HoverInfoFeedback';
 import { generateDomainConfidencePdf } from './utils/pdfGenerator';
@@ -132,6 +132,24 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { getStoredTheme, applyTheme } from './utils/theme';
 import { getStoredFontScalePercent, applyFontScalePercent } from './utils/fontSize';
 import { AccessibilityFontSizeControl } from './components/AccessibilityFontSizeControl';
+import {
+  KeyboardShortcutGuidePopover,
+  AccessibilitySettingsModal,
+  useKeyboardShortcutsConfig,
+} from './components/KeyboardShortcutGuide';
+import {
+  matchesShortcutEvent,
+  formatShortcutCombo,
+  DEFAULT_SHORTCUT_CONFIG,
+  isSameBinding,
+} from './utils/keyboardShortcuts';
+import { PersonalStudyNotesSidebar } from './components/PersonalStudyNotesSidebar';
+import {
+  BalancedPathIntensityCoach,
+  getStoredPathStudySeconds,
+  incrementPathStudySecond,
+  PathStudySecondsMap,
+} from './components/BalancedPathIntensityCoach';
 
 const QUIZ_SESSION_AUTOSAVE_KEY = 'az900_quiz_session_autosave_v1';
 const AUTOSAVE_INTERVAL_MS = 30_000; // Auto-save every 30 seconds
@@ -483,7 +501,27 @@ export default function App() {
   const [showBackendCloudModal, setShowBackendCloudModal] = useState<boolean>(false);
   const [backendModalSection, setBackendModalSection] = useState<HubSection>('auth-progress');
   const [showApiDocumentationModal, setShowApiDocumentationModal] = useState<boolean>(false);
+  const [showAccessibilityModal, setShowAccessibilityModal] = useState<boolean>(false);
+  const [externalOpenNotesDrawerTrigger, setExternalOpenNotesDrawerTrigger] = useState<number>(0);
+  const [pathStudySeconds, setPathStudySeconds] = useState<PathStudySecondsMap>(
+    getStoredPathStudySeconds
+  );
+  const { config: activeShortcuts, platform: detectedPlatform } = useKeyboardShortcutsConfig();
   const initialDeepLinkHandledRef = React.useRef<boolean>(false);
+
+  // Update savedNotesMap & persist to localStorage cleanly
+  const handleUpdateSavedNote = useCallback((questionId: string, text: string) => {
+    saveQuestionNote(questionId, text);
+    setSavedNotesMap((prev) => {
+      const next = { ...prev };
+      if (text.trim()) {
+        next[questionId] = text;
+      } else {
+        delete next[questionId];
+      }
+      return next;
+    });
+  }, []);
 
   // Sync saved notes map when notes are created, modified or deleted in any component
   useEffect(() => {
@@ -678,6 +716,12 @@ export default function App() {
   const [showStudyBreak, setShowStudyBreak] = useState<boolean>(false);
   const [showMicroDrill, setShowMicroDrill] = useState<number | false>(false);
   const [microDrillTargetModuleId, setMicroDrillTargetModuleId] = useState<number>(5);
+  const [fundamentalsResetModules, setFundamentalsResetModules] = useState<number[] | null>(
+    null
+  );
+  const [dismissedFundamentalsPairKey, setDismissedFundamentalsPairKey] = useState<
+    string | null
+  >(null);
   const [showPeerChallengeModal, setShowPeerChallengeModal] = useState<boolean>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -710,17 +754,21 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [focusModeToast]);
 
-  const toggleFocusMode = useCallback((_source?: 'shortcut' | 'button') => {
-    setIsFocusMode((prev) => {
-      const next = !prev;
-      setFocusModeToast(
-        next
-          ? "Focus Mode ON • Distraction-free exam UI (Press 'Ctrl+F', 'F', or 'Esc' to exit)"
-          : "Focus Mode OFF • Standard exam layout restored"
-      );
-      return next;
-    });
-  }, []);
+  const toggleFocusMode = useCallback(
+    (_source?: 'shortcut' | 'button') => {
+      const comboLabel = formatShortcutCombo(activeShortcuts.focusMode, detectedPlatform);
+      setIsFocusMode((prev) => {
+        const next = !prev;
+        setFocusModeToast(
+          next
+            ? `Focus Mode ON • Distraction-free exam UI (Press '${comboLabel}' or 'Esc' to exit)`
+            : 'Focus Mode OFF • Standard exam layout restored'
+        );
+        return next;
+      });
+    },
+    [activeShortcuts.focusMode, detectedPlatform]
+  );
 
   // Subtle Audio Feedback Mute state (persisted in localStorage, controlled in footer settings)
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(() => {
@@ -983,7 +1031,7 @@ export default function App() {
   // Visual Fire-Streak celebration trigger in header
   const [fireStreakTrigger, setFireStreakTrigger] = useState<number>(0);
 
-  // Global Keyboard Shortcut: 'F' or 'Ctrl+F' / 'Cmd+F' toggles Focus Mode, 'Escape' exits Focus Mode
+  // Global Keyboard Shortcut handler honoring platform defaults + user-customized Accessibility bindings
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -994,45 +1042,64 @@ export default function App() {
           target.tagName === 'SELECT' ||
           target.isContentEditable);
 
+      const focusLabel = formatShortcutCombo(activeShortcuts.focusMode, detectedPlatform);
+      const adaptiveLabel = formatShortcutCombo(
+        activeShortcuts.adaptiveDifficulty,
+        detectedPlatform
+      );
+
       // 1. Escape key exits Focus Mode
-      if (e.key === 'Escape' && isFocusMode) {
+      if (e.key === 'Escape' && isFocusMode && !showAccessibilityModal) {
         e.preventDefault();
         setIsFocusMode(false);
-        setFocusModeToast("Focus Mode OFF • Press 'Ctrl+F' or 'F' to re-enter");
+        setFocusModeToast(`Focus Mode OFF • Press '${focusLabel}' to re-enter`);
         return;
       }
 
-      // 2. Ctrl+F / Cmd+F shortcut (global toggle)
-      const isCtrlOrCmdF =
-        (e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'f' || e.key === 'F');
+      // Skip global shortcuts while editing form inputs or inside accessibility binding recorder
+      if (showAccessibilityModal) return;
 
-      // 3. Standalone 'F' shortcut (only outside editable fields to avoid intercepting form input typing)
-      const isStandaloneF =
-        !isEditable && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'f' || e.key === 'F');
+      const isDefaultFocus = isSameBinding(
+        activeShortcuts.focusMode,
+        DEFAULT_SHORTCUT_CONFIG.focusMode
+      );
+      const isDefaultAdaptive = isSameBinding(
+        activeShortcuts.adaptiveDifficulty,
+        DEFAULT_SHORTCUT_CONFIG.adaptiveDifficulty
+      );
 
-      if ((isCtrlOrCmdF && !isEditable) || isStandaloneF) {
-        if (isCtrlOrCmdF) {
-          e.preventDefault(); // Prevent native browser search dialog when toggling focus mode
-        }
+      // 2. Focus Mode Toggle (configured combo, plus single-key 'F' fallback when using default)
+      if (
+        matchesShortcutEvent(
+          e,
+          activeShortcuts.focusMode,
+          Boolean(isEditable),
+          isDefaultFocus ? 'f' : undefined
+        )
+      ) {
+        e.preventDefault();
         e.stopPropagation();
         toggleFocusMode('shortcut');
         return;
       }
 
-      // 4. 'A' or 'Alt+A' shortcut toggles Adaptive Difficulty ON/OFF
-      const isAltA = e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'a' || e.key === 'A');
-      const isStandaloneA =
-        !isEditable && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'a' || e.key === 'A');
-
-      if ((isAltA && !isEditable) || isStandaloneA) {
+      // 3. Adaptive Difficulty Toggle (configured combo, plus single-key 'A' fallback when using default)
+      if (
+        matchesShortcutEvent(
+          e,
+          activeShortcuts.adaptiveDifficulty,
+          Boolean(isEditable),
+          isDefaultAdaptive ? 'a' : undefined
+        )
+      ) {
         e.preventDefault();
         e.stopPropagation();
         setIsDynamicDifficultyEnabled((prev) => {
           const next = !prev;
           setFocusModeToast(
             next
-              ? "Adaptive Difficulty ON • Auto-adjusting difficulty from your last 5–20 answers ('A' or 'Alt+A')"
-              : "Adaptive Difficulty PAUSED • Difficulty level held steady ('A' or 'Alt+A' to re-enable)"
+              ? `Adaptive Difficulty ON • Auto-adjusting difficulty from your last 5–20 answers (${adaptiveLabel})`
+              : `Adaptive Difficulty PAUSED • Difficulty level held steady (${adaptiveLabel} to re-enable)`
           );
           return next;
         });
@@ -1041,7 +1108,13 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFocusMode, toggleFocusMode]);
+  }, [
+    isFocusMode,
+    toggleFocusMode,
+    activeShortcuts,
+    detectedPlatform,
+    showAccessibilityModal,
+  ]);
 
   // Scoped Module Confidence Reset Handler
   const handleResetModuleConfidence = (moduleId: number) => {
@@ -1518,6 +1591,88 @@ export default function App() {
     [stats]
   );
 
+  // Detect if rolling average accuracy dropped below 60% across two consecutive modules
+  const consecutiveLowAccuracyModulesAlert = useMemo(() => {
+    // Collect recent chronological attempts across stats.attempts + current sessionAttempts
+    const dedupMap = new Map<string, QuestionAttempt>();
+    Object.values(stats.attempts || {}).forEach((list) => {
+      list.forEach((att) => {
+        dedupMap.set(`${att.questionId}-${att.timestamp}`, att);
+      });
+    });
+    sessionAttempts.forEach((att) => {
+      dedupMap.set(`${att.questionId}-${att.timestamp}`, att);
+    });
+
+    const chronological = Array.from(dedupMap.values())
+      .filter((a) => typeof a.moduleId === 'number' && a.timestamp > 0)
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(-80);
+
+    if (chronological.length < 4) return null;
+
+    // Build rolling recent attempts per module & track the order of distinct modules practiced
+    const perModuleOutcomes = new Map<number, boolean[]>();
+    const moduleOrder: number[] = [];
+
+    chronological.forEach((att) => {
+      const existing = perModuleOutcomes.get(att.moduleId) || [];
+      perModuleOutcomes.set(att.moduleId, [...existing, att.isCorrect].slice(-10));
+
+      const prevIdx = moduleOrder.indexOf(att.moduleId);
+      if (prevIdx !== -1) {
+        moduleOrder.splice(prevIdx, 1);
+      }
+      moduleOrder.push(att.moduleId);
+    });
+
+    // Keep modules with at least 2 recent attempts to compute meaningful rolling module accuracy
+    const qualifiedModules = moduleOrder
+      .map((modId) => {
+        const outcomes = perModuleOutcomes.get(modId) || [];
+        const total = outcomes.length;
+        const correct = outcomes.filter(Boolean).length;
+        const rollingAccuracy = total > 0 ? Math.round((correct / total) * 100) : 100;
+        const modMeta = LEARNING_PATHS.flatMap((p) => p.modules).find(
+          (m) => m.id === modId
+        );
+        return {
+          moduleId: modId,
+          title: modMeta?.title || `Module ${modId}`,
+          total,
+          correct,
+          rollingAccuracy,
+        };
+      })
+      .filter((m) => m.total >= 2);
+
+    if (qualifiedModules.length < 2) return null;
+
+    const prevMod = qualifiedModules[qualifiedModules.length - 2];
+    const currMod = qualifiedModules[qualifiedModules.length - 1];
+
+    if (prevMod.rollingAccuracy < 60 && currMod.rollingAccuracy < 60) {
+      return {
+        prevMod,
+        currMod,
+        pairKey: `${prevMod.moduleId}-${currMod.moduleId}`,
+      };
+    }
+
+    return null;
+  }, [stats.attempts, sessionAttempts]);
+
+  // Reset dismissed state once the user recovers rolling accuracy above 60%
+  useEffect(() => {
+    if (!consecutiveLowAccuracyModulesAlert && dismissedFundamentalsPairKey !== null) {
+      setDismissedFundamentalsPairKey(null);
+    }
+  }, [consecutiveLowAccuracyModulesAlert, dismissedFundamentalsPairKey]);
+
+  const showFundamentalsResetAlert =
+    consecutiveLowAccuracyModulesAlert !== null &&
+    consecutiveLowAccuracyModulesAlert.pairKey !== dismissedFundamentalsPairKey;
+
   // Add newly generated AI question
   const handleQuestionGenerated = (newQ: Question) => {
     setQuestions((prev) => {
@@ -1572,6 +1727,33 @@ export default function App() {
   };
 
   const currentQ = filteredQuestions[currentQuestionIndex];
+
+  // Track active study seconds per Azure Learning Path (1, 2, 3) when tab is visible
+  useEffect(() => {
+    const activePath: 1 | 2 | 3 | null =
+      activeTab === 'quiz'
+        ? currentQ?.learningPathId === 1 ||
+          currentQ?.learningPathId === 2 ||
+          currentQ?.learningPathId === 3
+          ? currentQ.learningPathId
+          : selectedPathId === 1 || selectedPathId === 2 || selectedPathId === 3
+          ? selectedPathId
+          : null
+        : activeTab === 'adaptive' &&
+          (adaptiveFocusPathId === 1 || adaptiveFocusPathId === 2 || adaptiveFocusPathId === 3)
+        ? adaptiveFocusPathId
+        : null;
+
+    if (!activePath) return;
+
+    const timer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        setPathStudySeconds(incrementPathStudySecond(activePath));
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activeTab, currentQ?.learningPathId, selectedPathId, adaptiveFocusPathId]);
 
   // Periodic 30-second Auto-Save of current quiz session state (last active question, current streak, rolling accuracy) to localStorage
   const [lastAutoSavedAt, setLastAutoSavedAt] = useState<number | null>(() =>
@@ -1667,12 +1849,81 @@ export default function App() {
         {/* Offline Status Toast Indicator */}
         <OfflineIndicator />
 
-        {/* Global 'Payment Successful' Toast Notification, All-Time High Toast & Focus Mode Toast */}
-        {(paymentSuccessToast || allTimeHighToast || focusModeToast) && (
+        {/* Global Notifications Stack: Payment, All-Time High, Focus Mode & Fundamentals Reset Alert */}
+        {(paymentSuccessToast ||
+          allTimeHighToast ||
+          focusModeToast ||
+          showFundamentalsResetAlert) && (
           <div
             className="fixed top-16 right-4 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none px-2 sm:px-0"
             aria-live="polite"
           >
+            {showFundamentalsResetAlert && consecutiveLowAccuracyModulesAlert && (
+              <div
+                role="alert"
+                className="pointer-events-auto p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-rose-950 to-amber-950 text-white border-2 border-amber-400 shadow-2xl space-y-2.5 animate-in slide-in-from-top-3 duration-200"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2.5">
+                    <div className="p-2 rounded-xl bg-amber-400 text-slate-950 shrink-0">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs sm:text-sm font-black text-amber-300 leading-snug">
+                        Rolling Accuracy Below 60% (2 Consecutive Modules)
+                      </div>
+                      <p className="text-[11px] text-slate-200 mt-1 leading-relaxed">
+                        Your rolling accuracy dipped below 60% in{' '}
+                        <strong className="text-rose-300">
+                          M{consecutiveLowAccuracyModulesAlert.prevMod.moduleId} (
+                          {consecutiveLowAccuracyModulesAlert.prevMod.rollingAccuracy}%)
+                        </strong>{' '}
+                        and{' '}
+                        <strong className="text-rose-300">
+                          M{consecutiveLowAccuracyModulesAlert.currMod.moduleId} (
+                          {consecutiveLowAccuracyModulesAlert.currMod.rollingAccuracy}%)
+                        </strong>
+                        . Rebuild core concepts with a <strong>Fundamentals Reset</strong> drill.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDismissedFundamentalsPairKey(
+                        consecutiveLowAccuracyModulesAlert.pairKey
+                      )
+                    }
+                    className="text-[11px] font-bold text-slate-300 hover:text-white cursor-pointer shrink-0"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetIds = [
+                        consecutiveLowAccuracyModulesAlert.currMod.moduleId,
+                        consecutiveLowAccuracyModulesAlert.prevMod.moduleId,
+                      ];
+                      setFundamentalsResetModules(targetIds);
+                      setMicroDrillTargetModuleId(targetIds[0]);
+                      setShowMicroDrill(targetIds[0]);
+                      setDismissedFundamentalsPairKey(
+                        consecutiveLowAccuracyModulesAlert.pairKey
+                      );
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black inline-flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Start Fundamentals Reset Drill</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {paymentSuccessToast && (
               <div
                 role="status"
@@ -1815,6 +2066,9 @@ export default function App() {
               setIsDynamicDifficultyEnabled((prev) => !prev)
             }
             effectiveDynamicDifficulty={effectiveDynamicDifficulty}
+            consecutiveCorrect={consecutiveCorrect}
+            onOpenAccessibilitySettings={() => setShowAccessibilityModal(true)}
+            unresolvedMistakesCount={unresolvedMistakesCount}
           />
         )}
 
@@ -1836,28 +2090,16 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Hover-Only Keyboard Shortcut Guide inside Floating Focus Mode Banner */}
-              <div
-                role="tooltip"
-                className="pointer-events-none group-hover/floatingfocus:pointer-events-auto opacity-0 invisible group-hover/floatingfocus:opacity-100 group-hover/floatingfocus:visible transition-all duration-150 absolute left-0 top-full mt-3 w-76 sm:w-80 rounded-2xl bg-slate-950 text-white border border-sky-400/50 shadow-2xl p-3.5 z-50 text-left space-y-2"
-              >
-                <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
-                    <Keyboard className="w-3.5 h-3.5 text-amber-300" />
-                    On-Screen Keyboard Shortcuts
-                  </span>
-                </div>
-                <div className="space-y-1.5 text-[11px]">
-                  <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg">
-                    <span>Toggle Focus Mode:</span>
-                    <span className="font-mono font-black text-amber-300">F / Ctrl+F / Esc</span>
-                  </div>
-                  <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg">
-                    <span>Toggle Adaptive Difficulty:</span>
-                    <span className="font-mono font-black text-emerald-300">A / Alt+A</span>
-                  </div>
-                </div>
-              </div>
+              {/* Hover-Only Dynamic Platform-Aware Keyboard Shortcut Guide */}
+              <KeyboardShortcutGuidePopover
+                isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
+                effectiveDynamicDifficulty={effectiveDynamicDifficulty}
+                onToggleDynamicDifficulty={() =>
+                  setIsDynamicDifficultyEnabled((prev) => !prev)
+                }
+                onOpenAccessibilitySettings={() => setShowAccessibilityModal(true)}
+                align="left"
+              />
             </div>
 
             <div className="flex items-center gap-2.5">
@@ -1868,11 +2110,16 @@ export default function App() {
               <button
                 onClick={() => toggleFocusMode('button')}
                 className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition-colors border border-white/20 cursor-pointer"
-                title="Exit Focus Mode (or press Ctrl+F, F, or Esc)"
+                title={`Exit Focus Mode (or press ${formatShortcutCombo(
+                  activeShortcuts.focusMode,
+                  detectedPlatform
+                )} or Esc)`}
               >
                 <Minimize2 className="w-3.5 h-3.5" />
                 <span>Exit Focus</span>
-                <kbd className="hidden sm:inline px-1.5 py-0.5 rounded bg-black/40 text-[10px] text-slate-300">Ctrl+F / F / Esc</kbd>
+                <kbd className="hidden sm:inline px-1.5 py-0.5 rounded bg-black/40 text-[10px] text-slate-300">
+                  {formatShortcutCombo(activeShortcuts.focusMode, detectedPlatform)} / Esc
+                </kbd>
               </button>
             </div>
           </div>
@@ -2867,8 +3114,8 @@ export default function App() {
                           </span>
                         </div>
 
-                        {/* Focus Mode Indicator in Quiz Session Header with Hover-Only Keyboard Shortcut Guide */}
-                        <div className="relative group/sessionfocusguide">
+                        {/* Focus Mode Indicator in Quiz Session Header with Dynamic Platform-Aware Hover Guide */}
+                        <div className="relative group/focusguide">
                           <button
                             type="button"
                             onClick={() => toggleFocusMode('button')}
@@ -2878,66 +3125,19 @@ export default function App() {
                             <Maximize2 className="w-3 h-3 text-amber-300 shrink-0" />
                             <span>Focus Mode</span>
                             <kbd className="px-1 py-0.2 rounded bg-white/15 font-mono text-[9.5px] text-sky-200">
-                              F
+                              {formatShortcutCombo(activeShortcuts.focusMode, detectedPlatform)}
                             </kbd>
                           </button>
 
-                          {/* On-Screen Keyboard Shortcut Guide (Visible ONLY when hovering over 'Focus Mode' indicator) */}
-                          <div
-                            role="tooltip"
-                            className="pointer-events-none group-hover/sessionfocusguide:pointer-events-auto opacity-0 invisible group-hover/sessionfocusguide:opacity-100 group-hover/sessionfocusguide:visible transition-all duration-150 absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-2xl bg-slate-950/98 text-white border border-sky-400/50 shadow-2xl p-3.5 z-50 text-left space-y-2"
-                          >
-                            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-                              <span className="text-[10.5px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
-                                <Keyboard className="w-3.5 h-3.5 text-amber-300" />
-                                Header Keyboard Shortcut Guide
-                              </span>
-                              <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-200 text-[9px] font-bold">
-                                Hover Guide
-                              </span>
-                            </div>
-                            <div className="space-y-1.5 text-[11px]">
-                              <div className="p-2 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between gap-2">
-                                <div>
-                                  <div className="font-extrabold text-white">Focus Mode Toggle</div>
-                                  <div className="text-[10px] text-slate-300">
-                                    Distraction-free exam view (Esc exits)
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-amber-300">
-                                    F
-                                  </kbd>
-                                  <span className="text-[9px] text-slate-400">or</span>
-                                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-amber-300">
-                                    Ctrl+F
-                                  </kbd>
-                                </div>
-                              </div>
-                              <div className="p-2 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between gap-2">
-                                <div>
-                                  <div className="font-extrabold text-white">
-                                    Adaptive Difficulty Toggle
-                                  </div>
-                                  <div className="text-[10px] text-slate-300">
-                                    Currently:{' '}
-                                    <span className="text-emerald-300 font-bold">
-                                      {isDynamicDifficultyEnabled ? 'Enabled (Auto)' : 'Paused'}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-emerald-300">
-                                    A
-                                  </kbd>
-                                  <span className="text-[9px] text-slate-400">or</span>
-                                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-emerald-300">
-                                    Alt+A
-                                  </kbd>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                          <KeyboardShortcutGuidePopover
+                            isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
+                            effectiveDynamicDifficulty={effectiveDynamicDifficulty}
+                            onToggleDynamicDifficulty={() =>
+                              setIsDynamicDifficultyEnabled((prev) => !prev)
+                            }
+                            onOpenAccessibilitySettings={() => setShowAccessibilityModal(true)}
+                            align="right"
+                          />
                         </div>
 
                         {/* 20-Question Rolling Average Accuracy Mini Line Chart & Trend Indicator */}
@@ -3496,6 +3696,28 @@ export default function App() {
                   );
                 })()}
 
+                {/* Equal-Intensity Balanced Path Coach & Target Grade Tracker */}
+                {!isFocusMode && (
+                  <div className="mb-4">
+                    <BalancedPathIntensityCoach
+                      stats={stats}
+                      questions={questions}
+                      pathStudySeconds={pathStudySeconds}
+                      selectedPathId={selectedPathId}
+                      defaultExpanded={false}
+                      onFocusPath={(pId, modId) => {
+                        setRetryIncorrectPathId(null);
+                        setRetryIncorrectSnapshotIds([]);
+                        setSelectedPathId(pId);
+                        setSelectedModuleId(modId ?? 'all');
+                        setCurrentQuestionIndex(0);
+                        setShowPostSessionReview(false);
+                        setActiveTab('quiz');
+                      }}
+                    />
+                  </div>
+                )}
+
                 <div
                   key={`filtered-results-${searchQuery}-${currentQ?.id || currentQuestionIndex}`}
                   className="animate-quiz-card-fade-in-up"
@@ -3525,79 +3747,101 @@ export default function App() {
                   }}
                 >
                 {filteredQuestions.length > 0 && currentQ ? (
-                  <QuizCard
-                    key={currentQ.id}
-                    question={currentQ}
-                    questionIndex={currentQuestionIndex}
-                    totalQuestions={filteredQuestions.length}
-                    onAnswer={handleAnswerQuestion}
-                    onNext={() =>
-                      setCurrentQuestionIndex((prev) =>
-                        prev + 1 < filteredQuestions.length ? prev + 1 : 0
-                      )
-                    }
-                    onPrev={() =>
-                      setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))
-                    }
-                    onSkipQuestion={handleSkipQuestion}
-                    onBookmark={handleToggleBookmark}
-                    isBookmarked={stats.bookmarks.includes(currentQ.id)}
-                    onAskTutorAboutQuestion={handleAskTutorAboutQuestion}
-                    stats={stats}
-                    isFocusMode={isFocusMode}
-                    onToggleFocusMode={() => toggleFocusMode('button')}
-                    dynamicDifficulty={effectiveDynamicDifficulty}
-                    consecutiveStreak={consecutiveCorrect}
-                    isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
-                    onToggleDynamicDifficulty={() =>
-                      setIsDynamicDifficultyEnabled(!isDynamicDifficultyEnabled)
-                    }
-                    lockedDifficulty={lockedDifficulty}
-                    onChangeLockedDifficulty={handleChangeLockedDifficulty}
-                    selectedDifficultyFilter={selectedDifficultyFilter}
-                    onSelectDifficultyFilter={(nextFilter) => {
-                      setSelectedDifficultyFilter(nextFilter);
-                      setCurrentQuestionIndex(0);
-                    }}
-                    onOpenStudyRoom={() => setShowStudyRoom(true)}
-                    onFinishSession={() => setShowPostSessionReview(true)}
-                    onOpenPersonalizedReview={() => setShowReviewSession(true)}
-                    unresolvedMistakesCount={unresolvedMistakesCount}
-                    sessionAnsweredCount={sessionAttempts.length}
-                    onToggleRetryIncorrectInPath={handleToggleRetryIncorrectInPath}
-                    isRetryingIncorrectInPath={
-                      retryIncorrectPathId === currentQ.learningPathId
-                    }
-                    incorrectCountInCurrentPath={
-                      missedQuestionsByPath[currentQ.learningPathId]?.length || 0
-                    }
-                    isAudioMuted={isAudioMuted}
-                    rollingAverageAccuracy={rollingAverageAccuracy}
-                    rollingWindowCount={sessionRollingOutcomes.length}
-                    activeQuickFilter={activeQuickFilter}
-                    onSelectQuickFilter={handleSelectQuickFilter}
-                    bookmarksCount={stats.bookmarks.length}
-                    savedNotesCount={savedNotesCount}
-                    aiScenariosCount={questions.filter((q) => q.isAiGenerated).length}
-                    retryQueueCount={retryQueueQuestionIds.length}
-                    retryQueueSecondsLeft={retryQueueSecondsLeft}
-                    questionSortOrder={questionSortOrder}
-                    onChangeSortOrder={handleChangeSortOrder}
-                    onOpenMockExam={() => setShowMockExam(true)}
-                    onOpenAiGenerator={() => setActiveTab('ai-builder')}
-                    onNavigateTab={(tab) => setActiveTab(tab)}
-                    showWorkspacePanels={showWorkspacePanels}
-                    onToggleWorkspacePanels={() => setShowWorkspacePanels((prev) => !prev)}
-                    externalStudyZoneOpenTrigger={externalStudyZoneOpenTrigger}
-                    onRateConfidence={handleRateConfidence}
-                    onOpenUserGuide={() => setShowUserGuideModal(true)}
-                    onOpenPeerChallenge={() => {
-                      setPeerChallengeModuleId(currentQ.moduleId);
-                      setShowPeerChallengeModal(true);
-                    }}
-                    last5DifficultyImpactDelta={last5QuestionsImpact.deltaPercent}
-                    last5AnsweredCount={last5QuestionsImpact.count}
-                  />
+                  <div className="flex flex-col xl:flex-row gap-4 items-start w-full min-w-0">
+                    <div className="flex-1 min-w-0 w-full">
+                      <QuizCard
+                        key={currentQ.id}
+                        question={currentQ}
+                        questionIndex={currentQuestionIndex}
+                        totalQuestions={filteredQuestions.length}
+                        onAnswer={handleAnswerQuestion}
+                        onNext={() =>
+                          setCurrentQuestionIndex((prev) =>
+                            prev + 1 < filteredQuestions.length ? prev + 1 : 0
+                          )
+                        }
+                        onPrev={() =>
+                          setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))
+                        }
+                        onSkipQuestion={handleSkipQuestion}
+                        onBookmark={handleToggleBookmark}
+                        isBookmarked={stats.bookmarks.includes(currentQ.id)}
+                        onAskTutorAboutQuestion={handleAskTutorAboutQuestion}
+                        stats={stats}
+                        isFocusMode={isFocusMode}
+                        onToggleFocusMode={() => toggleFocusMode('button')}
+                        dynamicDifficulty={effectiveDynamicDifficulty}
+                        consecutiveStreak={consecutiveCorrect}
+                        isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
+                        onToggleDynamicDifficulty={() =>
+                          setIsDynamicDifficultyEnabled(!isDynamicDifficultyEnabled)
+                        }
+                        lockedDifficulty={lockedDifficulty}
+                        onChangeLockedDifficulty={handleChangeLockedDifficulty}
+                        selectedDifficultyFilter={selectedDifficultyFilter}
+                        onSelectDifficultyFilter={(nextFilter) => {
+                          setSelectedDifficultyFilter(nextFilter);
+                          setCurrentQuestionIndex(0);
+                        }}
+                        onOpenStudyRoom={() => setShowStudyRoom(true)}
+                        onFinishSession={() => setShowPostSessionReview(true)}
+                        onOpenPersonalizedReview={() => setShowReviewSession(true)}
+                        unresolvedMistakesCount={unresolvedMistakesCount}
+                        sessionAnsweredCount={sessionAttempts.length}
+                        onToggleRetryIncorrectInPath={handleToggleRetryIncorrectInPath}
+                        isRetryingIncorrectInPath={
+                          retryIncorrectPathId === currentQ.learningPathId
+                        }
+                        incorrectCountInCurrentPath={
+                          missedQuestionsByPath[currentQ.learningPathId]?.length || 0
+                        }
+                        isAudioMuted={isAudioMuted}
+                        rollingAverageAccuracy={rollingAverageAccuracy}
+                        rollingWindowCount={sessionRollingOutcomes.length}
+                        activeQuickFilter={activeQuickFilter}
+                        onSelectQuickFilter={handleSelectQuickFilter}
+                        bookmarksCount={stats.bookmarks.length}
+                        savedNotesCount={savedNotesCount}
+                        aiScenariosCount={questions.filter((q) => q.isAiGenerated).length}
+                        retryQueueCount={retryQueueQuestionIds.length}
+                        retryQueueSecondsLeft={retryQueueSecondsLeft}
+                        questionSortOrder={questionSortOrder}
+                        onChangeSortOrder={handleChangeSortOrder}
+                        onOpenMockExam={() => setShowMockExam(true)}
+                        onOpenAiGenerator={() => setActiveTab('ai-builder')}
+                        onNavigateTab={(tab) => setActiveTab(tab)}
+                        showWorkspacePanels={showWorkspacePanels}
+                        onToggleWorkspacePanels={() => setShowWorkspacePanels((prev) => !prev)}
+                        externalStudyZoneOpenTrigger={externalStudyZoneOpenTrigger}
+                        onRateConfidence={handleRateConfidence}
+                        onOpenUserGuide={() => setShowUserGuideModal(true)}
+                        onOpenPeerChallenge={() => {
+                          setPeerChallengeModuleId(currentQ.moduleId);
+                          setShowPeerChallengeModal(true);
+                        }}
+                        last5DifficultyImpactDelta={last5QuestionsImpact.deltaPercent}
+                        last5AnsweredCount={last5QuestionsImpact.count}
+                        savedNoteText={savedNotesMap[currentQ.id] ?? ''}
+                        onUpdateSavedNote={handleUpdateSavedNote}
+                        onOpenAccessibilitySettings={() => setShowAccessibilityModal(true)}
+                        externalOpenNotesDrawerTrigger={externalOpenNotesDrawerTrigger}
+                      />
+                    </div>
+                    <PersonalStudyNotesSidebar
+                      question={currentQ}
+                      savedNotesMap={savedNotesMap}
+                      onUpdateSavedNote={handleUpdateSavedNote}
+                      onExportAllMarkdown={() => {
+                        const res = downloadNotesAndMemoryAnchorsMarkdown(questions, stats);
+                        setAllTimeHighToast(
+                          `Exported ${res.notesCount} Notes & ${res.anchorsCount} Memory Anchors to Markdown`
+                        );
+                      }}
+                      onOpenFullDrawer={() =>
+                        setExternalOpenNotesDrawerTrigger((prev) => prev + 1)
+                      }
+                    />
+                  </div>
                 ) : (
                   <div className="bg-white rounded-xl border border-slate-200 card-elevation p-12 text-center space-y-4">
                     <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
@@ -3868,7 +4112,23 @@ export default function App() {
 
         {/* TAB: DOMAIN CONFIDENCE */}
         {activeTab === 'analytics' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell max-w-6xl mx-auto space-y-5">
+            <BalancedPathIntensityCoach
+              stats={stats}
+              questions={questions}
+              pathStudySeconds={pathStudySeconds}
+              selectedPathId={selectedPathId}
+              defaultExpanded={true}
+              onFocusPath={(pId, modId) => {
+                setRetryIncorrectPathId(null);
+                setRetryIncorrectSnapshotIds([]);
+                setSelectedPathId(pId);
+                setSelectedModuleId(modId ?? 'all');
+                setCurrentQuestionIndex(0);
+                setShowPostSessionReview(false);
+                setActiveTab('quiz');
+              }}
+            />
             <DomainConfidenceTracker
               stats={stats}
               onDrillWeakAreas={handleDrillWeakAreas}
@@ -4025,19 +4285,35 @@ export default function App() {
         />
       )}
 
-      {/* 5-Question Rapid Micro-Drill Modal (Daily Harambee Weakness Challenge) */}
+      {/* 5-Question Rapid Micro-Drill Modal (Daily Harambee Weakness Challenge / Fundamentals Reset) */}
       {showMicroDrill !== false && (() => {
         const targetModId = microDrillTargetModuleId || 11;
         const targetModInfo = LEARNING_PATHS.flatMap((p) => p.modules).find(
           (m) => m.id === targetModId
         );
-        const modQuestions = questions.filter((q) => q.moduleId === targetModId);
-        const pathQuestions = questions.filter(
-          (q) =>
-            q.learningPathId === (targetModInfo?.pathId || 3) &&
-            q.moduleId !== targetModId
-        );
-        const combinedDrillPool = [...modQuestions, ...pathQuestions, ...questions];
+        const isFundamentalsReset =
+          fundamentalsResetModules !== null && fundamentalsResetModules.length > 0;
+        const resetSet = new Set(fundamentalsResetModules || []);
+
+        const combinedDrillPool = isFundamentalsReset
+          ? [
+              ...questions.filter(
+                (q) => resetSet.has(q.moduleId) && q.difficulty === 'Fundamental'
+              ),
+              ...questions.filter((q) => resetSet.has(q.moduleId)),
+              ...questions.filter((q) => q.difficulty === 'Fundamental'),
+              ...questions,
+            ]
+          : [
+              ...questions.filter((q) => q.moduleId === targetModId),
+              ...questions.filter(
+                (q) =>
+                  q.learningPathId === (targetModInfo?.pathId || 3) &&
+                  q.moduleId !== targetModId
+              ),
+              ...questions,
+            ];
+
         const uniqueDrillFive: Question[] = [];
         const seenIds = new Set<string>();
         for (const q of combinedDrillPool) {
@@ -4055,6 +4331,14 @@ export default function App() {
             targetModuleName={
               targetModInfo?.title || 'Azure Monitoring & Advisory Tools'
             }
+            drillVariant={isFundamentalsReset ? 'fundamentals-reset' : 'standard'}
+            fundamentalsResetSubtitle={
+              isFundamentalsReset
+                ? `Foundation reset across Module${
+                    fundamentalsResetModules.length > 1 ? 's' : ''
+                  } ${fundamentalsResetModules.map((id) => `M${id}`).join(' & ')}`
+                : undefined
+            }
             onAnswer={handleAnswerQuestion}
             onCompleteDrill={(modId, score, total) => {
               setStats((prev) => saveHarambeeDrillCompletion(prev, modId, score, total));
@@ -4068,7 +4352,11 @@ export default function App() {
                   hour: '2-digit',
                   minute: '2-digit',
                 }),
-                title: `Harambee 5-Q Drill • Module ${modId}`,
+                title: isFundamentalsReset
+                  ? `Fundamentals Reset • Modules ${(fundamentalsResetModules || [modId])
+                      .map((id) => `M${id}`)
+                      .join(' & ')}`
+                  : `Harambee 5-Q Drill • Module ${modId}`,
                 mode: 'micro-drill',
                 totalQuestions: total,
                 correctCount: score,
@@ -4081,7 +4369,10 @@ export default function App() {
               setPeerChallengeModuleId(modId);
               setShowPeerChallengeModal(true);
             }}
-            onClose={() => setShowMicroDrill(false)}
+            onClose={() => {
+              setShowMicroDrill(false);
+              setFundamentalsResetModules(null);
+            }}
           />
         );
       })()}
@@ -4398,6 +4689,10 @@ export default function App() {
           </div>
         </footer>
       )}
+      <AccessibilitySettingsModal
+        isOpen={showAccessibilityModal}
+        onClose={() => setShowAccessibilityModal(false)}
+      />
       </div>
     </ProtectedRoute>
   );

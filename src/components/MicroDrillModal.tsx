@@ -26,6 +26,8 @@ interface MicroDrillProps {
   onAnswer: (questionId: string, selectedAnswer: string, isCorrect: boolean) => void;
   onCompleteDrill?: (moduleId: number, score: number, total: number) => void;
   onLaunchPeerChallenge?: (moduleId: number) => void;
+  drillVariant?: 'standard' | 'fundamentals-reset';
+  fundamentalsResetSubtitle?: string;
   onClose: () => void;
 }
 
@@ -273,6 +275,8 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
   onAnswer,
   onCompleteDrill,
   onLaunchPeerChallenge,
+  drillVariant = 'standard',
+  fundamentalsResetSubtitle,
   onClose,
 }) => {
   // Take up to 5 questions for the Daily Harambee Weakness Drill
@@ -340,22 +344,38 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
         </div>
 
         {/* Modal Header (Fixed / Shrink-0 so it stays visible on all screen sizes) */}
-        <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 text-white flex items-center justify-between gap-2">
+        <div
+          className={`shrink-0 px-4 sm:px-6 py-3 sm:py-4 text-white flex items-center justify-between gap-2 ${
+            drillVariant === 'fundamentals-reset'
+              ? 'bg-gradient-to-r from-rose-600 via-amber-600 to-orange-600'
+              : 'bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600'
+          }`}
+        >
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <div className="p-2 rounded-xl bg-white/20 backdrop-blur-xs shrink-0">
-              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-200" />
+              {drillVariant === 'fundamentals-reset' ? (
+                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 text-amber-200" />
+              ) : (
+                <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-200" />
+              )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-extrabold text-sm sm:text-lg truncate">
-                  5-Question Rapid Weakness Drill
+                  {drillVariant === 'fundamentals-reset'
+                    ? 'Fundamentals Reset Drill (5 Qs)'
+                    : '5-Question Rapid Weakness Drill'}
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white shrink-0">
-                  Daily Harambee Challenge
+                  {drillVariant === 'fundamentals-reset'
+                    ? 'Foundation Recovery'
+                    : 'Daily Harambee Challenge'}
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs text-amber-100 truncate">
-                Targeting Module {targetModuleId}: {targetModuleName}
+                {drillVariant === 'fundamentals-reset' && fundamentalsResetSubtitle
+                  ? fundamentalsResetSubtitle
+                  : `Targeting Module ${targetModuleId}: ${targetModuleName}`}
               </p>
             </div>
           </div>

@@ -15,10 +15,13 @@ import {
   CloudCheck,
   Download,
   Anchor,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 import { Question } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
 import { useDebouncedNotes } from '../hooks/useDebouncedNotes';
+import { saveQuestionNote } from '../utils/storage';
 import { BUILTIN_QUESTIONS } from '../data/questionBank';
 import {
   downloadNotesAndMemoryAnchorsMarkdown,
@@ -59,10 +62,22 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
     question ? isMemoryAnchorSaved(`anchor-${question.id}`) : false
   );
   const [markdownExportToast, setMarkdownExportToast] = useState<string | null>(null);
+  const [isDictating, setIsDictating] = useState<boolean>(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     if (question) {
       setAnchorPinned(isMemoryAnchorSaved(`anchor-${question.id}`));
+    }
+    setSpeechError(null);
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      setIsDictating(false);
     }
   }, [question, isOpen]);
 
@@ -122,6 +137,77 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
 
   const handleDelete = () => {
     deleteNote();
+  };
+
+  const handleToggleVoiceDictation = () => {
+    setSpeechError(null);
+    if (isDictating && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      setIsDictating(false);
+      return;
+    }
+
+    const SpeechRecognitionAPI =
+      typeof window !== 'undefined'
+        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        : null;
+
+    if (!SpeechRecognitionAPI) {
+      setSpeechError('Web Speech API voice dictation requires Chrome, Edge, or Safari.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognitionAPI();
+      recognition.lang = 'en-US';
+      recognition.continuous = true;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsDictating(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        let spoken = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            spoken += event.results[i][0].transcript + ' ';
+          }
+        }
+        const cleaned = spoken.trim();
+        if (cleaned && question?.id) {
+          setNoteText((prev) => {
+            const combined = prev.trim() ? `${prev.trim()} ${cleaned}` : cleaned;
+            saveQuestionNote(question.id, combined);
+            if (onNoteSaved) {
+              onNoteSaved(combined);
+            }
+            return combined;
+          });
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error !== 'aborted') {
+          setSpeechError(`Voice input stopped (${event.error || 'mic permission required'}).`);
+        }
+        setIsDictating(false);
+      };
+
+      recognition.onend = () => {
+        setIsDictating(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setSpeechError('Could not initialize browser microphone dictation.');
+      setIsDictating(false);
+    }
   };
 
   const insertSnippet = (prefix: string) => {
@@ -242,25 +328,86 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
             </div>
           </div>
 
-          {/* Note Textarea */}
+          {/* Note Textarea + Web Speech API Microphone Dictation */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center justify-between gap-2 text-xs">
               <label htmlFor="quick-note-textarea" className="font-extrabold text-slate-700">
-                Your Personal Note:
+                Your Personal Note (Markdown supported):
               </label>
-              <span className="text-slate-400 text-[11px]">
-                {noteText.length} characters
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleToggleVoiceDictation}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border flex items-center gap-1 transition-all cursor-pointer ${
+                    isDictating
+                      ? 'bg-rose-600 text-white border-rose-700 animate-pulse shadow-xs'
+                      : 'bg-sky-50 hover:bg-sky-100 text-[#0078D4] border-sky-200 shadow-2xs'
+                  }`}
+                  title="Dictate study notes into savedNotesMap via Web Speech API"
+                >
+                  {isDictating ? (
+                    <>
+                      <MicOff className="w-3.5 h-3.5" />
+                      <span>Stop Dictation</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-3.5 h-3.5" />
+                      <span>Dictate Note</span>
+                    </>
+                  )}
+                </button>
+                <span className="text-slate-400 text-[11px]">
+                  {noteText.length} characters
+                </span>
+              </div>
             </div>
-            <textarea
-              id="quick-note-textarea"
-              ref={textareaRef}
-              rows={8}
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              placeholder="e.g. Remember: LRS has 3 copies in single datacenter. ExpressRoute never touches public internet. Azure Policy enforces compliance before deployment."
-              className="w-full p-3.5 rounded-xl border border-slate-300 focus:border-[#0078D4] focus:ring-2 focus:ring-[#0078D4]/20 text-xs sm:text-sm text-slate-800 leading-relaxed font-sans resize-y shadow-2xs focus:outline-hidden"
-            />
+
+            {speechError && (
+              <div className="px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-semibold flex items-center justify-between gap-2">
+                <span>{speechError}</span>
+                <button
+                  type="button"
+                  onClick={() => setSpeechError(null)}
+                  className="font-bold underline cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            <div className="relative">
+              <textarea
+                id="quick-note-textarea"
+                ref={textareaRef}
+                rows={8}
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder={
+                  isDictating
+                    ? 'Listening... Speak your study notes clearly to transcribe straight into savedNotesMap...'
+                    : 'e.g. Remember: **LRS** has 3 copies in single datacenter. ExpressRoute never touches public internet.'
+                }
+                className={`w-full p-3.5 pr-10 rounded-xl border text-xs sm:text-sm text-slate-800 leading-relaxed font-sans resize-y shadow-2xs focus:outline-hidden ${
+                  isDictating
+                    ? 'border-rose-400 bg-rose-50/30 focus:ring-2 focus:ring-rose-500/30'
+                    : 'border-slate-300 focus:border-[#0078D4] focus:ring-2 focus:ring-[#0078D4]/20'
+                }`}
+              />
+              <button
+                type="button"
+                onClick={handleToggleVoiceDictation}
+                className={`absolute right-2.5 top-2.5 p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isDictating
+                    ? 'bg-rose-600 text-white animate-pulse'
+                    : 'text-slate-400 hover:text-[#0078D4] hover:bg-blue-50'
+                }`}
+                title="Tap microphone to dictate study notes"
+                aria-label="Toggle microphone voice dictation"
+              >
+                {isDictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           {/* Exam Anchor Reference Tip & Pin Memory Anchor */}
