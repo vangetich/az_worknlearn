@@ -31,7 +31,10 @@ import { MaasaiMedallion } from './MotifDecorations';
 import { AppTab } from './Header';
 import { setDailyGoal } from '../utils/storage';
 import { DomainConfidenceRadar } from './DomainConfidenceRadar';
-import { VIRTUAL_STUDY_AREAS, VirtualStudyArea } from '../data/virtualStudyAreas';
+import {
+  VIRTUAL_STUDY_AREAS,
+  computeChamberMasteryPct,
+} from '../data/virtualStudyAreas';
 
 interface GlassyStudyHubDropdownProps {
   stats: UserStats;
@@ -64,9 +67,40 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [showRadarModal, setShowRadarModal] = useState<boolean>(false);
+  const [liveChamberStats, setLiveChamberStats] = useState<
+    Record<string, { onlineCount: number; pendingHandoffsCount: number; questionsSolved: number }>
+  >({});
   const dropdownRef = useRef<HTMLDivElement>(null);
   const portalMenuRef = useRef<HTMLDivElement>(null);
   const radarModalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    fetch('/api/study-hub/chambers/summary')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active || !data || !Array.isArray(data.chambers)) return;
+        const nextMap: Record<
+          string,
+          { onlineCount: number; pendingHandoffsCount: number; questionsSolved: number }
+        > = {};
+        data.chambers.forEach((c: any) => {
+          nextMap[c.roomId] = {
+            onlineCount: Number(c.onlineCount) || 0,
+            pendingHandoffsCount: Number(c.pendingHandoffsCount) || 0,
+            questionsSolved: Number(c.questionsSolved) || 0,
+          };
+        });
+        setLiveChamberStats(nextMap);
+      })
+      .catch(() => {
+        // ignore offline
+      });
+    return () => {
+      active = false;
+    };
+  }, [isOpen]);
 
   // Close on outside click (check both trigger container and portaled menu/modal) or Escape
   useEffect(() => {
@@ -377,55 +411,64 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      onOpenStudyRoom('AZ900-HUB');
+                      onOpenStudyRoom('HUB-LOBBY');
                       setIsOpen(false);
                     }}
-                    className="px-2 py-0.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-[10px] font-black shrink-0 transition-colors cursor-pointer"
+                    className="px-2.5 py-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-[10px] font-black shrink-0 transition-colors cursor-pointer"
                   >
                     Enter Hub
                   </button>
                 )}
               </div>
 
-              {/* 6 Detailed Room Areas List with Live Status & Quick Join */}
-              <div className="space-y-1.5 max-h-52 overflow-y-auto overscroll-contain pr-0.5">
-                {VIRTUAL_STUDY_AREAS.map((area) => (
-                  <button
-                    key={area.id}
-                    type="button"
-                    onClick={() => {
-                      if (onOpenStudyRoom) {
-                        onOpenStudyRoom(area.id);
-                      }
-                      setIsOpen(false);
-                    }}
-                    className="w-full text-left p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700 hover:border-sky-400/60 transition-all flex items-center justify-between gap-2 group cursor-pointer"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] font-bold text-white group-hover:text-sky-300 transition-colors truncate">
-                          {area.name}
+              {/* 6 Detailed Room Areas List with Real Live Telemetry & Quick Join */}
+              <div className="space-y-1.5 max-h-56 overflow-y-auto overscroll-contain pr-0.5">
+                {VIRTUAL_STUDY_AREAS.map((area) => {
+                  const live = liveChamberStats[area.id];
+                  const mastery = computeChamberMasteryPct(area.id, stats);
+                  return (
+                    <button
+                      key={area.id}
+                      type="button"
+                      onClick={() => {
+                        if (onOpenStudyRoom) {
+                          onOpenStudyRoom(area.id);
+                        }
+                        setIsOpen(false);
+                      }}
+                      className="w-full text-left p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700 hover:border-sky-400/60 transition-all flex items-center justify-between gap-2 group cursor-pointer"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-white group-hover:text-sky-300 transition-colors truncate">
+                            {area.name}
+                          </span>
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-sky-950 text-sky-300 border border-sky-800 shrink-0">
+                            {area.examWeight}
+                          </span>
+                          {(live?.pendingHandoffsCount ?? 0) > 0 && (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-amber-400 text-slate-950 shrink-0 tabular-nums">
+                              {live?.pendingHandoffsCount} queued
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 group-hover:text-slate-300 truncate mt-0.5">
+                          {area.tagline}
+                        </p>
+                      </div>
+
+                      <div className="text-right shrink-0 flex flex-col items-end tabular-nums">
+                        <span className="text-[10px] font-extrabold text-emerald-400">
+                          {live?.onlineCount ?? 0} live ·{' '}
+                          {mastery.masteryPct !== null ? `${mastery.masteryPct}%` : 'New'}
                         </span>
-                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-sky-950 text-sky-300 border border-sky-800 shrink-0">
-                          {area.examWeight}
+                        <span className="text-[9px] text-slate-400 font-mono mt-0.5">
+                          {area.id}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400 group-hover:text-slate-300 truncate mt-0.5">
-                        {area.tagline}
-                      </p>
-                    </div>
-
-                    <div className="text-right shrink-0 flex flex-col items-end">
-                      <span className="text-[10px] font-extrabold text-emerald-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-                        {area.onlineCount} online
-                      </span>
-                      <span className="text-[9px] text-slate-400 font-mono mt-0.5">
-                        {area.id}
-                      </span>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -458,7 +501,7 @@ export const GlassyStudyHubDropdown: React.FC<GlassyStudyHubDropdownProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    onOpenStudyRoom();
+                    onOpenStudyRoom('HUB-LOBBY');
                     setIsOpen(false);
                   }}
                   className="text-left p-2 rounded-xl hover:bg-sky-50/70 border border-slate-100 hover:border-sky-200/80 transition-all flex items-center gap-2 group/item cursor-pointer"

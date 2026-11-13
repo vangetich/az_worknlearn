@@ -189,6 +189,27 @@ export interface WhiteboardStroke {
   authorName?: string;
 }
 
+export interface StudyChamberHandoff {
+  id: string;
+  fromRoomId: string;
+  toRoomId: string;
+  type: 'question' | 'trap' | 'concept' | 'warroom-miss';
+  title: string;
+  note: string;
+  senderName: string;
+  senderAvatar: string;
+  createdAt: number;
+  resolved: boolean;
+  questionSnapshot?: SharedQuestionSnapshot;
+}
+
+export interface StudyChamberTimerState {
+  durationSeconds: number;
+  remainingSeconds: number;
+  isRunning: boolean;
+  startedAtEpochMs: number | null;
+}
+
 export interface StudyHubRoomState {
   roomId: string;
   createdAt: number;
@@ -203,59 +224,271 @@ export interface StudyHubRoomState {
     currentStreak: number;
   };
   participants: Record<string, CollabParticipant>;
-  messages: CollabChatMessage[];
+  messages: StudyMessageCompat[];
   whiteboardNodes: WhiteboardNode[];
   whiteboardStrokes: WhiteboardStroke[];
+  handoffQueue: StudyChamberHandoff[];
+  timerState: StudyChamberTimerState;
 }
+
+type StudyMessageCompat = CollabChatMessage & {
+  isCoach?: boolean;
+  handoffRef?: {
+    fromRoomId: string;
+    toRoomId: string;
+    title: string;
+  };
+};
+
+const CANONICAL_CHAMBER_IDS = [
+  'AZ900-CONCEPTS',
+  'AZ900-SERVICES',
+  'AZ900-SECURITY',
+  'AZ900-GOVERNANCE',
+  'AZ900-WAR-ROOM',
+  'AZ900-CLINIC',
+] as const;
 
 const studyHubRooms = new Map<string, StudyHubRoomState>();
 
+function getDefaultDurationForRoom(roomId: string): number {
+  if (roomId === 'AZ900-WAR-ROOM') return 45 * 60;
+  if (roomId === 'AZ900-SERVICES') return 35 * 60;
+  if (roomId === 'AZ900-SECURITY') return 30 * 60;
+  if (roomId === 'AZ900-CLINIC') return 20 * 60;
+  return 25 * 60;
+}
+
 function getDefaultWhiteboardNodes(roomId: string): WhiteboardNode[] {
   const now = Date.now();
+  const normalized = roomId.trim().toUpperCase();
+
+  if (normalized === 'AZ900-CONCEPTS') {
+    return [
+      {
+        id: `wb-capex-${normalized}`,
+        title: 'CapEx vs OpEx Model',
+        category: 'governance',
+        notes: 'CapEx = upfront physical servers; OpEx = pay-as-you-go cloud consumption with zero idle waste.',
+        text: 'CapEx = upfront physical servers; OpEx = pay-as-you-go cloud consumption with zero idle waste.',
+        x: 6,
+        y: 12,
+        author: 'Concepts Chamber',
+        authorName: 'Concepts Chamber',
+        updatedAt: now,
+      },
+      {
+        id: `wb-resp-${normalized}`,
+        title: 'Shared Responsibility Boundary',
+        category: 'identity',
+        notes: 'Customer ALWAYS owns Data, Devices, Accounts & Identities across IaaS, PaaS, and SaaS.',
+        text: 'Customer ALWAYS owns Data, Devices, Accounts & Identities across IaaS, PaaS, and SaaS.',
+        x: 46,
+        y: 14,
+        author: 'Concepts Chamber',
+        authorName: 'Concepts Chamber',
+        updatedAt: now,
+      },
+      {
+        id: `wb-sla-${normalized}`,
+        title: 'Composite SLA Math',
+        category: 'compute',
+        notes: 'Chain of 99.95% App × 99.9% SQL = 99.85% composite availability.',
+        text: 'Chain of 99.95% App × 99.9% SQL = 99.85% composite availability.',
+        x: 18,
+        y: 52,
+        author: 'Concepts Chamber',
+        authorName: 'Concepts Chamber',
+        updatedAt: now,
+      },
+    ];
+  }
+
+  if (normalized === 'AZ900-SERVICES') {
+    return [
+      {
+        id: `wb-az-${normalized}`,
+        title: 'Availability Zones vs Region Pairs',
+        category: 'compute',
+        notes: 'AZs isolate datacenter failures inside 1 Region (3+ zones); Region Pairs span 300+ miles.',
+        text: 'AZs isolate datacenter failures inside 1 Region (3+ zones); Region Pairs span 300+ miles.',
+        x: 6,
+        y: 12,
+        author: 'Services Lab',
+        authorName: 'Services Lab',
+        updatedAt: now,
+      },
+      {
+        id: `wb-vnet-${normalized}`,
+        title: 'ExpressRoute vs VPN Gateway',
+        category: 'networking',
+        notes: 'ExpressRoute uses private dedicated fiber (bypasses public internet); VPN Gateway encrypts over internet.',
+        text: 'ExpressRoute uses private dedicated fiber (bypasses public internet); VPN Gateway encrypts over internet.',
+        x: 46,
+        y: 14,
+        author: 'Services Lab',
+        authorName: 'Services Lab',
+        updatedAt: now,
+      },
+      {
+        id: `wb-blob-${normalized}`,
+        title: 'Blob Storage Redundancy & Tiers',
+        category: 'storage',
+        notes: 'Archive tier = lowest storage cost, hours to rehydrate. ZRS = 3 AZs; GRS/GZRS = cross-region failover.',
+        text: 'Archive tier = lowest storage cost, hours to rehydrate. ZRS = 3 AZs; GRS/GZRS = cross-region failover.',
+        x: 16,
+        y: 52,
+        author: 'Services Lab',
+        authorName: 'Services Lab',
+        updatedAt: now,
+      },
+    ];
+  }
+
+  if (normalized === 'AZ900-SECURITY') {
+    return [
+      {
+        id: `wb-entra-${normalized}`,
+        title: 'Microsoft Entra ID (Zero Trust)',
+        category: 'identity',
+        notes: 'Verify explicitly: Signals (User, IP, Device) -> Conditional Access -> MFA Enforcement.',
+        text: 'Verify explicitly: Signals (User, IP, Device) -> Conditional Access -> MFA Enforcement.',
+        x: 8,
+        y: 12,
+        author: 'Security Chamber',
+        authorName: 'Security Chamber',
+        updatedAt: now,
+      },
+      {
+        id: `wb-did-${normalized}`,
+        title: '7-Ring Defense in Depth',
+        category: 'networking',
+        notes: 'Physical -> Identity & Access -> Perimeter (DDoS) -> Network (NSG) -> Compute -> Application -> Data.',
+        text: 'Physical -> Identity & Access -> Perimeter (DDoS) -> Network (NSG) -> Compute -> Application -> Data.',
+        x: 48,
+        y: 14,
+        author: 'Security Chamber',
+        authorName: 'Security Chamber',
+        updatedAt: now,
+      },
+      {
+        id: `wb-siem-${normalized}`,
+        title: 'Defender vs Microsoft Sentinel',
+        category: 'identity',
+        notes: 'Defender for Cloud = CSPM / Secure Score posture; Sentinel = cloud-native SIEM + SOAR analytics.',
+        text: 'Defender for Cloud = CSPM / Secure Score posture; Sentinel = cloud-native SIEM + SOAR analytics.',
+        x: 16,
+        y: 52,
+        author: 'Security Chamber',
+        authorName: 'Security Chamber',
+        updatedAt: now,
+      },
+    ];
+  }
+
+  if (normalized === 'AZ900-GOVERNANCE') {
+    return [
+      {
+        id: `wb-locks-${normalized}`,
+        title: 'Resource Locks Override Owners',
+        category: 'governance',
+        notes: 'CanNotDelete lock prevents deletion even by Subscription Owners until explicitly removed.',
+        text: 'CanNotDelete lock prevents deletion even by Subscription Owners until explicitly removed.',
+        x: 8,
+        y: 12,
+        author: 'Governance Arena',
+        authorName: 'Governance Arena',
+        updatedAt: now,
+      },
+      {
+        id: `wb-policy-${normalized}`,
+        title: 'RBAC vs Azure Policy',
+        category: 'governance',
+        notes: 'RBAC = WHO can access actions; Policy = WHAT configurations & regions are allowed.',
+        text: 'RBAC = WHO can access actions; Policy = WHAT configurations & regions are allowed.',
+        x: 48,
+        y: 14,
+        author: 'Governance Arena',
+        authorName: 'Governance Arena',
+        updatedAt: now,
+      },
+      {
+        id: `wb-arc-${normalized}`,
+        title: 'Azure Arc + Cost Calculators',
+        category: 'compute',
+        notes: 'Arc governs on-prem/AWS/GCP in ARM. TCO Calculator justifies migrations; Pricing Calculator prices new Azure builds.',
+        text: 'Arc governs on-prem/AWS/GCP in ARM. TCO Calculator justifies migrations; Pricing Calculator prices new Azure builds.',
+        x: 16,
+        y: 52,
+        author: 'Governance Arena',
+        authorName: 'Governance Arena',
+        updatedAt: now,
+      },
+    ];
+  }
+
+  if (normalized === 'AZ900-WAR-ROOM') {
+    return [
+      {
+        id: `wb-pace-${normalized}`,
+        title: '45-Min Exam Pacing Target',
+        category: 'compute',
+        notes: '~55 sec/question. Passing score = 700/1000. Zero penalty for guessing—answer every item.',
+        text: '~55 sec/question. Passing score = 700/1000. Zero penalty for guessing—answer every item.',
+        x: 8,
+        y: 12,
+        author: 'War Room Lead',
+        authorName: 'War Room Lead',
+        updatedAt: now,
+      },
+      {
+        id: `wb-weights-${normalized}`,
+        title: 'AZ-900 Exam Blueprint Weights',
+        category: 'governance',
+        notes: 'Concepts (25–30%) + Architecture & Services (35–40%) + Management & Governance (30–35%).',
+        text: 'Concepts (25–30%) + Architecture & Services (35–40%) + Management & Governance (30–35%).',
+        x: 48,
+        y: 14,
+        author: 'War Room Lead',
+        authorName: 'War Room Lead',
+        updatedAt: now,
+      },
+    ];
+  }
+
   return [
     {
-      id: `wb-entra-${roomId}`,
-      title: 'Microsoft Entra ID (Zero Trust)',
-      category: 'identity',
-      notes: 'Signals (User, IP, Device) -> Conditional Access -> MFA Enforcement',
-      text: 'Signals (User, IP, Device) -> Conditional Access -> MFA Enforcement',
+      id: `wb-trap-net-${normalized}`,
+      title: 'Trap: Advisor vs Monitor vs Service Health',
+      category: 'networking',
+      notes: 'Advisor = optimization tips; Monitor = metrics/alerts; Service Health = personalized regional outage notice.',
+      text: 'Advisor = optimization tips; Monitor = metrics/alerts; Service Health = personalized regional outage notice.',
       x: 8,
       y: 12,
-      author: 'Amara (Nairobi)',
-      authorName: 'Amara (Nairobi)',
+      author: 'Traps Clinic',
+      authorName: 'Traps Clinic',
       updatedAt: now,
     },
     {
-      id: `wb-vnet-${roomId}`,
-      title: 'Azure VNet & ExpressRoute',
-      category: 'networking',
-      notes: 'Private dedicated fiber connection (does NOT traverse public internet)',
-      text: 'Private dedicated fiber connection (does NOT traverse public internet)',
+      id: `wb-trap-store-${normalized}`,
+      title: 'Trap: Archive vs Cold Rehydration',
+      category: 'storage',
+      notes: 'Cold = online instant read (90+ day tier); Archive = offline, takes hours to rehydrate.',
+      text: 'Cold = online instant read (90+ day tier); Archive = offline, takes hours to rehydrate.',
       x: 48,
       y: 14,
-      author: 'Tariq (Lagos)',
-      authorName: 'Tariq (Lagos)',
-      updatedAt: now,
-    },
-    {
-      id: `wb-locks-${roomId}`,
-      title: 'Resource Locks vs RBAC',
-      category: 'governance',
-      notes: 'CanNotDelete lock overrides even Subscription Owner delete rights!',
-      text: 'CanNotDelete lock overrides even Subscription Owner delete rights!',
-      x: 16,
-      y: 52,
-      author: 'Kofi (Accra)',
-      authorName: 'Kofi (Accra)',
+      author: 'Traps Clinic',
+      authorName: 'Traps Clinic',
       updatedAt: now,
     },
   ];
 }
 
 function getOrCreateRoom(roomId: string): StudyHubRoomState {
-  const normalizedId = roomId.trim().toUpperCase();
+  const normalizedId = roomId.trim().toUpperCase() || 'AZ900-CONCEPTS';
   let room = studyHubRooms.get(normalizedId);
   if (!room) {
+    const defaultDuration = getDefaultDurationForRoom(normalizedId);
     room = {
       roomId: normalizedId,
       createdAt: Date.now(),
@@ -274,23 +507,67 @@ function getOrCreateRoom(roomId: string): StudyHubRoomState {
         {
           id: `sys-welcome-${normalizedId}`,
           senderId: 'system',
-          sender: 'Study Hub Host',
+          sender: 'Chamber Host',
           avatar: '🤝',
-          location: 'Live Hub',
-          text: `Welcome to Collaborative Study Hub #${normalizedId}! Share this room code with a study partner to solve scenario-based AZ-900 questions and brainstorm on the Shared Whiteboard in real-time.`,
+          location: 'Live Chamber',
+          text: `Connected to live chamber #${normalizedId}. Collaborators in this chamber synchronize questions, votes, whiteboard cards, timer state, and cross-chamber handoffs in real time.`,
           timestamp: Date.now(),
         },
       ],
       whiteboardNodes: getDefaultWhiteboardNodes(normalizedId),
       whiteboardStrokes: [],
+      handoffQueue: [],
+      timerState: {
+        durationSeconds: defaultDuration,
+        remainingSeconds: defaultDuration,
+        isRunning: false,
+        startedAtEpochMs: null,
+      },
     };
     studyHubRooms.set(normalizedId, room);
   }
   return room;
 }
 
-// Track WebSocket connections per room
+// Pre-seed all 6 canonical domain chambers on startup so summary telemetry is immediately live
+for (const canonicalId of CANONICAL_CHAMBER_IDS) {
+  getOrCreateRoom(canonicalId);
+}
+
+// Track WebSocket connections per room AND global lobby subscribers
 const roomSockets = new Map<string, Set<{ ws: WebSocket; userId: string }>>();
+
+function buildChambersSummary() {
+  const now = Date.now();
+  return CANONICAL_CHAMBER_IDS.map((chamberId) => {
+    const room = getOrCreateRoom(chamberId);
+    const activeParticipants = Object.values(room.participants).filter(
+      (p) => p.isOnline && now - p.lastSeen < 1000 * 60 * 15
+    );
+    const unresolvedHandoffs = room.handoffQueue.filter((h) => !h.resolved).length;
+    return {
+      roomId: room.roomId,
+      onlineCount: activeParticipants.length,
+      participants: activeParticipants.map((p) => ({
+        userId: p.userId,
+        name: p.name,
+        avatar: p.avatar,
+        location: p.location,
+      })),
+      questionsSolved: room.coopStats.questionsSolved,
+      consensusCorrect: room.coopStats.consensusCorrect,
+      currentStreak: room.coopStats.currentStreak,
+      activeQuestionTitle: room.activeQuestion?.moduleTitle || null,
+      activeQuestionId: room.activeQuestion?.id || null,
+      whiteboardNodesCount: room.whiteboardNodes.length,
+      messagesCount: room.messages.length,
+      pendingHandoffsCount: unresolvedHandoffs,
+      totalHandoffsCount: room.handoffQueue.length,
+      timerRunning: room.timerState.isRunning,
+      updatedAt: room.updatedAt,
+    };
+  });
+}
 
 function broadcastRoomState(roomId: string) {
   const normalizedId = roomId.trim().toUpperCase();
@@ -303,14 +580,31 @@ function broadcastRoomState(roomId: string) {
   });
 
   const clients = roomSockets.get(normalizedId);
-  if (!clients) return;
+  if (clients) {
+    for (const client of clients) {
+      if (client.ws.readyState === WebSocket.OPEN) {
+        try {
+          client.ws.send(payload);
+        } catch {
+          // ignore broken socket
+        }
+      }
+    }
+  }
 
-  for (const client of clients) {
-    if (client.ws.readyState === WebSocket.OPEN) {
-      try {
-        client.ws.send(payload);
-      } catch {
-        // ignore broken socket
+  // Also notify any connected sockets with live 6-chamber network summary
+  const summaryPayload = JSON.stringify({
+    type: 'chambers:summary',
+    chambers: buildChambersSummary(),
+  });
+  for (const [, set] of roomSockets.entries()) {
+    for (const client of set) {
+      if (client.ws.readyState === WebSocket.OPEN) {
+        try {
+          client.ws.send(summaryPayload);
+        } catch {
+          // ignore
+        }
       }
     }
   }
@@ -322,7 +616,7 @@ function applyRoomEvent(roomId: string, event: any): StudyHubRoomState {
   const now = Date.now();
   room.updatedAt = now;
 
-  const { type, userId, payload } = event;
+  const { type, userId, payload } = event || {};
 
   switch (type) {
     case 'room:join': {
@@ -354,7 +648,8 @@ function applyRoomEvent(roomId: string, event: any): StudyHubRoomState {
       break;
     }
 
-    case 'question:sync': {
+    case 'question:sync':
+    case 'question:set': {
       if (payload?.question) {
         room.activeQuestion = payload.question;
         room.isAnswerRevealed = false;
@@ -457,9 +752,77 @@ function applyRoomEvent(roomId: string, event: any): StudyHubRoomState {
       break;
     }
 
+    case 'timer:sync': {
+      const action = payload?.action;
+      if (action === 'start') {
+        const rem =
+          typeof payload.remainingSeconds === 'number'
+            ? Math.max(0, Math.round(payload.remainingSeconds))
+            : room.timerState.remainingSeconds;
+        room.timerState = {
+          ...room.timerState,
+          remainingSeconds: rem,
+          isRunning: true,
+          startedAtEpochMs: now,
+        };
+      } else if (action === 'pause') {
+        const rem =
+          typeof payload.remainingSeconds === 'number'
+            ? Math.max(0, Math.round(payload.remainingSeconds))
+            : room.timerState.remainingSeconds;
+        room.timerState = {
+          ...room.timerState,
+          remainingSeconds: rem,
+          isRunning: false,
+          startedAtEpochMs: null,
+        };
+      } else if (action === 'reset') {
+        const defDur =
+          typeof payload.durationSeconds === 'number'
+            ? Math.max(60, Math.round(payload.durationSeconds))
+            : getDefaultDurationForRoom(room.roomId);
+        room.timerState = {
+          durationSeconds: defDur,
+          remainingSeconds: defDur,
+          isRunning: false,
+          startedAtEpochMs: null,
+        };
+      }
+      break;
+    }
+
+    case 'handoff:load': {
+      if (payload?.handoffId) {
+        const item = room.handoffQueue.find((h) => h.id === payload.handoffId);
+        if (item?.questionSnapshot) {
+          room.activeQuestion = item.questionSnapshot;
+          room.isAnswerRevealed = false;
+          room.eliminatedOptions = [];
+          room.sharedScratchpad = item.note
+            ? `[From ${item.fromRoomId}] ${item.note}`
+            : room.sharedScratchpad;
+          Object.values(room.participants).forEach((p) => {
+            p.selectedOption = null;
+            p.lockedIn = false;
+            p.confidence = null;
+          });
+        }
+      }
+      break;
+    }
+
+    case 'handoff:resolve': {
+      if (payload?.handoffId) {
+        const item = room.handoffQueue.find((h) => h.id === payload.handoffId);
+        if (item) {
+          item.resolved = payload.resolved !== undefined ? Boolean(payload.resolved) : true;
+        }
+      }
+      break;
+    }
+
     case 'chat:message': {
       if (payload?.message && payload.message.id) {
-        // Idempotency guard: prevent duplicate messages
         const exists = room.messages.some((m) => m.id === payload.message.id);
         if (!exists) {
           room.messages.push(payload.message);
@@ -564,6 +927,86 @@ function applyRoomEvent(roomId: string, event: any): StudyHubRoomState {
   return room;
 }
 
+// Send an interoperable study handoff between two chambers (question, trap, concept, or war-room miss)
+function dispatchInterChamberHandoff(params: {
+  fromRoomId: string;
+  toRoomId: string;
+  type: 'question' | 'trap' | 'concept' | 'warroom-miss';
+  title: string;
+  note: string;
+  senderName: string;
+  senderAvatar: string;
+  questionSnapshot?: SharedQuestionSnapshot;
+}) {
+  const fromNorm = params.fromRoomId.trim().toUpperCase();
+  const toNorm = params.toRoomId.trim().toUpperCase();
+  const sourceRoom = getOrCreateRoom(fromNorm);
+  const targetRoom = getOrCreateRoom(toNorm);
+  const now = Date.now();
+
+  const handoff: StudyChamberHandoff = {
+    id: `handoff-${now}-${Math.random().toString(36).slice(2, 7)}`,
+    fromRoomId: fromNorm,
+    toRoomId: toNorm,
+    type: params.type,
+    title: params.title.slice(0, 140),
+    note: params.note.slice(0, 600),
+    senderName: params.senderName || 'Cloud Explorer',
+    senderAvatar: params.senderAvatar || '🌟',
+    createdAt: now,
+    resolved: false,
+    questionSnapshot: params.questionSnapshot,
+  };
+
+  targetRoom.handoffQueue.unshift(handoff);
+  if (targetRoom.handoffQueue.length > 30) {
+    targetRoom.handoffQueue = targetRoom.handoffQueue.slice(0, 30);
+  }
+  targetRoom.updatedAt = now;
+
+  // Post cross-chamber linkage announcements to both chambers
+  targetRoom.messages.push({
+    id: `handoff-msg-in-${now}-${Math.random().toString(36).slice(2, 6)}`,
+    senderId: 'system',
+    sender: `${params.senderName || 'Explorer'} via ${fromNorm}`,
+    avatar: params.senderAvatar || '🔗',
+    location: `Handoff from ${fromNorm}`,
+    text: `Linked study packet "${handoff.title}": ${handoff.note || 'Ready for collaborative review in the Escalated Queue.'}`,
+    timestamp: now,
+    handoffRef: {
+      fromRoomId: fromNorm,
+      toRoomId: toNorm,
+      title: handoff.title,
+    },
+  });
+  if (targetRoom.messages.length > 80) {
+    targetRoom.messages = targetRoom.messages.slice(-80);
+  }
+
+  sourceRoom.messages.push({
+    id: `handoff-msg-out-${now}-${Math.random().toString(36).slice(2, 6)}`,
+    senderId: 'system',
+    sender: 'Inter-Chamber Link',
+    avatar: '🔗',
+    location: `Sent -> ${toNorm}`,
+    text: `Forwarded "${handoff.title}" to chamber #${toNorm}.`,
+    timestamp: now,
+    handoffRef: {
+      fromRoomId: fromNorm,
+      toRoomId: toNorm,
+      title: handoff.title,
+    },
+  });
+  if (sourceRoom.messages.length > 80) {
+    sourceRoom.messages = sourceRoom.messages.slice(-80);
+  }
+
+  broadcastRoomState(fromNorm);
+  broadcastRoomState(toNorm);
+
+  return { handoff, sourceRoom, targetRoom };
+}
+
 // Attach WebSocketServer on /api/collab-ws
 const wss = new WebSocketServer({ noServer: true });
 
@@ -580,10 +1023,22 @@ wss.on('connection', (ws) => {
   let boundRoomId: string | null = null;
   let boundUserId: string | null = null;
 
+  // Send immediate chamber network overview upon socket connection
+  try {
+    ws.send(
+      JSON.stringify({
+        type: 'chambers:summary',
+        chambers: buildChambersSummary(),
+      })
+    );
+  } catch {
+    // ignore
+  }
+
   ws.on('message', (raw) => {
     try {
       const data = JSON.parse(raw.toString());
-      const roomId = (data.roomId || 'AZ900-HUB').toUpperCase();
+      const roomId = (data.roomId || 'AZ900-CONCEPTS').toUpperCase();
       const userId = data.userId || 'anon';
 
       if (!boundRoomId || boundRoomId !== roomId) {
@@ -601,7 +1056,20 @@ wss.on('connection', (ws) => {
         roomSockets.get(roomId)!.add({ ws, userId });
       }
 
-      applyRoomEvent(roomId, data);
+      if (data.type === 'handoff:send' && data.payload?.toRoomId) {
+        dispatchInterChamberHandoff({
+          fromRoomId: roomId,
+          toRoomId: data.payload.toRoomId,
+          type: data.payload.type || 'question',
+          title: data.payload.title || 'Linked AZ-900 Item',
+          note: data.payload.note || '',
+          senderName: data.payload.senderName || 'Cloud Explorer',
+          senderAvatar: data.payload.senderAvatar || '🌟',
+          questionSnapshot: data.payload.questionSnapshot,
+        });
+      } else {
+        applyRoomEvent(roomId, data);
+      }
     } catch (err) {
       console.error('WebSocket message error:', err);
     }
@@ -623,6 +1091,99 @@ wss.on('connection', (ws) => {
   });
 });
 
+// Live 6-chamber network summary endpoint
+app.get('/api/study-hub/chambers/summary', (req, res) => {
+  res.json({
+    chambers: buildChambersSummary(),
+    timestamp: Date.now(),
+  });
+});
+
+// Cross-chamber interoperable handoff endpoint
+app.post('/api/study-hub/:roomId/handoff', (req, res) => {
+  const { toRoomId, type, title, note, senderName, senderAvatar, questionSnapshot } = req.body || {};
+  if (!toRoomId || typeof toRoomId !== 'string') {
+    return res.status(400).json({ error: 'toRoomId is required for inter-chamber handoff.' });
+  }
+  const result = dispatchInterChamberHandoff({
+    fromRoomId: req.params.roomId,
+    toRoomId,
+    type: type || 'question',
+    title: String(title || 'Linked Study Item'),
+    note: String(note || ''),
+    senderName: String(senderName || 'Cloud Explorer'),
+    senderAvatar: String(senderAvatar || '🌟'),
+    questionSnapshot,
+  });
+  res.json({
+    handoff: result.handoff,
+    sourceRoom: result.sourceRoom,
+    targetRoom: result.targetRoom,
+    chambers: buildChambersSummary(),
+  });
+});
+
+// Optional Real AI Domain Coach inside any of the 6 chambers (uses server-side Gemini 4 Hydrogen)
+app.post('/api/study-hub/:roomId/coach', async (req, res) => {
+  const room = getOrCreateRoom(req.params.roomId);
+  const { prompt, userName, areaName } = req.body || {};
+  const q = room.activeQuestion;
+
+  const fallbackText = q
+    ? `[${areaName || room.roomId} Coach] Focus on ${q.moduleTitle}: ${q.examTip} Compare distractors carefully against the scenario requirement.`
+    : `[${areaName || room.roomId} Coach] Lock in the core service boundaries for this domain and send any tricky scenarios to Traps Clinic (AZ900-CLINIC) for side-by-side distractor breakdown.`;
+
+  if (!process.env.GEMINI_API_KEY) {
+    const coachMsg: StudyMessageCompat = {
+      id: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      senderId: 'chamber-coach',
+      sender: 'AZ-900 Domain Coach',
+      avatar: '🧭',
+      location: room.roomId,
+      text: fallbackText,
+      timestamp: Date.now(),
+      isCoach: true,
+    };
+    room.messages.push(coachMsg);
+    broadcastRoomState(room.roomId);
+    return res.json({ message: coachMsg, room });
+  }
+
+  try {
+    const contextPrompt = `You are a concise, practical Microsoft Azure AZ-900 Domain Study Coach inside chamber "${areaName || room.roomId}".
+Learner "${userName || 'Explorer'}" asked: "${String(prompt || 'Give us a concise exam clue for the current board without spoiling the option letter unless already revealed.')}"
+Active Question (${room.isAnswerRevealed ? 'ANSWER ALREADY REVEALED' : 'ANSWER HIDDEN - DO NOT REVEAL CORRECT LETTER'}):
+${q ? `Module: M${q.moduleId} (${q.moduleTitle})\nScenario: ${q.scenario}\nQuestion: ${q.question}\nShared Scratchpad: ${room.sharedScratchpad || '(empty)'}` : 'No question loaded yet.'}
+Respond in 2-3 tight bullet points or sentences focused strictly on AZ-900 exam logic and contrast rules.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-4-hydrogen',
+      contents: contextPrompt,
+    });
+
+    const coachText = (response.text || fallbackText).trim().slice(0, 700);
+    const coachMsg: StudyMessageCompat = {
+      id: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      senderId: 'chamber-coach',
+      sender: 'AZ-900 Domain Coach',
+      avatar: '🧭',
+      location: room.roomId,
+      text: coachText,
+      timestamp: Date.now(),
+      isCoach: true,
+    };
+    room.messages.push(coachMsg);
+    if (room.messages.length > 80) {
+      room.messages = room.messages.slice(-80);
+    }
+    broadcastRoomState(room.roomId);
+    res.json({ message: coachMsg, room });
+  } catch (err) {
+    console.error('Chamber coach error:', err);
+    res.status(500).json({ error: 'Unable to reach AI Domain Coach right now.' });
+  }
+});
+
 // REST endpoints for Study Hub state & events (enables instant sync & fallback)
 app.get('/api/study-hub/:roomId', (req, res) => {
   const room = getOrCreateRoom(req.params.roomId);
@@ -631,7 +1192,7 @@ app.get('/api/study-hub/:roomId', (req, res) => {
 
 app.post('/api/study-hub/:roomId/event', (req, res) => {
   const room = applyRoomEvent(req.params.roomId, req.body);
-  res.json({ room });
+  res.json({ room, chambers: buildChambersSummary() });
 });
 
 // Initialize Google GenAI

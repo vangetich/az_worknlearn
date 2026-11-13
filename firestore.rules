@@ -90,6 +90,44 @@ service cloud.firestore {
         data.updatedAt is timestamp;
     }
 
+    function isValidChamberRoomId(roomId) {
+      return roomId is string && roomId.size() <= 32 && (
+        roomId == 'AZ900-CONCEPTS' ||
+        roomId == 'AZ900-SERVICES' ||
+        roomId == 'AZ900-SECURITY' ||
+        roomId == 'AZ900-GOVERNANCE' ||
+        roomId == 'AZ900-WAR-ROOM' ||
+        roomId == 'AZ900-CLINIC'
+      );
+    }
+
+    function isValidStudyChamberCheckin(data) {
+      return data.keys().hasAll(['userId', 'roomId', 'questionsSolved', 'correctCount', 'handoffsResolved', 'lastNotes', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'roomId', 'questionsSolved', 'correctCount', 'handoffsResolved', 'lastNotes', 'createdAt', 'updatedAt']) &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        isValidChamberRoomId(data.roomId) &&
+        data.questionsSolved is int && data.questionsSolved >= 0 && data.questionsSolved <= 10000 &&
+        data.correctCount is int && data.correctCount >= 0 && data.correctCount <= data.questionsSolved &&
+        data.handoffsResolved is int && data.handoffsResolved >= 0 && data.handoffsResolved <= 10000 &&
+        data.lastNotes is string && data.lastNotes.size() <= 1200 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidStudyChamberHandoff(data) {
+      return data.keys().hasAll(['userId', 'fromRoomId', 'toRoomId', 'questionId', 'title', 'note', 'resolved', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'fromRoomId', 'toRoomId', 'questionId', 'title', 'note', 'resolved', 'createdAt', 'updatedAt']) &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        isValidChamberRoomId(data.fromRoomId) &&
+        isValidChamberRoomId(data.toRoomId) &&
+        data.questionId is string && data.questionId.size() >= 1 && data.questionId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        data.note is string && data.note.size() <= 600 &&
+        data.resolved is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
     // =========================================================================
     // Collection Rules
     // =========================================================================
@@ -219,6 +257,70 @@ service cloud.firestore {
         );
 
       allow delete: if false;
+    }
+
+    // 5. Study Chamber Checkins Collection (Per-Learner Domain Chamber Telemetry & Notes)
+    match /study_chamber_checkins/{checkinId} {
+      allow get: if isSignedIn() && isValidId(checkinId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(checkinId) &&
+        isValidStudyChamberCheckin(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(incoming().userId));
+
+      allow update: if isVerifiedUser() &&
+        isValidId(checkinId) &&
+        isValidStudyChamberCheckin(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().roomId == existing().roomId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (
+            existing().userId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['questionsSolved', 'correctCount', 'handoffsResolved', 'lastNotes', 'updatedAt'])
+          ) ||
+          isAdmin()
+        );
+
+      allow delete: if isVerifiedUser() && isValidId(checkinId) && isAdmin();
+    }
+
+    // 6. Study Chamber Handoffs Collection (Interoperable Cross-Chamber Traps & Links)
+    match /study_chamber_handoffs/{handoffId} {
+      allow get: if isSignedIn() && isValidId(handoffId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(handoffId) &&
+        isValidStudyChamberHandoff(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(incoming().userId));
+
+      allow update: if isVerifiedUser() &&
+        isValidId(handoffId) &&
+        isValidStudyChamberHandoff(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().fromRoomId == existing().fromRoomId &&
+        incoming().toRoomId == existing().toRoomId &&
+        incoming().questionId == existing().questionId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (
+            existing().userId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'note', 'resolved', 'updatedAt'])
+          ) ||
+          isAdmin()
+        );
+
+      allow delete: if isVerifiedUser() && isValidId(handoffId) && (existing().userId == request.auth.uid || isAdmin());
     }
   }
 }

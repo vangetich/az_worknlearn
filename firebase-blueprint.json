@@ -167,6 +167,132 @@
         }
       },
       "required": ["userId", "gateway", "amount", "currency", "checkoutRequestId", "status", "createdAt", "updatedAt"]
+    },
+    "StudyChamberCheckin": {
+      "title": "StudyChamberCheckin",
+      "description": "Per-learner cumulative study progress and domain notes inside one of the 6 Virtual Study Room chambers.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "roomId": {
+          "type": "string",
+          "description": "Canonical chamber room identifier.",
+          "enum": [
+            "AZ900-CONCEPTS",
+            "AZ900-SERVICES",
+            "AZ900-SECURITY",
+            "AZ900-GOVERNANCE",
+            "AZ900-WAR-ROOM",
+            "AZ900-CLINIC"
+          ]
+        },
+        "questionsSolved": {
+          "type": "integer",
+          "description": "Total questions solved in this chamber."
+        },
+        "correctCount": {
+          "type": "integer",
+          "description": "Total correct answers in this chamber."
+        },
+        "handoffsResolved": {
+          "type": "integer",
+          "description": "Total cross-chamber handoffs or traps resolved."
+        },
+        "lastNotes": {
+          "type": "string",
+          "description": "Latest chamber scratchpad note saved by the learner.",
+          "minLength": 0,
+          "maxLength": 1200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["userId", "roomId", "questionsSolved", "correctCount", "handoffsResolved", "lastNotes", "createdAt", "updatedAt"]
+    },
+    "StudyChamberHandoff": {
+      "title": "StudyChamberHandoff",
+      "description": "Inter-chamber question or concept handoff queued by a learner across the 6 study chambers.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "fromRoomId": {
+          "type": "string",
+          "description": "Source study chamber ID.",
+          "enum": [
+            "AZ900-CONCEPTS",
+            "AZ900-SERVICES",
+            "AZ900-SECURITY",
+            "AZ900-GOVERNANCE",
+            "AZ900-WAR-ROOM",
+            "AZ900-CLINIC"
+          ]
+        },
+        "toRoomId": {
+          "type": "string",
+          "description": "Target study chamber ID.",
+          "enum": [
+            "AZ900-CONCEPTS",
+            "AZ900-SERVICES",
+            "AZ900-SECURITY",
+            "AZ900-GOVERNANCE",
+            "AZ900-WAR-ROOM",
+            "AZ900-CLINIC"
+          ]
+        },
+        "questionId": {
+          "type": "string",
+          "description": "Linked AZ-900 question ID.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "description": "Short handoff summary title.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "note": {
+          "type": "string",
+          "description": "Learner study note carried between chambers.",
+          "minLength": 0,
+          "maxLength": 600
+        },
+        "resolved": {
+          "type": "boolean",
+          "description": "Whether the escalated trap/handoff has been mastered."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["userId", "fromRoomId", "toRoomId", "questionId", "title", "note", "resolved", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -185,6 +311,14 @@
     "/payment_transactions/{txId}": {
       "schema": { "$ref": "#/entities/PaymentTransaction" },
       "description": "M-Pesa Daraja STK Push and Stripe payment transactions."
+    },
+    "/study_chamber_checkins/{checkinId}": {
+      "schema": { "$ref": "#/entities/StudyChamberCheckin" },
+      "description": "Per-learner cumulative progress and saved notes across the 6 study chambers."
+    },
+    "/study_chamber_handoffs/{handoffId}": {
+      "schema": { "$ref": "#/entities/StudyChamberHandoff" },
+      "description": "Cross-chamber study handoffs and escalated traps synced for learners."
     }
   }
 }

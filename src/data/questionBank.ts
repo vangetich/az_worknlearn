@@ -1,4 +1,7 @@
 import { Question } from '../types/quiz';
+import { PATH1_EXPANSION_QUESTIONS } from './examQuestionsPath1';
+import { PATH2_EXPANSION_QUESTIONS } from './examQuestionsPath2';
+import { PATH3_EXPANSION_QUESTIONS } from './examQuestionsPath3';
 
 export const BUILTIN_QUESTIONS: Question[] = [
   // --- MODULE 1: Fundamental Cloud Concepts ---
@@ -1491,6 +1494,9 @@ export const BUILTIN_QUESTIONS: Question[] = [
     ],
     examTip: 'Memorize the 3 Health Scopes: Global World Map = Azure Status; Your Subscriptions & Regions = Azure Service Health; Single Specific VM/Resource = Azure Resource Health!',
   },
+  ...PATH1_EXPANSION_QUESTIONS,
+  ...PATH2_EXPANSION_QUESTIONS,
+  ...PATH3_EXPANSION_QUESTIONS,
 ];
 
 

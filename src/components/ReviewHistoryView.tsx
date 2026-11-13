@@ -38,6 +38,7 @@ import { QuizSessionRecord, UserStats } from '../types/quiz';
 import { getPastQuizSessions, deleteQuizSession } from '../utils/storage';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { AccuracyTrendSparkline } from './AccuracyTrendSparkline';
 
 interface ReviewHistoryViewProps {
   stats?: UserStats;
@@ -306,9 +307,16 @@ export const ReviewHistoryView: React.FC<ReviewHistoryViewProps> = ({
           </div>
         </div>
 
-        {/* 3. EXPANDABLE RECHARTS DOMAIN PERFORMANCE BAR CHART & PATH SUMMARY */}
+        {/* 3. EXPANDABLE RECHARTS ACCURACY TREND SPARKLINE & DOMAIN PERFORMANCE BAR CHART */}
         {isTrajectoryExpanded && (
           <div className="p-3.5 sm:p-5 bg-white space-y-4">
+            {/* Recharts 10-Session Accuracy Trend Sparkline & Plateau Detector */}
+            <AccuracyTrendSparkline
+              sessions={filteredSessions}
+              stats={stats}
+              onStartAdaptiveQuiz={onStartAdaptiveQuiz}
+            />
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-blue-50 text-[#0078D4] border border-blue-200">

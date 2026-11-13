@@ -43,8 +43,14 @@ import { QuizCard } from './components/QuizCard';
 import { ModuleBrowser } from './components/ModuleBrowser';
 import { AiScenarioGenerator } from './components/AiScenarioGenerator';
 import { KnowledgeAssistant } from './components/KnowledgeAssistant';
-import { MockExamModal } from './components/MockExamModal';
+import {
+  MockExamModal,
+  MockExamModeType,
+  MockExamFinishMetadata,
+} from './components/MockExamModal';
+import { auth, recordQuizSessionToFirestore } from './lib/firebase';
 import { DomainConfidenceTracker } from './components/DomainConfidenceTracker';
+import { DomainSkillRadar } from './components/DomainSkillRadar';
 import { StudyDeck } from './components/StudyDeck';
 import { MicroDrillModal } from './components/MicroDrillModal';
 import { StudyBreakModal } from './components/StudyBreakModal';
@@ -733,6 +739,8 @@ export default function App() {
 
   // Mock exam modal state
   const [showMockExam, setShowMockExam] = useState<boolean>(false);
+  const [mockExamInitialMode, setMockExamInitialMode] =
+    useState<MockExamModeType>('simulation');
   const [adaptiveFocusPathId, setAdaptiveFocusPathId] = useState<1 | 2 | 3 | null>(null);
   const [adaptiveFocusModuleId, setAdaptiveFocusModuleId] = useState<number | null>(null);
   const [showFoundationalPrimerInPractice, setShowFoundationalPrimerInPractice] =
@@ -4159,48 +4167,61 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB: TIMED MOCK EXAM SIMULATION (50-60 QUESTIONS) */}
+        {/* TAB: TIMED MOCK EXAM SIMULATION (45-90Q & 15-25Q WEAKNESS TARGETING) */}
         {activeTab === 'mock' && (
           <div className="responsive-tab-page-shell max-w-5xl mx-auto space-y-6">
-            <div className="bg-white rounded-xl border border-slate-200 card-elevation p-5 sm:p-8 max-w-3xl mx-auto text-center space-y-6">
+            <div className="bg-white rounded-xl border border-slate-200 card-elevation p-5 sm:p-8 max-w-4xl mx-auto text-center space-y-6">
               <div className="w-16 h-16 rounded-2xl bg-blue-50 text-[#0078D4] flex items-center justify-center mx-auto shadow-xs">
                 <Award className="w-8 h-8 text-amber-500" />
               </div>
 
               <div>
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                  Official Exam Simulation • 50–60 Questions
+                  {questions.length} Exam-Level Questions • Speed Routines &amp; Weakness Drills
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">
-                  AZ-900 Timed Mock Exam Simulation
+                  AZ-900 Mock Exam &amp; Speed Readiness Center
                 </h2>
-                <p className="text-sm text-slate-600 max-w-lg mx-auto mt-2 leading-relaxed">
-                  Experience the realistic Microsoft Pearson VUE exam simulation: 50 to 60 timed questions across all three learning paths (60 minutes), scaled score out of 1000 points, and a detailed post-exam performance breakdown by Learning Path and Module.
+                <p className="text-sm text-slate-600 max-w-2xl mx-auto mt-2 leading-relaxed">
+                  Practice full-length sequences of <strong>45, 50, 55, 60, 75, or 90 questions</strong> to engage fast brain recall routines and exam cohesion, or run a targeted <strong>15–25 question Weakness Exam</strong> zeroed in on your hardest modules and recorded misses.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700">
                 <div className="space-y-1">
-                  <span className="font-bold text-slate-900 block">Simulation Format:</span>
-                  <span className="text-slate-600">50–60 Questions • 60 Minutes</span>
+                  <span className="font-bold text-slate-900 block">Simulation &amp; Endurance:</span>
+                  <span className="text-slate-600">45, 50, 55, 60, 75 &amp; 90Q • Zero Repeats</span>
                 </div>
                 <div className="space-y-1">
-                  <span className="font-bold text-slate-900 block">Passing Score:</span>
-                  <span className="text-slate-600">700 / 1000 Scaled Points (70%)</span>
+                  <span className="font-bold text-slate-900 block">Weakness Precision Mode:</span>
+                  <span className="text-slate-600">15–25 Challenging &amp; Missed Qs</span>
                 </div>
                 <div className="space-y-1">
-                  <span className="font-bold text-slate-900 block">Domain Breakdown:</span>
-                  <span className="text-slate-600">Detailed Path 1, 2 &amp; 3 Report</span>
+                  <span className="font-bold text-slate-900 block">Brain Speed Calibration:</span>
+                  <span className="text-slate-600">Standard (~65s), Sharp (45s), Blitz (30s)</span>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
-                  onClick={() => setShowMockExam(true)}
-                  className="px-6 sm:px-8 py-3.5 rounded-xl bg-gradient-to-r from-[#0078D4] to-[#005A9E] hover:from-[#005A9E] hover:to-[#004578] text-white font-bold text-sm shadow-md hover:shadow-lg transition-all inline-flex items-center gap-2 cursor-pointer"
+                  onClick={() => {
+                    setMockExamInitialMode('simulation');
+                    setShowMockExam(true);
+                  }}
+                  className="px-6 sm:px-7 py-3.5 rounded-xl bg-gradient-to-r from-[#0078D4] to-[#005A9E] hover:from-[#005A9E] hover:to-[#004578] text-white font-bold text-sm shadow-md hover:shadow-lg transition-all inline-flex items-center gap-2 cursor-pointer"
                 >
                   <Award className="w-5 h-5 text-amber-300 shrink-0" />
-                  <span>Launch 50–60Q Mock Exam Simulation</span>
+                  <span>Launch 45–90Q Exam Simulation</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setMockExamInitialMode('weakness');
+                    setShowMockExam(true);
+                  }}
+                  className="px-6 py-3.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-md transition-all inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <Target className="w-4 h-4 text-amber-200 shrink-0" />
+                  <span>Drill 15–25Q Weakness Areas</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('planner')}
@@ -4252,9 +4273,14 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB: DOMAIN CONFIDENCE */}
+        {/* TAB: DOMAIN CONFIDENCE & SKILL RADAR */}
         {activeTab === 'analytics' && (
           <div className="responsive-tab-page-shell max-w-6xl mx-auto space-y-5">
+            <DomainSkillRadar
+              stats={stats}
+              onDrillDomain={handleDrillWeakAreas}
+              onSelectModule={handleSelectModuleFromTracker}
+            />
             <BalancedPathIntensityCoach
               stats={stats}
               questions={questions}
@@ -4401,8 +4427,30 @@ export default function App() {
       {showMockExam && (
         <MockExamModal
           questions={questions}
-          onFinish={(correct, total) => {
-            const scorePercent = Math.round((correct / total) * 100);
+          stats={stats}
+          initialMode={mockExamInitialMode}
+          onFinish={(correct, total, meta?: MockExamFinishMetadata) => {
+            const scorePercent = Math.round((correct / Math.max(1, total)) * 100);
+            if (meta?.answeredItems && meta.answeredItems.length > 0) {
+              let nextStats = stats;
+              const nowTs = Date.now();
+              meta.answeredItems.forEach((item, idx) => {
+                nextStats = saveUserAttempt(nextStats, {
+                  questionId: item.question.id,
+                  moduleId: item.question.moduleId,
+                  pathId: item.question.learningPathId,
+                  selectedAnswer: item.selectedAnswer,
+                  isCorrect: item.isCorrect,
+                  timestamp: nowTs + idx,
+                  trapType: item.question.errorDiagnostic?.trapType || 'Conceptual Gap',
+                });
+              });
+              setStats(nextStats);
+            }
+            const modeTag =
+              meta?.examMode === 'weakness'
+                ? 'Weakness Precision Exam'
+                : 'Timed Mock Exam Simulation';
             saveQuizSession({
               id: `session-mock-${Date.now()}`,
               timestamp: Date.now(),
@@ -4412,14 +4460,20 @@ export default function App() {
                 hour: '2-digit',
                 minute: '2-digit',
               }),
-              title: `Timed Mock Exam Simulation (${total} Questions)`,
+              title: `${modeTag} (${total} Questions · ${meta?.avgSecondsPerQuestion || 0}s/Q)`,
               mode: 'mock',
               totalQuestions: total,
               correctCount: correct,
               scorePercent,
               passed: scorePercent >= 70,
-              missedQuestions: [],
+              durationSeconds: meta?.durationSeconds,
+              missedQuestions: meta?.missedQuestions || [],
             });
+            if (auth.currentUser?.uid) {
+              recordQuizSessionToFirestore(auth.currentUser.uid, total, correct).catch(
+                () => {}
+              );
+            }
           }}
           onLaunchAdaptiveForPath={(pathId) => {
             setShowMockExam(false);
@@ -4651,13 +4705,41 @@ export default function App() {
         />
       )}
 
-      {/* Virtual Study Room Side Chat & Live Collaboration Hub */}
+      {/* Virtual Study Room Side Chat & Live 6-Chamber Interoperable Hub */}
       <VirtualStudyRoom
         currentQuestion={currentQ}
         activeModuleTitle={currentQ?.moduleTitle}
+        allQuestions={questions}
+        stats={stats}
         isOpen={showStudyRoom}
         onClose={() => setShowStudyRoom(false)}
-        onSelectSharedQuestion={(qId) => setPendingJumpQuestionId(qId)}
+        onSelectSharedQuestion={(qId) => {
+          setPendingJumpQuestionId(qId);
+          setActiveTab('quiz');
+        }}
+        onRecordAnswer={(question, selectedOption) => {
+          handleAnswerQuestion(
+            question.id,
+            selectedOption,
+            selectedOption === question.correctAnswer,
+            question
+          );
+        }}
+        onPracticeModule={(modId) => {
+          handleSelectModuleFromTracker(modId);
+        }}
+        onOpenStudyDecksModule={(modId, pathId) => {
+          setSelectedPathId(pathId);
+          setSelectedModuleId(modId);
+          setActiveTab('study-decks');
+        }}
+        onOpenAzureThemes={(modId) => {
+          if (modId) {
+            setAzureThemesFocus({ themeId: 'scaling-elasticity', moduleId: modId });
+          }
+          setActiveTab('azure-themes');
+        }}
+        onOpenMockExam={() => setShowMockExam(true)}
         initialRoomAreaId={selectedStudyRoomAreaId}
       />
 

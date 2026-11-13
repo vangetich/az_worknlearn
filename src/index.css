@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+@custom-variant mobile-landscape (@media (orientation: landscape) and (max-height: 540px) and (max-width: 1023px));
+@custom-variant compact-portrait (@media (orientation: portrait) and (max-width: 1040px));
+
 @theme {
   --breakpoint-xs: 400px;
   --animate-kenyan-pulse: kenyanQuickSortPulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;

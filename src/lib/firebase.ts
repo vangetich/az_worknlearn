@@ -301,3 +301,203 @@ export function subscribeToCrossDeviceProgress(
 
   return unsubscribe;
 }
+
+export type CanonicalChamberRoomId =
+  | 'AZ900-CONCEPTS'
+  | 'AZ900-SERVICES'
+  | 'AZ900-SECURITY'
+  | 'AZ900-GOVERNANCE'
+  | 'AZ900-WAR-ROOM'
+  | 'AZ900-CLINIC';
+
+export interface FirestoreStudyChamberCheckin {
+  id: string;
+  userId: string;
+  roomId: CanonicalChamberRoomId;
+  questionsSolved: number;
+  correctCount: number;
+  handoffsResolved: number;
+  lastNotes: string;
+}
+
+export interface FirestoreStudyChamberHandoff {
+  id: string;
+  userId: string;
+  fromRoomId: CanonicalChamberRoomId;
+  toRoomId: CanonicalChamberRoomId;
+  questionId: string;
+  title: string;
+  note: string;
+  resolved: boolean;
+}
+
+const CANONICAL_CHAMBERS: Set<string> = new Set([
+  'AZ900-CONCEPTS',
+  'AZ900-SERVICES',
+  'AZ900-SECURITY',
+  'AZ900-GOVERNANCE',
+  'AZ900-WAR-ROOM',
+  'AZ900-CLINIC',
+]);
+
+export async function syncStudyChamberCheckinToFirestore(
+  userId: string,
+  roomId: string,
+  delta: {
+    solvedDelta?: number;
+    correctDelta?: number;
+    handoffsResolvedDelta?: number;
+    lastNotes?: string;
+  }
+): Promise<void> {
+  if (!auth.currentUser || auth.currentUser.uid !== userId) return;
+  if (!CANONICAL_CHAMBERS.has(roomId)) return;
+
+  const docId = `${userId}_${roomId}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
+  const path = `study_chamber_checkins/${docId}`;
+  const ref = doc(db, 'study_chamber_checkins', docId);
+
+  try {
+    const existingSnap = await getDoc(ref);
+    if (!existingSnap.exists()) {
+      const solved = Math.max(0, Math.min(10000, delta.solvedDelta || 0));
+      const correct = Math.max(0, Math.min(solved, delta.correctDelta || 0));
+      const resolved = Math.max(0, Math.min(10000, delta.handoffsResolvedDelta || 0));
+      const notes = (delta.lastNotes || '').slice(0, 1200);
+
+      await setDoc(ref, {
+        userId,
+        roomId,
+        questionsSolved: solved,
+        correctCount: correct,
+        handoffsResolved: resolved,
+        lastNotes: notes,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      const prev = existingSnap.data();
+      const prevSolved = typeof prev?.questionsSolved === 'number' ? prev.questionsSolved : 0;
+      const prevCorrect = typeof prev?.correctCount === 'number' ? prev.correctCount : 0;
+      const prevResolved = typeof prev?.handoffsResolved === 'number' ? prev.handoffsResolved : 0;
+
+      const nextSolved = Math.max(0, Math.min(10000, prevSolved + (delta.solvedDelta || 0)));
+      const nextCorrect = Math.max(
+        0,
+        Math.min(nextSolved, prevCorrect + (delta.correctDelta || 0))
+      );
+      const nextResolved = Math.max(
+        0,
+        Math.min(10000, prevResolved + (delta.handoffsResolvedDelta || 0))
+      );
+      const nextNotes =
+        delta.lastNotes !== undefined
+          ? delta.lastNotes.slice(0, 1200)
+          : String(prev?.lastNotes || '').slice(0, 1200);
+
+      await updateDoc(ref, {
+        questionsSolved: nextSolved,
+        correctCount: nextCorrect,
+        handoffsResolved: nextResolved,
+        lastNotes: nextNotes,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function saveStudyChamberHandoffToFirestore(
+  userId: string,
+  handoff: {
+    id: string;
+    fromRoomId: string;
+    toRoomId: string;
+    questionId: string;
+    title: string;
+    note: string;
+  }
+): Promise<void> {
+  if (!auth.currentUser || auth.currentUser.uid !== userId) return;
+  if (!CANONICAL_CHAMBERS.has(handoff.fromRoomId) || !CANONICAL_CHAMBERS.has(handoff.toRoomId)) {
+    return;
+  }
+  const safeId = `${userId}_${handoff.id}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
+  const path = `study_chamber_handoffs/${safeId}`;
+  const ref = doc(db, 'study_chamber_handoffs', safeId);
+
+  try {
+    await setDoc(ref, {
+      userId,
+      fromRoomId: handoff.fromRoomId,
+      toRoomId: handoff.toRoomId,
+      questionId: (handoff.questionId || 'general').slice(0, 128),
+      title: (handoff.title || 'Chamber Handoff').slice(0, 140),
+      note: (handoff.note || '').slice(0, 600),
+      resolved: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function resolveStudyChamberHandoffInFirestore(
+  userId: string,
+  docId: string,
+  resolved: boolean
+): Promise<void> {
+  if (!auth.currentUser || auth.currentUser.uid !== userId) return;
+  const safeId = docId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
+  const path = `study_chamber_handoffs/${safeId}`;
+  const ref = doc(db, 'study_chamber_handoffs', safeId);
+
+  try {
+    await updateDoc(ref, {
+      resolved,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export function subscribeToStudyChamberCheckins(
+  userId: string,
+  onUpdate: (checkins: Record<string, FirestoreStudyChamberCheckin>) => void
+): () => void {
+  if (!auth.currentUser || auth.currentUser.uid !== userId) {
+    return () => {};
+  }
+  const path = 'study_chamber_checkins';
+  const q = query(collection(db, path), where('userId', '==', userId));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const map: Record<string, FirestoreStudyChamberCheckin> = {};
+      snapshot.docs.forEach((d) => {
+        const data = d.data();
+        const roomId = String(data.roomId || '') as CanonicalChamberRoomId;
+        if (CANONICAL_CHAMBERS.has(roomId)) {
+          map[roomId] = {
+            id: d.id,
+            userId: String(data.userId || userId),
+            roomId,
+            questionsSolved: Number(data.questionsSolved) || 0,
+            correctCount: Number(data.correctCount) || 0,
+            handoffsResolved: Number(data.handoffsResolved) || 0,
+            lastNotes: String(data.lastNotes || ''),
+          };
+        }
+      });
+      onUpdate(map);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+

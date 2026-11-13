@@ -30,6 +30,7 @@ import {
   BarChart3,
   Pencil,
   GitBranch,
+  Flame,
 } from 'lucide-react';
 import {
   MaasaiMedallion,
@@ -43,6 +44,7 @@ import { DailyStudyStreak } from './DailyStudyStreak';
 import { PWAInstallButton } from './PWAInstallButton';
 import { DailyGoalAlertsModal } from './DailyGoalAlertsModal';
 import { EditDailyGoalModal } from './EditDailyGoalModal';
+import { DailyGoalCelebrationModal } from './DailyGoalCelebrationModal';
 import { ThemeToggle } from './ThemeToggle';
 import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
 import { GlobalSearchBar } from './GlobalSearchBar';
@@ -58,106 +60,157 @@ import { formatShortcutCombo } from '../utils/keyboardShortcuts';
 
 /**
  * Animated Daily Study Goal Circular Progress Ring
- * Animates stroke-dashoffset smoothly as users answer questions throughout the day.
+ * Displays percentage completion based on current streak and today's answered questions,
+ * and shows a small fire icon animation upon reaching the daily goal.
  */
 const DailyStudyGoalRing: React.FC<{
   todayAnsweredCount: number;
   dailyGoal: number;
+  streakDays?: number;
   onClick: () => void;
+  onOpenCelebration?: () => void;
   compact?: boolean;
-}> = ({ todayAnsweredCount, dailyGoal, onClick, compact = false }) => {
+}> = ({
+  todayAnsweredCount,
+  dailyGoal,
+  streakDays = 0,
+  onClick,
+  onOpenCelebration,
+  compact = false,
+}) => {
   const safeGoal = Math.max(1, dailyGoal);
-  const progressRatio = Math.min(1, todayAnsweredCount / safeGoal);
-  const percentage = Math.round(progressRatio * 100);
+  const questionRatio = Math.min(1, todayAnsweredCount / safeGoal);
+  // Factor in active streak momentum (+2% per active streak day up to +10% while building toward 100%)
+  const streakMomentumBonus =
+    todayAnsweredCount > 0 && questionRatio < 1
+      ? Math.min(0.1, Math.max(0, streakDays) * 0.02)
+      : 0;
+  const effectiveRatio = Math.min(
+    1,
+    questionRatio >= 1 ? 1 : Math.min(0.99, questionRatio + streakMomentumBonus)
+  );
+  const percentage = Math.round(effectiveRatio * 100);
   const isGoalReached = todayAnsweredCount >= safeGoal;
 
   const size = compact ? 26 : 30;
   const strokeWidth = compact ? 3 : 3.2;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - progressRatio * circumference;
+  const strokeDashoffset = circumference - effectiveRatio * circumference;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group relative flex items-center gap-1.5 ${
-        compact ? 'px-2 py-1' : 'px-2.5 py-1'
-      } rounded-xl border text-xs font-extrabold transition-all duration-300 shadow-2xs cursor-pointer shrink-0 overflow-visible ${
-        isGoalReached
-          ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-400 ring-1 ring-emerald-400/50 animate-goal-celebrate'
-          : 'bg-orange-50/90 hover:bg-orange-100 text-orange-900 border-orange-200/90'
-      }`}
-      title={`Daily Study Goal: ${todayAnsweredCount}/${safeGoal} questions solved today (${percentage}%)${isGoalReached ? ' — Daily Goal Reached!' : ''} • Click to open Edit Daily Goal`}
-      aria-label={`Edit Daily Study Goal: ${todayAnsweredCount} of ${safeGoal} questions (${percentage}%)`}
-    >
-      {/* Subtle Celebration Sparkles when Daily Study Goal is Reached */}
-      {isGoalReached && (
-        <span className="pointer-events-none absolute -top-1.5 -right-1 flex items-center justify-center">
-          <Sparkles className="w-3 h-3 text-amber-500 animate-sparkle-1" />
-        </span>
-      )}
-      {isGoalReached && (
-        <span className="pointer-events-none absolute -bottom-1 -left-1 flex items-center justify-center">
-          <Sparkles className="w-2.5 h-2.5 text-emerald-500 animate-sparkle-2" />
-        </span>
-      )}
+    <div className="inline-flex items-center gap-1 shrink-0">
+      <button
+        type="button"
+        onClick={isGoalReached && onOpenCelebration ? onOpenCelebration : onClick}
+        className={`group relative flex items-center gap-1.5 ${
+          compact ? 'px-2 py-1' : 'px-2.5 py-1'
+        } rounded-xl border text-xs font-extrabold transition-all duration-300 shadow-2xs cursor-pointer shrink-0 overflow-visible ${
+          isGoalReached
+            ? 'bg-gradient-to-r from-emerald-50 via-amber-50 to-orange-50 hover:from-emerald-100 hover:to-amber-100 text-emerald-950 border-amber-400 ring-1 ring-amber-400/60 animate-goal-celebrate'
+            : 'bg-orange-50/90 hover:bg-orange-100 text-orange-900 border-orange-200/90'
+        }`}
+        title={`Daily Study Goal: ${percentage}% complete (${todayAnsweredCount}/${safeGoal} Qs today • ${streakDays}d streak)${
+          isGoalReached
+            ? ' — 100% Goal Reached! Click to open Fire Streak Celebration & Share Progress'
+            : ' • Click to edit Daily Study Goal'
+        }`}
+        aria-label={`Daily Study Goal: ${percentage}% complete (${todayAnsweredCount} of ${safeGoal} questions, ${streakDays} day streak)`}
+      >
+        {/* Small Fire Icon Animation & Rising Embers when Daily Goal is Reached */}
+        {isGoalReached && (
+          <>
+            <span className="pointer-events-none absolute -top-2 -right-1.5 flex items-center justify-center">
+              <Flame className="w-3.5 h-3.5 text-orange-500 fill-amber-400 animate-bounce drop-shadow-xs" />
+            </span>
+            <span className="pointer-events-none absolute -top-2.5 right-1 w-1.5 h-1.5 rounded-full bg-amber-400 animate-ember-drift-1" />
+            <span className="pointer-events-none absolute -bottom-1 -left-1 flex items-center justify-center">
+              <Sparkles className="w-2.5 h-2.5 text-emerald-500 animate-sparkle-2" />
+            </span>
+          </>
+        )}
 
-      <div className="relative flex items-center justify-center shrink-0" style={{ width: size, height: size }}>
-        <svg
-          width={size}
-          height={size}
-          viewBox={`0 0 ${size} ${size}`}
-          className="-rotate-90 transform overflow-visible"
+        <div
+          className="relative flex items-center justify-center shrink-0"
+          style={{ width: size, height: size }}
         >
-          {/* Background Track Ring */}
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="transparent"
-            stroke="currentColor"
-            strokeWidth={strokeWidth}
-            className={isGoalReached ? 'text-emerald-200' : 'text-orange-200/80'}
-          />
-          {/* Animated Progress Ring */}
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="transparent"
-            stroke={isGoalReached ? '#059669' : '#ea580c'}
-            strokeWidth={strokeWidth}
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            style={{
-              transition: 'stroke-dashoffset 0.75s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.3s ease',
-            }}
-          />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-[8px] font-black tracking-tighter">
-          {isGoalReached ? '✓' : `${percentage}%`}
-        </span>
-      </div>
-      <div className="flex flex-col items-start leading-none">
-        <span className="text-[9px] uppercase tracking-wider font-black opacity-80 hidden sm:inline">
-          {isGoalReached
-            ? 'Goal Met ✨'
-            : percentage >= 50
-            ? '50% Milestone ✓'
-            : percentage >= 25
-            ? '25% Milestone ✓'
-            : 'Daily Goal'}
-        </span>
-        <span className="text-[11px] font-black tabular-nums flex items-center gap-1">
-          <span>
-            {todayAnsweredCount}/{safeGoal}
+          <svg
+            width={size}
+            height={size}
+            viewBox={`0 0 ${size} ${size}`}
+            className="-rotate-90 transform overflow-visible"
+          >
+            {/* Background Track Ring */}
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="transparent"
+              stroke="currentColor"
+              strokeWidth={strokeWidth}
+              className={isGoalReached ? 'text-amber-200/90' : 'text-orange-200/80'}
+            />
+            {/* Animated Progress Ring */}
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="transparent"
+              stroke={isGoalReached ? '#f97316' : '#ea580c'}
+              strokeWidth={strokeWidth}
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              style={{
+                transition:
+                  'stroke-dashoffset 0.75s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.3s ease',
+              }}
+            />
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center text-[8px] font-black tracking-tighter">
+            {isGoalReached ? (
+              <Flame className="w-3 h-3 text-orange-600 fill-amber-400 animate-pulse" />
+            ) : (
+              `${percentage}%`
+            )}
           </span>
-          <Pencil className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 transition-opacity" />
-        </span>
-      </div>
-    </button>
+        </div>
+
+        <div className="flex flex-col items-start leading-none">
+          <span className="text-[9px] uppercase tracking-wider font-black opacity-85 hidden sm:inline items-center gap-0.5">
+            {isGoalReached
+              ? `100% Goal 🔥 ${streakDays}d`
+              : percentage >= 50
+              ? `${percentage}% • ${streakDays}d Streak`
+              : percentage >= 25
+              ? `${percentage}% • ${streakDays}d Streak`
+              : `Goal ${percentage}%`}
+          </span>
+          <span className="text-[11px] font-black tabular-nums flex items-center gap-1">
+            <span>
+              {todayAnsweredCount}/{safeGoal}
+            </span>
+            {isGoalReached ? (
+              <Flame className="w-3 h-3 text-orange-500 fill-amber-400 animate-pulse" />
+            ) : (
+              <Pencil className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 transition-opacity" />
+            )}
+          </span>
+        </div>
+      </button>
+
+      {isGoalReached && (
+        <button
+          type="button"
+          onClick={onClick}
+          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200/80 transition-colors cursor-pointer"
+          title="Edit Daily Study Goal target"
+          aria-label="Edit Daily Study Goal target"
+        >
+          <Pencil className="w-3 h-3" />
+        </button>
+      )}
+    </div>
   );
 };
 
@@ -243,6 +296,255 @@ const PATH_COMPACT_INTEL: Record<
   },
 };
 
+type NavGroupName = 'Core Study' | 'Exam & Drills' | 'Insights & History' | 'AI Tutor & Community';
+
+interface NavTabConfig {
+  id: AppTab;
+  label: string;
+  group: NavGroupName;
+  title?: string;
+  activeClass: string;
+  fontWeightClass?: string;
+  renderIcon: (isActive: boolean) => React.ReactNode;
+}
+
+const NAV_TAB_GROUPS: NavGroupName[] = [
+  'Core Study',
+  'Exam & Drills',
+  'Insights & History',
+  'AI Tutor & Community',
+];
+
+const NAV_TABS: NavTabConfig[] = [
+  {
+    id: 'quiz',
+    label: 'Practice',
+    group: 'Core Study',
+    activeClass: 'bg-[#005A9E] text-white shadow-sm ring-1 ring-white/80 font-black',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <BookOpen className="w-3 h-3 text-[#005A9E] dark:text-sky-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'study-decks',
+    label: 'Study Mode',
+    group: 'Core Study',
+    title:
+      'Interactive Study Mode: Select Learning Path & Module to study Unit-by-Unit concepts, Azure services, and examples',
+    activeClass:
+      'bg-gradient-to-r from-[#0078D4] to-[#005A9E] text-white shadow-sm ring-1 ring-amber-300 font-black',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <Layers className="w-3 h-3 text-[#005A9E] dark:text-sky-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'image-tutor',
+    label: 'Image Tutor',
+    group: 'Core Study',
+    title:
+      'Image Tutor: Interactive Microsoft Certified: Azure Fundamentals visual diagrams and course knowledge across all 12 modules',
+    activeClass:
+      'bg-gradient-to-r from-[#0078D4] via-indigo-700 to-[#005A9E] text-white shadow-sm ring-1 ring-amber-300 font-black',
+    fontWeightClass: 'font-extrabold',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <ImageIcon className="w-3 h-3 text-[#0078D4] dark:text-sky-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'azure-themes',
+    label: 'Azure Themes',
+    group: 'Core Study',
+    title:
+      'Azure Themes: Interconnecting theories woven across all 12 AZ-900 modules and Azure service categories',
+    activeClass:
+      'bg-gradient-to-r from-[#0078D4] via-sky-700 to-[#005A9E] text-white shadow-sm ring-1 ring-amber-300 font-black',
+    fontWeightClass: 'font-extrabold',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <GitBranch className="w-3 h-3 text-[#0078D4] dark:text-sky-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'adaptive',
+    label: 'Adaptive Quiz',
+    group: 'Exam & Drills',
+    activeClass:
+      'bg-gradient-to-r from-blue-700 to-indigo-700 text-white shadow-sm ring-1 ring-amber-300 font-black',
+    fontWeightClass: 'font-extrabold',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <Zap className="w-3 h-3 text-amber-600 dark:text-amber-300 fill-amber-400 shrink-0" />
+      ),
+  },
+  {
+    id: 'flashcards',
+    label: 'Flashcards',
+    group: 'Exam & Drills',
+    activeClass:
+      'bg-gradient-to-r from-indigo-700 to-purple-700 text-white shadow-sm ring-1 ring-white/80 font-black',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'mock',
+    label: 'Mock Exam',
+    group: 'Exam & Drills',
+    title:
+      'Mock Exam Simulation: Timed 45–90 question official exam simulation & Weakness Precision drills with Learning Path breakdown',
+    activeClass:
+      'bg-gradient-to-r from-blue-800 to-[#005A9E] text-white shadow-sm ring-1 ring-white/80 font-black',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <Award className="w-3 h-3 text-amber-600 dark:text-amber-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'planner',
+    label: 'Study Planner',
+    group: 'Exam & Drills',
+    title:
+      'Study Planner: Set your target exam date & confidence levels to generate a prioritized daily or weekly schedule',
+    activeClass:
+      'bg-gradient-to-r from-sky-700 to-emerald-700 text-white shadow-sm ring-1 ring-amber-300 font-black',
+    fontWeightClass: 'font-extrabold',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <Calendar className="w-3 h-3 text-emerald-700 dark:text-emerald-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'history',
+    label: 'History',
+    group: 'Insights & History',
+    activeClass: 'bg-[#005A9E] text-white shadow-sm ring-1 ring-white/80 font-black',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <History className="w-3 h-3 text-[#005A9E] dark:text-sky-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'analytics',
+    label: 'Analytics',
+    group: 'Insights & History',
+    activeClass: 'bg-slate-900 text-white shadow-sm ring-1 ring-sky-300 font-black',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <TrendingUp className="w-3 h-3 text-[#005A9E] dark:text-sky-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'trends',
+    label: 'Performance Trends',
+    group: 'Insights & History',
+    title:
+      'Performance Trends: Recharts historical accuracy per module and learning path over time',
+    activeClass:
+      'bg-gradient-to-r from-[#0078D4] to-cyan-700 text-white shadow-sm ring-1 ring-sky-200 font-black',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <BarChart3 className="w-3 h-3 text-[#0078D4] dark:text-sky-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'cohort',
+    label: 'Cohort Performance',
+    group: 'Insights & History',
+    title:
+      'Cohort Performance: Compare your module mastery against the anonymized Global Harambee Azure Cohort benchmark via D3.js',
+    activeClass:
+      'bg-gradient-to-r from-blue-700 to-indigo-700 text-white shadow-sm ring-1 ring-amber-300 font-black',
+    fontWeightClass: 'font-extrabold',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <Users className="w-3 h-3 text-[#0078D4] dark:text-amber-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'assistant',
+    label: 'Tutor',
+    group: 'AI Tutor & Community',
+    activeClass:
+      'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-sm ring-1 ring-yellow-200 font-black',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <Bot className="w-3 h-3 text-orange-700 dark:text-amber-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'leaderboard',
+    label: 'Global Peer Leaderboard',
+    group: 'AI Tutor & Community',
+    title:
+      'Global Peer Leaderboard: Top performers from the Global Harambee Azure Cohort ranked by total questions solved',
+    activeClass: 'bg-amber-600 text-white shadow-sm ring-1 ring-amber-200 font-black',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <Award className="w-3 h-3 text-amber-700 dark:text-amber-400 shrink-0" />
+      ),
+  },
+  {
+    id: 'profile',
+    label: 'Profile',
+    group: 'AI Tutor & Community',
+    activeClass:
+      'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-sm ring-1 ring-purple-300 font-black',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <Award className="w-3 h-3 text-purple-700 dark:text-amber-300 shrink-0" />
+      ),
+  },
+  {
+    id: 'glossary',
+    label: 'Glossary',
+    group: 'AI Tutor & Community',
+    title:
+      'Azure Glossary & Dictionary: All AZ-900 terms, interrelated architecture pinpoints, and verified Microsoft Learn references',
+    activeClass:
+      'bg-gradient-to-r from-emerald-700 to-[#005A9E] text-white shadow-sm ring-1 ring-emerald-300 font-black',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <BookOpen className="w-3 h-3 text-emerald-700 dark:text-emerald-300 shrink-0" />
+      ),
+  },
+];
+
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
@@ -280,6 +582,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [showEditDailyGoalModal, setShowEditDailyGoalModal] = useState<boolean>(false);
   const [showGoalAlertsModal, setShowGoalAlertsModal] = useState<boolean>(false);
+  const [showDailyGoalCelebrationModal, setShowDailyGoalCelebrationModal] = useState<boolean>(false);
   const [showLocalAccessibilityModal, setShowLocalAccessibilityModal] = useState<boolean>(false);
   const { config: shortcutConfig, platform: detectedPlatform } = useKeyboardShortcutsConfig();
   const openAccessibilityModal = () => {
@@ -290,6 +593,8 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = useState<boolean>(false);
+  const [isNavDropdownOpen, setIsNavDropdownOpen] = useState<boolean>(false);
+  const headerRef = React.useRef<HTMLElement>(null);
   const [inspectedPathInMenu, setInspectedPathInMenu] = useState<1 | 2 | 3>(
     selectedPathId === 1 || selectedPathId === 2 || selectedPathId === 3 ? selectedPathId : 2
   );
@@ -300,6 +605,39 @@ export const Header: React.FC<HeaderProps> = ({
       return false;
     }
   });
+
+  const activeNavTab = React.useMemo(
+    () => NAV_TABS.find((t) => t.id === activeTab) || NAV_TABS[0],
+    [activeTab]
+  );
+
+  // Close dropdown menus cleanly on Escape key or click outside header
+  React.useEffect(() => {
+    if (!isNavDropdownOpen && !isMobileDetailsOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsNavDropdownOpen(false);
+        setIsMobileDetailsOpen(false);
+      }
+    };
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      if (headerRef.current && !headerRef.current.contains(e.target as Node)) {
+        setIsNavDropdownOpen(false);
+        setIsMobileDetailsOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, [isNavDropdownOpen, isMobileDetailsOpen]);
 
   const toggleMenuBar = () => {
     setIsMenuBarHidden((prev) => {
@@ -505,6 +843,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header
+      ref={headerRef}
       className={`sticky top-0 z-40 w-full max-w-full bg-white/95 backdrop-blur-md border-b shadow-xs transition-all duration-300 ${
         consecutiveCorrect >= 5
           ? consecutiveCorrect % 5 === 0
@@ -521,39 +860,42 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl w-full mx-auto px-2.5 sm:px-5 lg:px-6 relative z-10 min-w-0">
         {/* =====================================================================
             MOBILE & TABLET COMPACT TOP BAR (< lg screens)
+            - Always displays Azure Cloud Explorer • AZ-900 • Fundamentals Practice Studio
+            - Compact 2-row stack on narrow portrait phones (< sm)
+            - Slim 1-row bar with slightly smaller text on mobile landscape
+            - Clean 1-row tablet portrait bar with dedicated All-Tabs Dropdown Menu
            ===================================================================== */}
-        <div className="flex lg:hidden flex-wrap sm:flex-nowrap items-center justify-between py-2 gap-1.5 sm:gap-2 min-w-0 w-full">
-          {/* Compact Brand Logo & Disappearing Title on Mobile/Small Tablet Views (< md) + Hover/Tap Student Stats Pop-up */}
-          <div className="relative shrink-0 flex items-center">
+        <div className="flex lg:hidden flex-wrap sm:flex-nowrap mobile-landscape:flex-nowrap items-center justify-between py-1.5 sm:py-2 mobile-landscape:py-1 gap-1.5 sm:gap-2 mobile-landscape:gap-1 min-w-0 w-full">
+          {/* Brand Logo + Always-Viewable App Title + Hover/Tap Student Stats Pop-up */}
+          <div className="relative flex items-center min-w-0 basis-full sm:basis-auto sm:flex-1 mobile-landscape:basis-auto mobile-landscape:flex-1">
             <div
-              className="flex items-center gap-1.5 sm:gap-2 cursor-pointer group/logo min-w-0"
+              className="flex items-center gap-1.5 sm:gap-2 mobile-landscape:gap-1.5 cursor-pointer group/logo min-w-0 max-w-full"
               onClick={handleCloudLogoClick}
               onMouseEnter={handleCloudMouseEnter}
               onMouseLeave={handleCloudMouseLeave}
               title="Click or hover to view Student Stats & Daily Encouragement"
             >
-              <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shrink-0 group-hover/logo:scale-105 transition-transform">
-                <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <div className="relative flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 mobile-landscape:w-7 mobile-landscape:h-7 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shrink-0 group-hover/logo:scale-105 transition-transform">
+                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mobile-landscape:w-3.5 mobile-landscape:h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
                 </svg>
                 <div className="absolute -bottom-1 -right-1">
-                  <MaasaiMedallion size={11} />
+                  <MaasaiMedallion size={10} />
                 </div>
               </div>
 
-              {/* Text disappears on mobile and smaller tablet views (< md), showing ONLY the Cloud logo */}
-              <div className="hidden md:block truncate text-left min-w-0">
+              <div className="block min-w-0 flex-1 text-left">
                 <div className="flex items-center gap-1 min-w-0">
-                  <span className="font-black text-xs sm:text-sm tracking-tight text-slate-900 truncate">
+                  <span className="font-black text-xs xs:text-[13px] sm:text-sm mobile-landscape:text-[11px] tracking-tight text-slate-900 leading-tight truncate">
                     Azure Cloud Explorer
                   </span>
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-[#0078D4] text-white shrink-0 shadow-2xs">
+                  <span className="px-1 xs:px-1.5 py-0.2 rounded text-[8.5px] xs:text-[9.5px] sm:text-[10px] mobile-landscape:text-[8.5px] font-black bg-[#0078D4] text-white shrink-0 shadow-2xs">
                     AZ-900
                   </span>
                 </div>
-                <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/35 shadow-2xs max-w-full">
-                  <Sparkles className="w-2.5 h-2.5 text-[#0078D4] shrink-0" />
-                  <span className="text-[9.5px] sm:text-[11px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent truncate studio-subtitle-standout">
+                <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/35 shadow-2xs max-w-full">
+                  <Sparkles className="w-2.5 h-2.5 mobile-landscape:w-2 mobile-landscape:h-2 text-[#0078D4] shrink-0" />
+                  <span className="text-[8.5px] xs:text-[9.5px] sm:text-[10.5px] mobile-landscape:text-[8px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent truncate studio-subtitle-standout">
                     Fundamentals Practice Studio
                   </span>
                 </div>
@@ -562,118 +904,158 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right Controls on Mobile & Tablet */}
-          <div className="flex items-center justify-end gap-1 sm:gap-1.5 shrink-0 min-w-0">
-            {/* Subtle Supabase Real-Time Connection Status Indicator (Mobile/Tablet) */}
-            <div
-              className={`flex items-center gap-1 px-2 py-1.5 rounded-xl text-[11px] font-bold border select-none ${
-                realtimeStatus === 'connected'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200/90'
-                  : realtimeStatus === 'syncing'
-                  ? 'bg-amber-50 text-amber-800 border-amber-200/90'
-                  : 'bg-rose-50 text-rose-800 border-rose-200/90'
-              }`}
-              title={
-                realtimeStatus === 'connected'
-                  ? `Supabase / Postgres Connected${
-                      lastSyncedAt
-                        ? ` • Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
-                        : ''
-                    }`
-                  : realtimeStatus === 'syncing'
-                  ? 'Syncing progress to Supabase / Postgres backend...'
-                  : 'Supabase / Postgres Offline — Progress queued locally'
-              }
-              aria-label={`Supabase real-time sync status: ${realtimeStatus}`}
-            >
-              {realtimeStatus === 'connected' && (
-                <>
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                  </span>
-                  <Database className="w-3.5 h-3.5 text-emerald-600" />
-                </>
-              )}
-              {realtimeStatus === 'syncing' && (
-                <RefreshCw className="w-3.5 h-3.5 text-amber-600 animate-spin" />
-              )}
-              {realtimeStatus === 'offline' && (
-                <WifiOff className="w-3.5 h-3.5 text-rose-600" />
-              )}
-              <span className="hidden md:inline capitalize">{realtimeStatus}</span>
-              {pendingOfflineCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9.5px] font-black">
-                  {pendingOfflineCount}
-                </span>
-              )}
-            </div>
-
-            <div className="hidden md:block">
-              <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
-            </div>
-
+          <div className="flex items-center justify-between sm:justify-end mobile-landscape:justify-end gap-1 sm:gap-1.5 mobile-landscape:gap-1 w-full sm:w-auto mobile-landscape:w-auto shrink-0 min-w-0">
+            {/* Tablet Portrait & Mobile Navigation Dropdown Menu Trigger (Accommodates all 16 Nav Bar Buttons) */}
             <button
               type="button"
-              onClick={toggleMenuBar}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
-                isMenuBarHidden
-                  ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
-                  : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80'
+              onClick={() => {
+                setIsNavDropdownOpen((prev) => !prev);
+                setIsMobileDetailsOpen(false);
+                setShowCloudStatsPopup(false);
+              }}
+              className={`flex items-center gap-1 px-2 sm:px-2.5 mobile-landscape:px-2 py-1 sm:py-1.5 mobile-landscape:py-1 rounded-xl text-[11px] sm:text-xs mobile-landscape:text-[10px] font-extrabold transition-all shadow-xs cursor-pointer border shrink-0 min-w-0 ${
+                isNavDropdownOpen
+                  ? 'bg-[#005A9E] text-white border-[#004578] ring-2 ring-sky-300/60'
+                  : 'bg-sky-50/90 hover:bg-sky-100 text-[#005A9E] border-sky-300/80'
               }`}
-              title={isMenuBarHidden ? 'Show sliding navigation tabs' : 'Hide sliding navigation tabs'}
-              aria-expanded={!isMenuBarHidden}
+              aria-expanded={isNavDropdownOpen}
+              aria-haspopup="true"
+              aria-label="Open Navigation Tabs Dropdown Menu"
+              title="Open Navigation Dropdown Menu with all 16 studio tabs"
             >
-              <Layers className={`w-3.5 h-3.5 ${isMenuBarHidden ? 'text-white' : 'text-[#0078D4]'}`} />
-              <span>{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
-            </button>
-
-            <DailyStudyGoalRing
-              todayAnsweredCount={todayAnsweredCount}
-              dailyGoal={dailyGoal}
-              onClick={() => setShowEditDailyGoalModal(true)}
-              compact={true}
-            />
-
-            <button
-              type="button"
-              onClick={() => setIsMobileDetailsOpen((prev) => !prev)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer border ${
-                isMobileDetailsOpen
-                  ? 'bg-[#0078D4] text-white border-[#0078D4]'
-                  : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200/90'
-              }`}
-              aria-expanded={isMobileDetailsOpen}
-              aria-label="Toggle Tools and Goal dropdown"
-            >
-              {isMobileDetailsOpen ? (
-                <X className="w-3.5 h-3.5" />
+              {isNavDropdownOpen ? (
+                <X className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 shrink-0" />
               ) : (
-                <SlidersHorizontal className="w-3.5 h-3.5 text-[#0078D4]" />
+                <Menu className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 text-[#0078D4] shrink-0" />
               )}
-              <span className="hidden sm:inline">Tools &amp; Goal</span>
-              <span className="sm:hidden">Tools</span>
+              <span className="truncate max-w-[115px] xs:max-w-[140px] sm:max-w-[135px] mobile-landscape:max-w-[95px]">
+                {activeNavTab.label}
+              </span>
               <ChevronDown
-                className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  isMobileDetailsOpen ? 'rotate-180' : ''
+                className={`w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 shrink-0 transition-transform duration-200 ${
+                  isNavDropdownOpen ? 'rotate-180' : ''
                 }`}
               />
             </button>
 
-            {/* Mobile & Tablet Compact Red Sign Out Button with Smooth Width Expansion on Hover */}
-            {onLogout && (
+            <div className="flex items-center gap-1 sm:gap-1.5 mobile-landscape:gap-1 shrink-0">
+              {/* Subtle Supabase Real-Time Connection Status Indicator (Mobile/Tablet) */}
+              <div
+                className={`flex items-center gap-1 px-1.5 sm:px-2 mobile-landscape:px-1.5 py-1 sm:py-1.5 mobile-landscape:py-1 rounded-xl text-[11px] mobile-landscape:text-[10px] font-bold border select-none ${
+                  realtimeStatus === 'connected'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200/90'
+                    : realtimeStatus === 'syncing'
+                    ? 'bg-amber-50 text-amber-800 border-amber-200/90'
+                    : 'bg-rose-50 text-rose-800 border-rose-200/90'
+                }`}
+                title={
+                  realtimeStatus === 'connected'
+                    ? `Supabase / Postgres Connected${
+                        lastSyncedAt
+                          ? ` • Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
+                          : ''
+                      }`
+                    : realtimeStatus === 'syncing'
+                    ? 'Syncing progress to Supabase / Postgres backend...'
+                    : 'Supabase / Postgres Offline — Progress queued locally'
+                }
+                aria-label={`Supabase real-time sync status: ${realtimeStatus}`}
+              >
+                {realtimeStatus === 'connected' && (
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    <Database className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 text-emerald-600" />
+                  </>
+                )}
+                {realtimeStatus === 'syncing' && (
+                  <RefreshCw className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 text-amber-600 animate-spin" />
+                )}
+                {realtimeStatus === 'offline' && (
+                  <WifiOff className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 text-rose-600" />
+                )}
+                {pendingOfflineCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9.5px] font-black">
+                    {pendingOfflineCount}
+                  </span>
+                )}
+              </div>
+
+              <div className="hidden md:block mobile-landscape:hidden">
+                <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
+              </div>
+
+              {/* Show/Hide inline horizontal tab strip toggle (Mobile Landscape only; portrait uses the Nav Dropdown) */}
               <button
                 type="button"
-                onClick={onLogout}
-                className="group relative flex items-center justify-center hover:justify-start gap-0 hover:gap-2 px-2 hover:px-3 py-1.5 max-w-[34px] sm:max-w-[38px] hover:max-w-[128px] overflow-hidden rounded-xl bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
-                title={userEmail ? `Signed in as ${userEmail} • Click to open 17s Secure Exit & WhatsApp Study Report` : 'Sign out & Save Progress'}
-                aria-label="Sign out"
+                onClick={toggleMenuBar}
+                className={`hidden mobile-landscape:flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
+                  isMenuBarHidden
+                    ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
+                    : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80'
+                }`}
+                title={isMenuBarHidden ? 'Show compact landscape tab strip' : 'Hide compact landscape tab strip'}
+                aria-expanded={!isMenuBarHidden}
               >
-                <ArrowLeftOnRectangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
-                <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 max-w-0 group-hover:max-w-[80px] transition-all duration-300 ease-in-out font-extrabold tracking-tight">
-                  Sign out
-                </span>
+                <Layers className={`w-3 h-3 ${isMenuBarHidden ? 'text-white' : 'text-[#0078D4]'}`} />
+                <span>{isMenuBarHidden ? 'Tabs' : 'Hide'}</span>
               </button>
-            )}
+
+              <DailyStudyGoalRing
+                todayAnsweredCount={todayAnsweredCount}
+                dailyGoal={dailyGoal}
+                streakDays={stats.streakDays || 0}
+                onClick={() => setShowEditDailyGoalModal(true)}
+                onOpenCelebration={() => setShowDailyGoalCelebrationModal(true)}
+                compact={true}
+              />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileDetailsOpen((prev) => !prev);
+                  setIsNavDropdownOpen(false);
+                }}
+                className={`flex items-center gap-1 px-2 sm:px-2.5 mobile-landscape:px-2 py-1 sm:py-1.5 mobile-landscape:py-1 rounded-xl text-[11px] sm:text-xs mobile-landscape:text-[10px] font-extrabold transition-all shadow-xs cursor-pointer border ${
+                  isMobileDetailsOpen
+                    ? 'bg-[#0078D4] text-white border-[#0078D4]'
+                    : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200/90'
+                }`}
+                aria-expanded={isMobileDetailsOpen}
+                aria-label="Toggle Tools and Goal dropdown"
+              >
+                {isMobileDetailsOpen ? (
+                  <X className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3" />
+                ) : (
+                  <SlidersHorizontal className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 text-[#0078D4]" />
+                )}
+                <span className="hidden sm:inline mobile-landscape:hidden">Tools &amp; Goal</span>
+                <span className="sm:hidden mobile-landscape:inline">Tools</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 transition-transform duration-200 ${
+                    isMobileDetailsOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {/* Mobile & Tablet Compact Red Sign Out Button with Smooth Width Expansion on Hover */}
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="group relative flex items-center justify-center hover:justify-start gap-0 hover:gap-2 px-2 hover:px-3 py-1 sm:py-1.5 mobile-landscape:py-1 max-w-[34px] sm:max-w-[38px] hover:max-w-[128px] overflow-hidden rounded-xl bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs mobile-landscape:text-[10px] font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
+                  title={userEmail ? `Signed in as ${userEmail} • Click to open 17s Secure Exit & WhatsApp Study Report` : 'Sign out & Save Progress'}
+                  aria-label="Sign out"
+                >
+                  <ArrowLeftOnRectangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 mobile-landscape:w-3.5 mobile-landscape:h-3.5 shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
+                  <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 max-w-0 group-hover:max-w-[80px] transition-all duration-300 ease-in-out font-extrabold tracking-tight">
+                    Sign out
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -858,7 +1240,10 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Desktop Tools & Goal Dropdown Button */}
             <button
               type="button"
-              onClick={() => setIsMobileDetailsOpen((prev) => !prev)}
+              onClick={() => {
+                setIsMobileDetailsOpen((prev) => !prev);
+                setIsNavDropdownOpen(false);
+              }}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
                 isMobileDetailsOpen
                   ? 'bg-[#0078D4] text-white border-[#0078D4]'
@@ -920,7 +1305,9 @@ export const Header: React.FC<HeaderProps> = ({
             <DailyStudyGoalRing
               todayAnsweredCount={todayAnsweredCount}
               dailyGoal={dailyGoal}
+              streakDays={stats.streakDays || 0}
               onClick={() => setShowEditDailyGoalModal(true)}
+              onOpenCelebration={() => setShowDailyGoalCelebrationModal(true)}
               compact={false}
             />
 
@@ -972,10 +1359,36 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* Large Tablet Portrait (1024px portrait) Nav Dropdown Menu Trigger */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsNavDropdownOpen((prev) => !prev);
+                setIsMobileDetailsOpen(false);
+                setShowCloudStatsPopup(false);
+              }}
+              className={`hidden compact-portrait:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
+                isNavDropdownOpen
+                  ? 'bg-[#005A9E] text-white border-[#004578] ring-2 ring-sky-300/60'
+                  : 'bg-sky-50/90 hover:bg-sky-100 text-[#005A9E] border-sky-300/80'
+              }`}
+              aria-expanded={isNavDropdownOpen}
+              aria-haspopup="true"
+              title="Open Navigation Dropdown Menu with all 16 studio tabs"
+            >
+              {isNavDropdownOpen ? <X className="w-3.5 h-3.5" /> : <Menu className="w-3.5 h-3.5 text-[#0078D4]" />}
+              <span>Tabs: {activeNavTab.label}</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                  isNavDropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
             <button
               type="button"
               onClick={toggleMenuBar}
-              className={`-mt-0.5 flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
+              className={`compact-portrait:hidden -mt-0.5 flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
                 isMenuBarHidden
                   ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
                   : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80'
@@ -993,6 +1406,109 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
         </div>
+
+        {/* =====================================================================
+            RESPONSIVE NAVIGATION DROPDOWN MENU (Tablet Portrait, Mobile Portrait & Mobile Landscape)
+            Accommodates all 16 Nav Bar Buttons in organized Tailwind CSS grids
+           ===================================================================== */}
+        {isNavDropdownOpen && (
+          <div
+            role="menu"
+            aria-label="All Studio Navigation Tabs"
+            className="lg:hidden compact-portrait:block mb-2 p-2.5 sm:p-3 mobile-landscape:p-2 rounded-2xl bg-white/98 border border-sky-200/90 shadow-xl space-y-2.5 mobile-landscape:space-y-1.5 animate-in slide-in-from-top-1 duration-150 max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain"
+          >
+            {/* Dropdown Top Strip: Count + Quick Path Switcher */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mobile-landscape:pb-1.5 border-b border-slate-100">
+              <div className="flex items-center gap-2 min-w-0">
+                <MoranShieldMotif size={16} animate={false} />
+                <span className="text-[11px] sm:text-xs mobile-landscape:text-[10px] font-black uppercase tracking-wider text-slate-800">
+                  Studio Navigation
+                </span>
+                <span className="px-1.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-[#0078D4] text-[10px] mobile-landscape:text-[9px] font-extrabold">
+                  {NAV_TABS.length} Tabs
+                </span>
+              </div>
+
+              {onSelectPath && (
+                <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg border border-slate-200/80 text-[10.5px] mobile-landscape:text-[9.5px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectPath('all');
+                      if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
+                    }}
+                    className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                      selectedPathId === 'all'
+                        ? 'bg-white text-slate-900 shadow-2xs font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    All
+                  </button>
+                  {([1, 2, 3] as const).map((pId) => (
+                    <button
+                      key={pId}
+                      type="button"
+                      onClick={() => {
+                        onSelectPath(pId);
+                        setInspectedPathInMenu(pId);
+                        if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
+                      }}
+                      className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                        selectedPathId === pId
+                          ? 'bg-[#0078D4] text-white font-black'
+                          : 'text-slate-600 hover:text-[#0078D4]'
+                      }`}
+                    >
+                      P{pId}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Grouped Responsive Grid for All 16 Nav Bar Buttons */}
+            <div className="space-y-2.5 mobile-landscape:space-y-1.5">
+              {NAV_TAB_GROUPS.map((groupName) => {
+                const items = NAV_TABS.filter((item) => item.group === groupName);
+                return (
+                  <div key={groupName} className="space-y-1">
+                    <div className="text-[9.5px] mobile-landscape:text-[8.5px] font-black uppercase tracking-wider text-slate-500 px-0.5">
+                      {groupName}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 mobile-landscape:grid-cols-4 gap-1.5 mobile-landscape:gap-1">
+                      {items.map((item) => {
+                        const isActive = activeTab === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setActiveTab(item.id);
+                              setIsNavDropdownOpen(false);
+                            }}
+                            title={item.title}
+                            className={`flex items-center gap-1.5 px-2.5 py-2 sm:py-1.5 mobile-landscape:px-2 mobile-landscape:py-1 rounded-xl text-[11px] sm:text-xs mobile-landscape:text-[10px] ${
+                              item.fontWeightClass || 'font-bold'
+                            } transition-all cursor-pointer border text-left min-w-0 ${
+                              isActive
+                                ? `${item.activeClass} border-transparent`
+                                : 'bg-slate-50/90 hover:bg-sky-50 text-slate-900 border-slate-200/80 hover:border-sky-300'
+                            }`}
+                          >
+                            {item.renderIcon(isActive)}
+                            <span className="truncate">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* =====================================================================
             ULTRA-COMPACT TOOLS & GOAL DROPDOWN (Strictly 3 Concise Lines Max)
@@ -1155,229 +1671,43 @@ export const Header: React.FC<HeaderProps> = ({
           );
         })()}
 
-        {/* Permanent Slim Navigation Bar in Full-Size Window View: Wraps Cleanly Across Computer, Laptop, Tablet & Mobile */}
+        {/* Permanent Slim Navigation Bar: Desktop/Laptop + Optional Single-Row Mobile Landscape Strip (Portrait uses Nav Dropdown) */}
         <nav
           aria-label="Primary Studio Navigation"
-          className={`relative w-full lg:w-fit lg:max-w-full lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-xl lg:mb-1 shadow-xs backdrop-blur-md ${
+          className={`compact-portrait:hidden relative w-full lg:w-fit lg:max-w-full lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-xl lg:mb-1 shadow-xs backdrop-blur-md ${
             isMenuBarHidden
               ? 'max-h-0 opacity-0 pointer-events-none py-0 border-transparent lg:mb-0'
-              : 'max-h-64 opacity-100 py-1.5 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
+              : 'max-h-64 mobile-landscape:max-h-14 opacity-100 py-1.5 mobile-landscape:py-1 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
           }`}
         >
           <WavyAzureFabricMotif className="opacity-50" />
-          <div className="relative z-10 flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 px-2 py-0.5 max-w-full">
+          <div className="relative z-10 flex flex-wrap mobile-landscape:flex-nowrap mobile-landscape:overflow-x-auto mobile-landscape:justify-start mobile-landscape:no-scrollbar items-center justify-center gap-1 sm:gap-1.5 mobile-landscape:gap-1 px-2 py-0.5 mobile-landscape:py-0 max-w-full">
             {/* Left Kenyan Moran Warrior Shield Motif */}
             <div className="hidden xl:flex items-center shrink-0 px-1 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
               <MoranShieldMotif size={18} animate={true} />
             </div>
 
-            <button
-              onClick={() => setActiveTab('quiz')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'quiz'
-                  ? 'bg-[#005A9E] text-white shadow-sm ring-1 ring-white/80 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-            >
-              {activeTab === 'quiz' ? <WarriorSpearBadge size={12} /> : <BookOpen className="w-3 h-3 text-[#005A9E] dark:text-sky-300" />}
-              <span>Practice</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('study-decks')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'study-decks'
-                  ? 'bg-gradient-to-r from-[#0078D4] to-[#005A9E] text-white shadow-sm ring-1 ring-amber-300 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-              title="Interactive Study Mode: Select Learning Path & Module to study Unit-by-Unit concepts, Azure services, and examples"
-            >
-              {activeTab === 'study-decks' ? <WarriorSpearBadge size={12} /> : <Layers className="w-3 h-3 text-[#005A9E] dark:text-sky-300" />}
-              <span>Study Mode</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('image-tutor')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'image-tutor'
-                  ? 'bg-gradient-to-r from-[#0078D4] via-indigo-700 to-[#005A9E] text-white shadow-sm ring-1 ring-amber-300 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-              title="Image Tutor: Interactive Microsoft Certified: Azure Fundamentals visual diagrams and course knowledge across all 12 modules"
-            >
-              {activeTab === 'image-tutor' ? <WarriorSpearBadge size={12} /> : <ImageIcon className="w-3 h-3 text-[#0078D4] dark:text-sky-300" />}
-              <span>Image Tutor</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('azure-themes')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'azure-themes'
-                  ? 'bg-gradient-to-r from-[#0078D4] via-sky-700 to-[#005A9E] text-white shadow-sm ring-1 ring-amber-300 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-              title="Azure Themes: Interconnecting theories woven across all 12 AZ-900 modules and Azure service categories"
-            >
-              {activeTab === 'azure-themes' ? <WarriorSpearBadge size={12} /> : <GitBranch className="w-3 h-3 text-[#0078D4] dark:text-sky-300" />}
-              <span>Azure Themes</span>
-            </button>
-
-            {/* Adaptive Quiz Mode with glowing Zap */}
-            <button
-              onClick={() => setActiveTab('adaptive')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'adaptive'
-                  ? 'bg-gradient-to-r from-blue-700 to-indigo-700 text-white shadow-sm ring-1 ring-amber-300 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-            >
-              {activeTab === 'adaptive' ? <WarriorSpearBadge size={12} /> : <Zap className="w-3 h-3 text-amber-600 dark:text-amber-300 fill-amber-400" />}
-              <span>Adaptive Quiz</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('flashcards')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'flashcards'
-                  ? 'bg-gradient-to-r from-indigo-700 to-purple-700 text-white shadow-sm ring-1 ring-white/80 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-            >
-              {activeTab === 'flashcards' ? <WarriorSpearBadge size={12} /> : <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-300" />}
-              <span>Flashcards</span>
-            </button>
-
-            {/* Review History Tab */}
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'history'
-                  ? 'bg-[#005A9E] text-white shadow-sm ring-1 ring-white/80 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-            >
-              {activeTab === 'history' ? <WarriorSpearBadge size={12} /> : <History className="w-3 h-3 text-[#005A9E] dark:text-sky-300" />}
-              <span>History</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('mock')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'mock'
-                  ? 'bg-gradient-to-r from-blue-800 to-[#005A9E] text-white shadow-sm ring-1 ring-white/80 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-              title="Mock Exam Simulation: Timed 50–60 question official exam simulation with Learning Path breakdown"
-            >
-              {activeTab === 'mock' ? <WarriorSpearBadge size={12} /> : <Award className="w-3 h-3 text-amber-600 dark:text-amber-300" />}
-              <span>Mock Exam</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('planner')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'planner'
-                  ? 'bg-gradient-to-r from-sky-700 to-emerald-700 text-white shadow-sm ring-1 ring-amber-300 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-              title="Study Planner: Set your target exam date & confidence levels to generate a prioritized daily or weekly schedule"
-            >
-              {activeTab === 'planner' ? <WarriorSpearBadge size={12} /> : <Calendar className="w-3 h-3 text-emerald-700 dark:text-emerald-300" />}
-              <span>Study Planner</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('analytics')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'analytics'
-                  ? 'bg-slate-900 text-white shadow-sm ring-1 ring-sky-300 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-            >
-              {activeTab === 'analytics' ? <WarriorSpearBadge size={12} /> : <TrendingUp className="w-3 h-3 text-[#005A9E] dark:text-sky-300" />}
-              <span>Analytics</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('trends')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'trends'
-                  ? 'bg-gradient-to-r from-[#0078D4] to-cyan-700 text-white shadow-sm ring-1 ring-sky-200 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-              title="Performance Trends: Recharts historical accuracy per module and learning path over time"
-            >
-              {activeTab === 'trends' ? (
-                <WarriorSpearBadge size={12} />
-              ) : (
-                <BarChart3 className="w-3 h-3 text-[#0078D4] dark:text-sky-300" />
-              )}
-              <span>Performance Trends</span>
-            </button>
-
-            {/* New Cohort Performance Visualization Tab (D3.js Global Harambee Azure Cohort Benchmark) */}
-            <button
-              onClick={() => setActiveTab('cohort')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'cohort'
-                  ? 'bg-gradient-to-r from-blue-700 to-indigo-700 text-white shadow-sm ring-1 ring-amber-300 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-              title="Cohort Performance: Compare your module mastery against the anonymized Global Harambee Azure Cohort benchmark via D3.js"
-            >
-              {activeTab === 'cohort' ? <WarriorSpearBadge size={12} /> : <Users className="w-3 h-3 text-[#0078D4] dark:text-amber-300" />}
-              <span>Cohort Performance</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('assistant')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'assistant'
-                  ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-sm ring-1 ring-yellow-200 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-            >
-              {activeTab === 'assistant' ? <WarriorSpearBadge size={12} /> : <Bot className="w-3 h-3 text-orange-700 dark:text-amber-300" />}
-              <span>Tutor</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('leaderboard')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'leaderboard'
-                  ? 'bg-amber-600 text-white shadow-sm ring-1 ring-amber-200 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-              title="Global Peer Leaderboard: Top performers from the Global Harambee Azure Cohort ranked by total questions solved"
-            >
-              {activeTab === 'leaderboard' ? <WarriorSpearBadge size={12} /> : <Award className="w-3 h-3 text-amber-700 dark:text-amber-400" />}
-              <span>Global Peer Leaderboard</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'profile'
-                  ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-sm ring-1 ring-purple-300 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-            >
-              {activeTab === 'profile' ? <WarriorSpearBadge size={12} /> : <Award className="w-3 h-3 text-purple-700 dark:text-amber-300" />}
-              <span>Profile</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('glossary')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                activeTab === 'glossary'
-                  ? 'bg-gradient-to-r from-emerald-700 to-[#005A9E] text-white shadow-sm ring-1 ring-emerald-300 font-black'
-                  : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-              }`}
-              title="Azure Glossary & Dictionary: All AZ-900 terms, interrelated architecture pinpoints, and verified Microsoft Learn references"
-            >
-              {activeTab === 'glossary' ? <WarriorSpearBadge size={12} /> : <BookOpen className="w-3 h-3 text-emerald-700 dark:text-emerald-300" />}
-              <span>Glossary</span>
-            </button>
+            {NAV_TABS.map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveTab(item.id)}
+                  title={item.title}
+                  className={`flex items-center gap-1 px-2 sm:px-2.5 mobile-landscape:px-2 py-1 mobile-landscape:py-0.5 rounded-lg text-[11px] mobile-landscape:text-[10px] ${
+                    item.fontWeightClass || 'font-bold'
+                  } whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                    isActive
+                      ? item.activeClass
+                      : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
+                  }`}
+                >
+                  {item.renderIcon(isActive)}
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
 
             {/* Right Kenyan Moran Warrior Shield Motif */}
             <div className="hidden xl:flex items-center shrink-0 px-1 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
@@ -1386,13 +1716,13 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </nav>
 
-        {/* Minimalist Floating Expand Handle (Moved up so it is 100% visible when menu bar is hidden) */}
+        {/* Minimalist Floating Expand Handle (Desktop & Mobile Landscape when menu bar is hidden) */}
         {isMenuBarHidden && (
-          <div className="flex justify-center -mt-0.5 mb-1.5 py-1 relative z-20">
+          <div className="compact-portrait:hidden flex justify-center -mt-0.5 mb-1.5 py-1 mobile-landscape:py-0.5 relative z-20">
             <button
               type="button"
               onClick={toggleMenuBar}
-              className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full bg-gradient-to-r from-[#003865] to-[#005a9e] hover:from-[#004578] hover:to-[#0078d4] text-white text-[11px] font-extrabold shadow-md border border-sky-400/50 cursor-pointer transition-all hover:scale-105"
+              className="inline-flex items-center gap-1.5 px-4 py-1 mobile-landscape:px-3 mobile-landscape:py-0.5 rounded-full bg-gradient-to-r from-[#003865] to-[#005a9e] hover:from-[#004578] hover:to-[#0078d4] text-white text-[11px] mobile-landscape:text-[10px] font-extrabold shadow-md border border-sky-400/50 cursor-pointer transition-all hover:scale-105"
               title="Expand navigation menu tabs"
             >
               <MoranShieldMotif size={14} animate={false} />
@@ -1427,6 +1757,17 @@ export const Header: React.FC<HeaderProps> = ({
         onClose={() => setShowEditDailyGoalModal(false)}
         onUpdateStats={onUpdateStats}
         onOpenFullReminders={() => setShowGoalAlertsModal(true)}
+      />
+
+      {/* 100% Daily Study Goal Fire-Streak Celebration & Cohort Peer Share Modal */}
+      <DailyGoalCelebrationModal
+        stats={stats}
+        todayAnsweredCount={todayAnsweredCount}
+        dailyGoal={dailyGoal}
+        isOpen={showDailyGoalCelebrationModal}
+        onClose={() => setShowDailyGoalCelebrationModal(false)}
+        userEmail={userEmail}
+        onNavigateToCohort={() => setActiveTab('cohort')}
       />
 
       {/* Dedicated Daily Goal & Custom Alerts Modal */}
