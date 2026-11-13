@@ -1641,4 +1641,67 @@ export function getThreadContextForModule(
   };
 }
 
+export function doesModuleMatchThemeSearch(
+  moduleId: number,
+  rawQuery: string,
+  extraModuleTitle = ''
+): boolean {
+  const q = rawQuery.trim().toLowerCase();
+  if (!q) return true;
+
+  const parts: string[] = [
+    `m${moduleId}`,
+    `module ${moduleId}`,
+    extraModuleTitle,
+  ];
+
+  for (const theme of AZURE_THEME_THREADS) {
+    const conn = theme.moduleConnections.find((c) => c.moduleId === moduleId);
+    if (conn) {
+      parts.push(
+        theme.title,
+        theme.shortTitle,
+        theme.numberLabel,
+        conn.moduleTitle,
+        conn.serviceCategory,
+        conn.roleInThread,
+        conn.earlierRecallPrompt,
+        conn.serviceApplication,
+        conn.examTrapGuard,
+        ...conn.azureServices
+      );
+    }
+  }
+
+  const deep = SCALING_DEEP_DIVE_MODULES.find((m) => m.moduleId === moduleId);
+  if (deep) {
+    parts.push(
+      deep.moduleTitle,
+      deep.moduleFocusSummary,
+      deep.compute.horizontalSpec,
+      deep.compute.verticalSpec,
+      deep.compute.keyExamRule,
+      ...deep.compute.azureComponents,
+      deep.networking.horizontalSpec,
+      deep.networking.verticalSpec,
+      deep.networking.keyExamRule,
+      ...deep.networking.azureComponents,
+      deep.storage.horizontalSpec,
+      deep.storage.verticalSpec,
+      deep.storage.keyExamRule,
+      ...deep.storage.azureComponents
+    );
+  }
+
+  const tagMetas = getThreadTagsForModule(moduleId, 3);
+  for (const tm of tagMetas) {
+    parts.push(tm.label, tm.shortDescription);
+  }
+
+  const searchableText = parts.join(' ').toLowerCase();
+  const tokens = q.split(/\s+/).filter(Boolean);
+  return tokens.every((tok) => searchableText.includes(tok));
+}
+
+
 

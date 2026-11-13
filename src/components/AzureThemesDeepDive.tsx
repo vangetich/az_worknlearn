@@ -18,12 +18,15 @@ import {
   SCALING_DEEP_DIVE_MODULES,
   ScalingDeepDiveModule,
   ScalingPillarDetail,
+  doesModuleMatchThemeSearch,
 } from '../data/azureThemesData';
 import { UserStats } from '../types/quiz';
 
 interface AzureThemesDeepDiveProps {
   stats: UserStats;
   initialModuleId?: number | null;
+  searchQuery?: string;
+  onClearSearch?: () => void;
   onPracticeModule: (moduleId: number) => void;
 }
 
@@ -35,6 +38,8 @@ const STORAGE_KEY_MAPPED_MODULES = 'az900_scaling_deepdive_mapped_v1';
 export const AzureThemesDeepDive: React.FC<AzureThemesDeepDiveProps> = ({
   stats,
   initialModuleId,
+  searchQuery = '',
+  onClearSearch,
   onPracticeModule,
 }) => {
   const [chosenThread, setChosenThread] = useState<ChosenThreadAxis>('both');
@@ -78,11 +83,20 @@ export const AzureThemesDeepDive: React.FC<AzureThemesDeepDiveProps> = ({
     }
   };
 
+  const filteredDeepDiveModules = useMemo(() => {
+    if (!searchQuery.trim()) return SCALING_DEEP_DIVE_MODULES;
+    return SCALING_DEEP_DIVE_MODULES.filter((m) =>
+      doesModuleMatchThemeSearch(m.moduleId, searchQuery, m.moduleTitle)
+    );
+  }, [searchQuery]);
+
   const activeModule: ScalingDeepDiveModule = useMemo(
     () =>
+      filteredDeepDiveModules.find((m) => m.moduleId === activeModuleId) ||
+      filteredDeepDiveModules[0] ||
       SCALING_DEEP_DIVE_MODULES.find((m) => m.moduleId === activeModuleId) ||
       SCALING_DEEP_DIVE_MODULES[0],
-    [activeModuleId]
+    [activeModuleId, filteredDeepDiveModules]
   );
 
   const getModuleMasteryPct = (modId: number): number | null => {
@@ -271,11 +285,38 @@ export const AzureThemesDeepDive: React.FC<AzureThemesDeepDiveProps> = ({
             </div>
           </div>
 
+          {filteredDeepDiveModules.length === 0 ? (
+            <div className="p-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 text-center space-y-2">
+              <p className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">
+                No modules matched &ldquo;{searchQuery}&rdquo; in Deep-Dive Mode.
+              </p>
+              {onClearSearch && (
+                <button
+                  type="button"
+                  onClick={onClearSearch}
+                  className="px-3 py-1.5 rounded-lg bg-[#0078D4] text-white text-xs font-bold cursor-pointer"
+                >
+                  Clear Search Filter
+                </button>
+              )}
+            </div>
+          ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-            {SCALING_DEEP_DIVE_MODULES.map((mod) => {
+            {filteredDeepDiveModules.map((mod) => {
               const isSelected = mod.moduleId === activeModule.moduleId;
               const isMapped = mappedModuleIds.includes(mod.moduleId);
               const masteryPct = getModuleMasteryPct(mod.moduleId);
+
+              const matchesThread =
+                chosenThread === 'both' ||
+                (chosenThread === 'horizontal' &&
+                  (mod.compute.primaryMode !== 'Vertical' ||
+                    mod.networking.primaryMode !== 'Vertical' ||
+                    mod.storage.primaryMode !== 'Vertical')) ||
+                (chosenThread === 'vertical' &&
+                  (mod.compute.primaryMode !== 'Horizontal' ||
+                    mod.networking.primaryMode !== 'Horizontal' ||
+                    mod.storage.primaryMode !== 'Horizontal'));
 
               return (
                 <button
@@ -285,6 +326,8 @@ export const AzureThemesDeepDive: React.FC<AzureThemesDeepDiveProps> = ({
                   className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
                     isSelected
                       ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-sm'
+                      : !matchesThread
+                      ? 'bg-slate-50/50 dark:bg-slate-900/40 border-slate-200/60 dark:border-slate-800 text-slate-500 dark:text-slate-400 opacity-55 hover:opacity-100'
                       : isMapped
                       ? 'bg-emerald-50/50 dark:bg-emerald-950/25 border-emerald-300/80 dark:border-emerald-800/70 text-slate-900 dark:text-slate-100 hover:border-[#0078D4]'
                       : 'bg-white dark:bg-slate-800/70 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:border-[#0078D4]'
@@ -329,16 +372,47 @@ export const AzureThemesDeepDive: React.FC<AzureThemesDeepDiveProps> = ({
                       isSelected ? 'text-sky-100' : 'text-slate-500 dark:text-slate-400'
                     }`}
                   >
-                    <span>C:{mod.compute.primaryMode[0]}</span>
+                    <span
+                      className={
+                        !isSelected &&
+                        ((chosenThread === 'horizontal' && mod.compute.primaryMode !== 'Vertical') ||
+                          (chosenThread === 'vertical' && mod.compute.primaryMode !== 'Horizontal'))
+                          ? 'font-bold text-[#0078D4] dark:text-sky-400'
+                          : ''
+                      }
+                    >
+                      C:{mod.compute.primaryMode[0]}
+                    </span>
                     <span>·</span>
-                    <span>N:{mod.networking.primaryMode[0]}</span>
+                    <span
+                      className={
+                        !isSelected &&
+                        ((chosenThread === 'horizontal' && mod.networking.primaryMode !== 'Vertical') ||
+                          (chosenThread === 'vertical' && mod.networking.primaryMode !== 'Horizontal'))
+                          ? 'font-bold text-[#0078D4] dark:text-sky-400'
+                          : ''
+                      }
+                    >
+                      N:{mod.networking.primaryMode[0]}
+                    </span>
                     <span>·</span>
-                    <span>S:{mod.storage.primaryMode[0]}</span>
+                    <span
+                      className={
+                        !isSelected &&
+                        ((chosenThread === 'horizontal' && mod.storage.primaryMode !== 'Vertical') ||
+                          (chosenThread === 'vertical' && mod.storage.primaryMode !== 'Horizontal'))
+                          ? 'font-bold text-[#0078D4] dark:text-sky-400'
+                          : ''
+                      }
+                    >
+                      S:{mod.storage.primaryMode[0]}
+                    </span>
                   </div>
                 </button>
               );
             })}
           </div>
+          )}
         </div>
       </section>
 
@@ -406,13 +480,21 @@ export const AzureThemesDeepDive: React.FC<AzureThemesDeepDiveProps> = ({
           }`}
         >
           {pillarEntries.map((pillar) => {
-            const showHorizontal = chosenThread === 'both' || chosenThread === 'horizontal';
-            const showVertical = chosenThread === 'both' || chosenThread === 'vertical';
+            const isHorizontalHighlighted = chosenThread === 'horizontal';
+            const isVerticalHighlighted = chosenThread === 'vertical';
+            const pillarMatchesChosen =
+              chosenThread === 'both' ||
+              (chosenThread === 'horizontal' && pillar.detail.primaryMode !== 'Vertical') ||
+              (chosenThread === 'vertical' && pillar.detail.primaryMode !== 'Horizontal');
 
             return (
               <div
                 key={pillar.key}
-                className="rounded-2xl border border-slate-200 dark:border-slate-700/90 bg-slate-50/70 dark:bg-slate-800/40 p-4 sm:p-5 flex flex-col justify-between gap-4"
+                className={`rounded-2xl border p-4 sm:p-5 flex flex-col justify-between gap-4 transition-all ${
+                  pillarMatchesChosen
+                    ? 'border-slate-200 dark:border-slate-700/90 bg-slate-50/70 dark:bg-slate-800/40'
+                    : 'border-slate-200/70 dark:border-slate-800 bg-slate-50/35 dark:bg-slate-900/40 opacity-75'
+                }`}
               >
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700/80 pb-3">
@@ -436,31 +518,43 @@ export const AzureThemesDeepDive: React.FC<AzureThemesDeepDiveProps> = ({
                     </span>
                   </div>
 
-                  {/* Horizontal Implementation Spec */}
-                  {showHorizontal && (
-                    <div className="p-3 rounded-xl bg-sky-50/80 dark:bg-sky-950/40 border border-sky-200/80 dark:border-sky-800/70 space-y-1">
-                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#0078D4] dark:text-sky-300">
-                        <MoveHorizontal className="w-3.5 h-3.5 shrink-0" />
-                        <span>Horizontal Scaling (Scale Out / In)</span>
-                      </div>
-                      <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">
-                        {pillar.detail.horizontalSpec}
-                      </p>
+                  {/* Horizontal Implementation Spec (Highlighted dynamically on Horizontal focus) */}
+                  <div
+                    className={`p-3 rounded-xl border space-y-1 transition-all ${
+                      isHorizontalHighlighted
+                        ? 'bg-sky-50 dark:bg-sky-950/60 border-[#0078D4] ring-1 ring-[#0078D4]/40'
+                        : isVerticalHighlighted
+                        ? 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200/70 dark:border-slate-800 opacity-55'
+                        : 'bg-sky-50/80 dark:bg-sky-950/40 border-sky-200/80 dark:border-sky-800/70'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#0078D4] dark:text-sky-300">
+                      <MoveHorizontal className="w-3.5 h-3.5 shrink-0" />
+                      <span>Horizontal Scaling (Scale Out / In)</span>
                     </div>
-                  )}
+                    <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">
+                      {pillar.detail.horizontalSpec}
+                    </p>
+                  </div>
 
-                  {/* Vertical Implementation Spec */}
-                  {showVertical && (
-                    <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/35 border border-amber-200/80 dark:border-amber-800/70 space-y-1">
-                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-800 dark:text-amber-300">
-                        <ArrowUp className="w-3.5 h-3.5 shrink-0" />
-                        <span>Vertical Scaling (Scale Up / Down)</span>
-                      </div>
-                      <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">
-                        {pillar.detail.verticalSpec}
-                      </p>
+                  {/* Vertical Implementation Spec (Highlighted dynamically on Vertical focus) */}
+                  <div
+                    className={`p-3 rounded-xl border space-y-1 transition-all ${
+                      isVerticalHighlighted
+                        ? 'bg-amber-50 dark:bg-amber-950/55 border-amber-500 ring-1 ring-amber-500/40'
+                        : isHorizontalHighlighted
+                        ? 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200/70 dark:border-slate-800 opacity-55'
+                        : 'bg-amber-50/80 dark:bg-amber-950/35 border-amber-200/80 dark:border-amber-800/70'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                      <ArrowUp className="w-3.5 h-3.5 shrink-0" />
+                      <span>Vertical Scaling (Scale Up / Down)</span>
                     </div>
-                  )}
+                    <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">
+                      {pillar.detail.verticalSpec}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Azure Components + Exam Rule */}
@@ -521,7 +615,17 @@ export const AzureThemesDeepDive: React.FC<AzureThemesDeepDiveProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800">
-              {SCALING_DEEP_DIVE_MODULES.map((mod) => {
+              {filteredDeepDiveModules.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={1 + (pillarFilter === 'all' ? 3 : 1)}
+                    className="py-6 px-4 text-center text-xs text-slate-500 dark:text-slate-400"
+                  >
+                    No modules match &ldquo;{searchQuery}&rdquo;. Clear the search filter above to view all 12 modules.
+                  </td>
+                </tr>
+              ) : (
+                filteredDeepDiveModules.map((mod) => {
                 const isSelectedRow = mod.moduleId === activeModule.moduleId;
                 const renderCellSummary = (detail: ScalingPillarDetail) => {
                   if (chosenThread === 'horizontal') return detail.horizontalSpec;
@@ -578,7 +682,8 @@ export const AzureThemesDeepDive: React.FC<AzureThemesDeepDiveProps> = ({
                     )}
                   </tr>
                 );
-              })}
+              })
+              )}
             </tbody>
           </table>
         </div>

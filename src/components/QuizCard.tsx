@@ -2758,6 +2758,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                       key={tag.id}
                       tag={tag}
                       size="sm"
+                      animateOnHover
                       customTooltip={`${tag.label} — Click to view how ${tag.label} applies fundamentally in Module ${question.moduleId}`}
                       onClick={(clickedTag) => setActiveThreadModalTag(clickedTag)}
                     />

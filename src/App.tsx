@@ -88,6 +88,8 @@ import { PaymentGatekeeper } from './components/PaymentGatekeeper';
 import { SubscriptionTierSelection } from './components/SubscriptionTierSelection';
 import { PeerChallengeModal } from './components/PeerChallengeModal';
 import { PracticeControlOverflowMenu } from './components/PracticeControlOverflowMenu';
+import { ThreadMultiSelectDropdown } from './components/ThreadMultiSelectDropdown';
+import { ThreadTagId, getThreadTagsForQuestion } from './data/azureThemesData';
 import {
   useQuizFocusTimer,
   QuizFocusTimerPill,
@@ -324,6 +326,19 @@ export default function App() {
     }
     return 'all';
   });
+  const [selectedThreadFilters, setSelectedThreadFilters] = useState<ThreadTagId[]>([]);
+
+  const handleToggleThreadFilter = (threadId: ThreadTagId) => {
+    setSelectedThreadFilters((prev) =>
+      prev.includes(threadId) ? prev.filter((t) => t !== threadId) : [...prev, threadId]
+    );
+    setCurrentQuestionIndex(0);
+  };
+
+  const handleClearThreadFilters = () => {
+    setSelectedThreadFilters([]);
+    setCurrentQuestionIndex(0);
+  };
 
   const [isMotifShimmering, setIsMotifShimmering] = useState<boolean>(false);
   const [trendScoreFlipParity, setTrendScoreFlipParity] = useState<boolean>(false);
@@ -1228,6 +1243,12 @@ export default function App() {
       if (selectedDifficultyFilter !== 'all' && q.difficulty !== selectedDifficultyFilter) {
         return false;
       }
+      if (selectedThreadFilters.length > 0) {
+        const qThreads = getThreadTagsForQuestion(q, 3).map((t) => t.id);
+        if (!selectedThreadFilters.some((tag) => qThreads.includes(tag))) {
+          return false;
+        }
+      }
       if (onlyBookmarks && !stats.bookmarks.includes(q.id)) {
         return false;
       }
@@ -1341,6 +1362,7 @@ export default function App() {
     selectedPathId,
     selectedModuleId,
     selectedDifficultyFilter,
+    selectedThreadFilters,
     onlyBookmarks,
     onlySavedNotes,
     savedNotesMap,
@@ -1353,6 +1375,19 @@ export default function App() {
     lockedDifficulty,
     questionSortOrder,
   ]);
+
+  const threadQuestionCounts = useMemo(() => {
+    const counts: Partial<Record<ThreadTagId, number>> = {};
+    for (const q of questions) {
+      if (selectedPathId !== 'all' && q.learningPathId !== selectedPathId) continue;
+      if (selectedModuleId !== 'all' && q.moduleId !== selectedModuleId) continue;
+      const tags = getThreadTagsForQuestion(q, 3);
+      for (const tag of tags) {
+        counts[tag.id] = (counts[tag.id] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [questions, selectedPathId, selectedModuleId]);
 
   // Handle jumping directly to a specific question selected in GlobalSearchBar or via Deep-Link
   useEffect(() => {
@@ -2457,6 +2492,15 @@ export default function App() {
                         )}
                       </div>
 
+                      {/* 2b. Interconnecting Thread Multi-Select Filter */}
+                      <ThreadMultiSelectDropdown
+                        selectedThreads={selectedThreadFilters}
+                        onToggleThread={handleToggleThreadFilter}
+                        onClearThreads={handleClearThreadFilters}
+                        threadCounts={threadQuestionCounts}
+                        variant="compact"
+                      />
+
                       {/* 3. Heatmap */}
                       <button
                         type="button"
@@ -2680,6 +2724,15 @@ export default function App() {
                           <option value="Advanced">Advanced (Override)</option>
                         </select>
                       </div>
+
+                      {/* Interconnecting Thread Multi-Select Filter */}
+                      <ThreadMultiSelectDropdown
+                        selectedThreads={selectedThreadFilters}
+                        onToggleThread={handleToggleThreadFilter}
+                        onClearThreads={handleClearThreadFilters}
+                        threadCounts={threadQuestionCounts}
+                        variant="expanded"
+                      />
                     </div>
 
                     {/* Right: Actions, Single-Line Collapse & Hide Toggles */}
@@ -3909,6 +3962,8 @@ export default function App() {
                     <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
                       {searchQuery.trim()
                         ? `No questions matched "${searchQuery}". Try another Azure service or clear the search filter.`
+                        : selectedThreadFilters.length > 0
+                        ? `No questions matched the selected Thread filter (${selectedThreadFilters.join(', ')}) within your current Learning Path/Module scope.`
                         : selectedDifficultyFilter !== 'all'
                         ? `No "${selectedDifficultyFilter}" questions matched the current filter selection.`
                         : retryIncorrectPathId !== null
@@ -3926,6 +3981,7 @@ export default function App() {
                         setSelectedPathId('all');
                         setSelectedModuleId('all');
                         setSelectedDifficultyFilter('all');
+                        setSelectedThreadFilters([]);
                         setRetryIncorrectPathId(null);
                         setRetryIncorrectSnapshotIds([]);
                         setOnlyBookmarks(false);
@@ -4531,6 +4587,9 @@ export default function App() {
           handleChangeLockedDifficulty(diff === 'all' ? null : diff);
           setCurrentQuestionIndex(0);
         }}
+        selectedThreadFilters={selectedThreadFilters}
+        onToggleThreadFilter={handleToggleThreadFilter}
+        onClearThreadFilters={handleClearThreadFilters}
         showPracticeHeatmap={showPracticeHeatmap}
         onToggleHeatmap={() => setShowPracticeHeatmap((prev) => !prev)}
         showWorkspacePanels={showWorkspacePanels}

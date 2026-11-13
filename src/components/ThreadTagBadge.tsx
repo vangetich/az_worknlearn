@@ -16,6 +16,7 @@ interface ThreadTagBadgeProps {
   onClick?: (tag: ThreadTagMeta, e: React.MouseEvent) => void;
   titlePrefix?: string;
   customTooltip?: string;
+  animateOnHover?: boolean;
 }
 
 export const getThreadTagIcon = (tagId: ThreadTagId, className = 'w-3 h-3') => {
@@ -42,6 +43,7 @@ export const ThreadTagBadge: React.FC<ThreadTagBadgeProps> = ({
   onClick,
   titlePrefix,
   customTooltip,
+  animateOnHover = false,
 }) => {
   const colorClasses = onDarkPrimaryBg ? tag.activeModuleBadgeClass : tag.badgeClass;
   const sizeClasses =
@@ -63,9 +65,11 @@ export const ThreadTagBadge: React.FC<ThreadTagBadgeProps> = ({
           e.stopPropagation();
           onClick(tag, e);
         }}
-        className={`inline-flex items-center font-bold border whitespace-nowrap transition-all hover:brightness-95 dark:hover:brightness-110 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#0078D4] ${sizeClasses} ${colorClasses}`}
+        className={`inline-flex items-center font-bold border whitespace-nowrap transition-all hover:brightness-95 dark:hover:brightness-110 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#0078D4] ${
+          animateOnHover ? 'thread-tag-hover-interactive' : ''
+        } ${sizeClasses} ${colorClasses}`}
         title={tooltip}
-        aria-label={`Inspect ${tag.label} interconnecting theme in Azure Themes`}
+        aria-label={`Inspect ${tag.label} interconnecting theme`}
       >
         {getThreadTagIcon(tag.id, iconClass)}
         <span>{tag.label}</span>

@@ -12,6 +12,8 @@ import {
   Compass,
   Filter,
   SlidersHorizontal,
+  Search,
+  X,
 } from 'lucide-react';
 import { UserStats } from '../types/quiz';
 import { LEARNING_PATHS } from '../data/curriculum';
@@ -20,9 +22,11 @@ import {
   AzureThemeThread,
   ServiceCategoryKey,
   ThemeModuleLink,
+  doesModuleMatchThemeSearch,
 } from '../data/azureThemesData';
 import { ScalingArchitectureDiagram } from './ScalingArchitectureDiagram';
 import { AzureThemesDeepDive } from './AzureThemesDeepDive';
+import { ThemeMasteryTimeline } from './ThemeMasteryTimeline';
 
 interface AzureThemesViewProps {
   stats: UserStats;
@@ -42,6 +46,7 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
   initialModuleId,
 }) => {
   const [viewMode, setViewMode] = useState<'overview' | 'deep-dive'>('overview');
+  const [themeSearchQuery, setThemeSearchQuery] = useState<string>('');
   const [selectedThemeId, setSelectedThemeId] = useState<string>(
     initialThemeId || AZURE_THEME_THREADS[0].id
   );
@@ -101,6 +106,22 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
       ),
     []
   );
+
+  const matchingModuleIds = useMemo(() => {
+    if (!themeSearchQuery.trim()) return null;
+    const matched = new Set<number>();
+    for (const mod of allModulesFlat) {
+      if (doesModuleMatchThemeSearch(mod.id, themeSearchQuery, mod.title)) {
+        matched.add(mod.id);
+      }
+    }
+    return matched;
+  }, [themeSearchQuery, allModulesFlat]);
+
+  const filteredModulesFlat = useMemo(() => {
+    if (!matchingModuleIds) return allModulesFlat;
+    return allModulesFlat.filter((m) => matchingModuleIds.has(m.id));
+  }, [allModulesFlat, matchingModuleIds]);
 
   const handleSelectTheme = (theme: AzureThemeThread) => {
     setSelectedThemeId(theme.id);
@@ -214,6 +235,65 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
           </div>
         </div>
 
+        {/* Top-Level Search Bar: Filter 12 Modules by Theme Keywords or Azure Service Types */}
+        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="search"
+                value={themeSearchQuery}
+                onChange={(e) => setThemeSearchQuery(e.target.value)}
+                placeholder="Search 12 modules by theme keyword or Azure service (e.g., VMSS, ExpressRoute, Entra ID, Blob, FinOps, Policy)..."
+                aria-label="Filter the 12 modules by theme keywords or service types"
+                className="w-full pl-9 pr-9 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0078D4]/30 focus:border-[#0078D4]"
+              />
+              {themeSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setThemeSearchQuery('')}
+                  className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-white absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer"
+                  aria-label="Clear theme search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 text-xs tabular-nums">
+              <span className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200">
+                {filteredModulesFlat.length} / 12 Modules
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+            <span className="font-semibold text-slate-500 dark:text-slate-400 mr-0.5">
+              Quick Filter:
+            </span>
+            {['VMSS', 'Horizontal', 'ExpressRoute', 'Storage', 'Entra ID', 'FinOps', 'Arc'].map(
+              (preset) => {
+                const isActive =
+                  themeSearchQuery.trim().toLowerCase() === preset.toLowerCase();
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setThemeSearchQuery(isActive ? '' : preset)}
+                    className={`px-2 py-0.5 rounded-md border font-semibold transition-colors cursor-pointer ${
+                      isActive
+                        ? 'bg-[#0078D4] text-white border-[#0078D4]'
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#0078D4]'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                );
+              }
+            )}
+          </div>
+        </div>
+
         {/* Theme Selector Grid (Shown in Overview Mode) */}
         {viewMode === 'overview' && (
           <div
@@ -223,6 +303,10 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
           >
             {AZURE_THEME_THREADS.map((theme) => {
               const isSelected = theme.id === activeTheme.id;
+              const matchedModulesInTheme = matchingModuleIds
+                ? theme.moduleConnections.filter((c) => matchingModuleIds.has(c.moduleId)).length
+                : theme.moduleConnections.length;
+
               return (
                 <button
                   key={theme.id}
@@ -234,7 +318,7 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
                     isSelected
                       ? 'bg-slate-900 dark:bg-sky-950/90 text-white border-slate-900 dark:border-sky-500 shadow-sm'
                       : 'bg-slate-50/70 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700/80'
-                  }`}
+                  } ${matchingModuleIds && matchedModulesInTheme === 0 ? 'opacity-50' : ''}`}
                 >
                   <div className="flex items-center justify-between gap-2 text-[11px] font-semibold">
                     <span
@@ -249,7 +333,9 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
                         isSelected ? 'text-amber-300' : 'text-slate-500 dark:text-slate-400'
                       }`}
                     >
-                      {theme.moduleConnections.length} modules
+                      {matchingModuleIds
+                        ? `${matchedModulesInTheme}/${theme.moduleConnections.length} match`
+                        : `${theme.moduleConnections.length} modules`}
                     </span>
                   </div>
                   <div className="font-bold text-sm leading-snug">{theme.shortTitle}</div>
@@ -271,6 +357,8 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
         <AzureThemesDeepDive
           stats={stats}
           initialModuleId={initialModuleId ?? selectedModuleId}
+          searchQuery={themeSearchQuery}
+          onClearSearch={() => setThemeSearchQuery('')}
           onPracticeModule={onPracticeModule}
         />
       ) : (
@@ -317,6 +405,19 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
             )}
           </div>
         </div>
+
+        {/* Interactive Theme Mastery Progress Timeline */}
+        <ThemeMasteryTimeline
+          theme={activeTheme}
+          stats={stats}
+          selectedModuleId={activeModuleLink.moduleId}
+          matchingModuleIds={matchingModuleIds}
+          onSelectModule={(modId) => {
+            setSelectedCategoryFilter('All');
+            setSelectedModuleId(modId);
+          }}
+          onPracticeModule={onPracticeModule}
+        />
 
         {/* Explicit Horizontal vs. Vertical Scaling Interactive 12-Module Visual Map */}
         {activeTheme.id === 'scaling-elasticity' && (
@@ -380,11 +481,25 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
           <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
             Select any connected module below to inspect how earlier Path 1/2 ideas continue into that module:
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-            {allModulesFlat.map((mod) => {
-              const linkMatch = visibleConnections.find((c) => c.moduleId === mod.id);
-              const isSelected = activeModuleLink.moduleId === mod.id;
-              const masteryPct = getModuleMasteryPct(mod.id);
+          {filteredModulesFlat.length === 0 ? (
+            <div className="p-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 text-center space-y-2">
+              <p className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">
+                No modules matched &ldquo;{themeSearchQuery}&rdquo;.
+              </p>
+              <button
+                type="button"
+                onClick={() => setThemeSearchQuery('')}
+                className="px-3 py-1.5 rounded-lg bg-[#0078D4] text-white text-xs font-bold cursor-pointer"
+              >
+                Clear Search Filter
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {filteredModulesFlat.map((mod) => {
+                const linkMatch = visibleConnections.find((c) => c.moduleId === mod.id);
+                const isSelected = activeModuleLink.moduleId === mod.id;
+                const masteryPct = getModuleMasteryPct(mod.id);
 
               return (
                 <button
@@ -421,17 +536,18 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
                   <div className="text-xs font-semibold leading-tight line-clamp-2">
                     {mod.title}
                   </div>
-                  <div
-                    className={`text-[10px] truncate ${
-                      isSelected ? 'text-sky-100' : 'text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    {linkMatch ? linkMatch.serviceCategory : 'Outside active filter'}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                    <div
+                      className={`text-[10px] truncate ${
+                        isSelected ? 'text-sky-100' : 'text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
+                      {linkMatch ? linkMatch.serviceCategory : 'Outside active filter'}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Two-Zone Detail Stage: Module Bridge Inspector + Thread Recall Check */}
@@ -660,7 +776,17 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800">
-              {allModulesFlat.map((mod) => (
+              {filteredModulesFlat.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={1 + AZURE_THEME_THREADS.length}
+                    className="py-6 px-4 text-center text-xs text-slate-500 dark:text-slate-400"
+                  >
+                    No modules match &ldquo;{themeSearchQuery}&rdquo;. Clear the search bar above to inspect all 12 modules.
+                  </td>
+                </tr>
+              ) : (
+                filteredModulesFlat.map((mod) => (
                 <tr
                   key={mod.id}
                   className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
@@ -711,7 +837,8 @@ export const AzureThemesView: React.FC<AzureThemesViewProps> = ({
                     );
                   })}
                 </tr>
-              ))}
+              ))
+              )}
             </tbody>
           </table>
         </div>

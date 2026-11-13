@@ -10,8 +10,11 @@ import {
   Sparkles,
   Users,
   Download,
+  GitBranch,
 } from 'lucide-react';
 import { KenyanFlagMiniEmblem, MaasaiMedallion } from './MotifDecorations';
+import { THREAD_TAG_META, ThreadTagId } from '../data/azureThemesData';
+import { getThreadTagIcon } from './ThreadTagBadge';
 
 interface PracticeControlOverflowMenuProps {
   isOpen: boolean;
@@ -22,6 +25,10 @@ interface PracticeControlOverflowMenuProps {
   // 2. Diff
   selectedDifficultyFilter: 'all' | 'Fundamental' | 'Intermediate' | 'Advanced';
   onDifficultyChange: (diff: 'all' | 'Fundamental' | 'Intermediate' | 'Advanced') => void;
+  // 2b. Interconnecting Thread multi-select
+  selectedThreadFilters?: ThreadTagId[];
+  onToggleThreadFilter?: (threadId: ThreadTagId) => void;
+  onClearThreadFilters?: () => void;
   // 3. Heatmap
   showPracticeHeatmap: boolean;
   onToggleHeatmap: () => void;
@@ -42,6 +49,9 @@ export const PracticeControlOverflowMenu: React.FC<PracticeControlOverflowMenuPr
   onSortChange,
   selectedDifficultyFilter,
   onDifficultyChange,
+  selectedThreadFilters = [],
+  onToggleThreadFilter,
+  onClearThreadFilters,
   showPracticeHeatmap,
   onToggleHeatmap,
   showWorkspacePanels,
@@ -217,6 +227,58 @@ export const PracticeControlOverflowMenu: React.FC<PracticeControlOverflowMenuPr
               })}
             </div>
           </div>
+
+          {/* ==========================================
+              CONTROL 2B: INTERCONNECTING THREAD MULTI-SELECT
+             ========================================== */}
+          {onToggleThreadFilter && (
+            <div className="space-y-2 pt-1 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <GitBranch className="w-3.5 h-3.5 text-[#0078D4]" />
+                  <span>Interconnecting Threads ('Thread' Multi-Select)</span>
+                </label>
+                {selectedThreadFilters.length > 0 && onClearThreadFilters ? (
+                  <button
+                    type="button"
+                    onClick={onClearThreadFilters}
+                    className="text-[11px] font-bold text-[#0078D4] hover:underline cursor-pointer"
+                  >
+                    Clear ({selectedThreadFilters.length})
+                  </button>
+                ) : (
+                  <span className="text-[11px] font-bold text-slate-500">All Themes</span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                {(['Scaling', 'Reliability', 'Security', 'Responsibility', 'FinOps', 'Hybrid/IaC'] as ThreadTagId[]).map(
+                  (threadId) => {
+                    const meta = THREAD_TAG_META[threadId];
+                    const isChecked = selectedThreadFilters.includes(threadId);
+                    return (
+                      <button
+                        key={threadId}
+                        type="button"
+                        onClick={() => onToggleThreadFilter(threadId)}
+                        className={`min-h-[42px] px-2.5 py-2 rounded-xl border text-left flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+                          isChecked
+                            ? 'bg-[#0078D4] text-white border-[#005A9E] shadow-xs'
+                            : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold truncate">
+                          {getThreadTagIcon(meta.id, 'w-3.5 h-3.5 shrink-0')}
+                          <span className="truncate">{meta.label}</span>
+                        </span>
+                        {isChecked && <Check className="w-3.5 h-3.5 shrink-0 stroke-[3]" />}
+                      </button>
+                    );
+                  }
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ==========================================
               CONTROLS 3, 4 & 5: HEATMAP, MAPS & STUDY ZONE
