@@ -44,6 +44,7 @@ import { LearningPathProgressMap } from './LearningPathProgressMap';
 import { triggerAchievementOverlay } from './AchievementOverlay';
 import { AppTab } from './Header';
 import { StreakActivityGraph } from './StreakActivityGraph';
+import { StudyStreakCalendar } from './StudyStreakCalendar';
 import { DailyStudyReminder } from './DailyStudyReminder';
 import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
 import { SubscriptionPanel } from './SubscriptionPanel';
@@ -2640,6 +2641,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       <DailyStudyReminder
         stats={stats}
         onStartScenarioQuestion={onNavigateToPractice}
+      />
+
+      {/* 3-Month Study Streak Calendar Heat Map (Highlights Daily Goal Met Days) */}
+      <StudyStreakCalendar
+        stats={stats}
+        onOpenManageGoal={onOpenManageGoal}
       />
 
       {/* 30-Day Streak Activity & Study Consistency Graph (Recharts) */}
