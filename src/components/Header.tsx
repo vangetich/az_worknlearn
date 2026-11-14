@@ -31,6 +31,8 @@ import {
   Pencil,
   GitBranch,
   Flame,
+  CheckCircle2,
+  MoreHorizontal,
 } from 'lucide-react';
 import {
   MaasaiMedallion,
@@ -600,6 +602,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = useState<boolean>(false);
   const [isNavDropdownOpen, setIsNavDropdownOpen] = useState<boolean>(false);
   const [selectedNavDropdownGroup, setSelectedNavDropdownGroup] = useState<NavGroupName | 'all'>('all');
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState<boolean>(false);
   const headerRef = React.useRef<HTMLElement>(null);
   const [inspectedPathInMenu, setInspectedPathInMenu] = useState<1 | 2 | 3>(
     selectedPathId === 1 || selectedPathId === 2 || selectedPathId === 3 ? selectedPathId : 2
@@ -624,18 +627,20 @@ export const Header: React.FC<HeaderProps> = ({
       setSelectedNavDropdownGroup(group);
       setIsNavDropdownOpen(true);
       setIsMobileDetailsOpen(false);
+      setIsMoreMenuOpen(false);
       setShowCloudStatsPopup(false);
     }
   };
 
   // Close dropdown menus cleanly on Escape key or click outside header
   React.useEffect(() => {
-    if (!isNavDropdownOpen && !isMobileDetailsOpen) return;
+    if (!isNavDropdownOpen && !isMobileDetailsOpen && !isMoreMenuOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsNavDropdownOpen(false);
         setIsMobileDetailsOpen(false);
+        setIsMoreMenuOpen(false);
       }
     };
 
@@ -643,6 +648,7 @@ export const Header: React.FC<HeaderProps> = ({
       if (headerRef.current && !headerRef.current.contains(e.target as Node)) {
         setIsNavDropdownOpen(false);
         setIsMobileDetailsOpen(false);
+        setIsMoreMenuOpen(false);
       }
     };
 
@@ -654,7 +660,7 @@ export const Header: React.FC<HeaderProps> = ({
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('touchstart', handlePointerDown);
     };
-  }, [isNavDropdownOpen, isMobileDetailsOpen]);
+  }, [isNavDropdownOpen, isMobileDetailsOpen, isMoreMenuOpen]);
 
   const toggleMenuBar = () => {
     setIsMenuBarHidden((prev) => {
@@ -918,7 +924,7 @@ export const Header: React.FC<HeaderProps> = ({
         <WavyAzureFabricMotif />
       </div>
 
-      <div className="w-full max-w-full px-2.5 sm:px-5 lg:pl-[2.7cm] lg:pr-6 relative z-10 min-w-0 lg:mx-0">
+      <div className="max-w-[1560px] 2xl:max-w-[1680px] w-full mx-auto px-3 sm:px-5 lg:px-6 xl:px-8 relative z-10 min-w-0">
         {/* =====================================================================
             MOBILE & TABLET COMPACT TOP BAR (< lg screens)
             - Always displays Azure Cloud Explorer • AZ-900 • Fundamentals Practice Studio
@@ -1346,6 +1352,302 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </button>
             )}
+
+            {/* Small Dropdown Menu on the Far Right of Screen: Houses all studio controls & any missed/condensed buttons on laptop view */}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMoreMenuOpen((prev) => !prev);
+                  setIsNavDropdownOpen(false);
+                  setIsMobileDetailsOpen(false);
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-black transition-all shadow-2xs cursor-pointer border shrink-0 whitespace-nowrap ${
+                  isMoreMenuOpen
+                    ? 'bg-[#0078D4] text-white border-[#0078D4] ring-2 ring-sky-300/60'
+                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border-slate-200 dark:border-slate-700'
+                }`}
+                aria-expanded={isMoreMenuOpen}
+                aria-haspopup="true"
+                title="Studio Controls Overflow Menu: Celebrate, Show/Hide Nav, Goal Settings, Shortcuts, User Guide & Sign Out"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-300 shrink-0" />
+                <span className="text-[11px] font-extrabold">More</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
+                    isMoreMenuOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {/* Far-Right Dropdown Panel */}
+              {isMoreMenuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-150 text-xs"
+                  role="menu"
+                >
+                  <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="font-black text-slate-900 dark:text-white uppercase tracking-wider text-[10px]">
+                      Studio Controls &amp; Quick Actions
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 dark:bg-sky-950 text-[#0078D4] dark:text-sky-300">
+                      Laptop Hub
+                    </span>
+                  </div>
+
+                  <div className="space-y-0.5 max-h-[75vh] overflow-y-auto p-0.5">
+                    {/* Celebrate Daily Goal */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDailyGoalCelebrationModal(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-orange-600 flex items-center justify-center shrink-0">
+                          <Flame className="w-4 h-4 fill-amber-400" />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                            Celebrate Daily Goal
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            {todayAnsweredCount}/{dailyGoal} Qs answered today
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-amber-700 bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.5 rounded shrink-0">
+                        {todayAnsweredCount >= dailyGoal ? 'Goal Met! 🎉' : `${Math.round((todayAnsweredCount / dailyGoal) * 100)}%`}
+                      </span>
+                    </button>
+
+                    {/* Show/Hide Navigation Tabs Bar */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toggleMenuBar();
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-sky-50 dark:hover:bg-sky-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-[#0078D4] flex items-center justify-center shrink-0">
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                            {isMenuBarHidden ? 'Show Navigation Tabs Bar' : 'Hide Navigation Tabs Bar'}
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            {isMenuBarHidden ? 'Reveal 4 categorized dropdown tabs' : 'Maximize quiz vertical space'}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                        {isMenuBarHidden ? 'Hidden' : 'Visible'}
+                      </span>
+                    </button>
+
+                    {/* Edit Daily Goal Target */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEditDailyGoalModal(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center shrink-0">
+                          <Target className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                            Edit Daily Study Goal
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            Current target: {dailyGoal} questions / day
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded shrink-0">
+                        Target: {dailyGoal}Q
+                      </span>
+                    </button>
+
+                    {/* Tools, Path & Timer Menu */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMobileDetailsOpen(true);
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
+                          <SlidersHorizontal className="w-4 h-4 text-[#0078D4]" />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                            Tools &amp; Learning Paths
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            Focus paths, audio pacing &amp; study decks
+                          </div>
+                        </div>
+                      </div>
+                      {missedCount > 0 && (
+                        <span className="text-[10px] font-black text-rose-600 bg-rose-100 dark:bg-rose-950 px-1.5 py-0.5 rounded-full shrink-0">
+                          {missedCount} Missed
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Interactive User Guide */}
+                    {onOpenUserGuide && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenUserGuide();
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 flex items-center justify-center shrink-0">
+                            <BookOpen className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                              Interactive User Guide
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              Tips, architecture pinpoints &amp; AZ-900 rules
+                            </div>
+                          </div>
+                        </div>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                      </button>
+                    )}
+
+                    {/* Study Break */}
+                    {onOpenStudyBreak && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenStudyBreak();
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-teal-100 dark:bg-teal-900/40 text-teal-600 flex items-center justify-center shrink-0">
+                            <Zap className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                              Take a Study Break
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              Mindful pacing, trivia &amp; eye rest
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-teal-700 bg-teal-100 dark:bg-teal-900/60 px-1.5 py-0.5 rounded shrink-0">
+                          5 min
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Accessibility & Shortcuts */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        openAccessibilityModal();
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 flex items-center justify-center shrink-0">
+                          <SlidersHorizontal className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                            Accessibility &amp; Shortcuts
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            Font size, high contrast &amp; key combos
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                        ⌘ / Ctrl
+                      </span>
+                    </button>
+
+                    {/* Backend Database Status */}
+                    {onOpenCloudBackend && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenCloudBackend();
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center shrink-0">
+                            <Database className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                              Supabase Cloud Backend
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              Postgres connection, sync &amp; audit
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded shrink-0">
+                          {realtimeStatus}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Sign Out (in dropdown as guaranteed fallback) */}
+                    {onLogout && (
+                      <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onLogout();
+                            setIsMoreMenuOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2">
+                            <ArrowLeftOnRectangle className="w-4 h-4 text-red-600" />
+                            <div>
+                              <div className="font-black text-xs">Sign Out</div>
+                              <div className="text-[10px] text-red-500 dark:text-red-400">
+                                {userEmail || 'Save session & exit'}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-black uppercase text-red-600 shrink-0">
+                            Exit
+                          </span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1357,7 +1659,7 @@ export const Header: React.FC<HeaderProps> = ({
           aria-label="Primary Studio Navigation"
           onMouseEnter={handleNavBarMouseEnter}
           onMouseLeave={handleNavBarMouseLeave}
-          className={`relative w-full lg:w-full lg:max-w-full lg:mx-0 overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-lg lg:mb-0.5 shadow-xs backdrop-blur-md ${
+          className={`relative w-full lg:w-fit lg:max-w-full lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-lg lg:mb-0.5 shadow-xs backdrop-blur-md ${
             isMenuBarHidden
               ? 'max-h-0 opacity-0 pointer-events-none py-0 border-transparent lg:mb-0'
               : 'max-h-24 sm:max-h-14 lg:max-h-8 mobile-landscape:max-h-10 opacity-100 py-1 lg:py-0.5 mobile-landscape:py-0.5 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'

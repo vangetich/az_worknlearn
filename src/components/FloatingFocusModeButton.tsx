@@ -198,7 +198,7 @@ export const FloatingFocusModeButton: React.FC<FloatingFocusModeButtonProps> = (
       : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40';
 
   return (
-    <div className="fixed bottom-20 right-4 sm:bottom-24 sm:right-6 z-50 w-14 h-14 sm:w-16 sm:h-16 pointer-events-none">
+    <div className="fixed bottom-20 portrait:max-md:bottom-[72px] right-4 sm:bottom-24 sm:right-6 z-50 w-14 h-14 sm:w-16 sm:h-16 pointer-events-none">
       {/* Hover Pop-up Small Rectangle with Full Focus Features — Only mounted when button itself is hovered */}
       {isHovered && (
         <div

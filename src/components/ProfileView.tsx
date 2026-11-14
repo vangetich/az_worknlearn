@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Award,
   Sparkles,
@@ -32,8 +32,13 @@ import {
   AtSign,
   Upload,
   BarChart3,
+  Target,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import { UserStats } from '../types/quiz';
+import { setDailyGoal } from '../utils/storage';
+import { getTodaySolvedQuestionsCount } from './DailyStudyReminder';
 import { BADGE_DEFINITIONS, BadgeTier, BadgeCategory } from './BadgeSystem';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { MODULE_FREQUENTLY_MISSED_TERMS } from '../data/frequentlyMissedTerms';
@@ -166,6 +171,35 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [tempUsername, setTempUsername] = useState<string>(candidateUsername);
   const [tempRole, setTempRole] = useState<string>(candidateRole);
   const [profileSaveFeedback, setProfileSaveFeedback] = useState<boolean>(false);
+
+  // Dynamic Custom Daily Study Goal State (1-100 questions/day)
+  const [customGoalInput, setCustomGoalInput] = useState<string>(() =>
+    String(stats.dailyGoal || 10)
+  );
+  const [goalSaveSuccess, setGoalSaveSuccess] = useState<boolean>(false);
+
+  useEffect(() => {
+    setCustomGoalInput(String(stats.dailyGoal || 10));
+  }, [stats.dailyGoal]);
+
+  const todaySolved = useMemo(() => getTodaySolvedQuestionsCount(stats), [stats]);
+  const activeDailyGoal = Math.max(1, stats.dailyGoal || 10);
+  const todayGoalPct = Math.min(100, Math.round((todaySolved / activeDailyGoal) * 100));
+  const isDailyGoalMet = todaySolved >= activeDailyGoal;
+
+  const handleSaveDailyGoal = (targetValue: number) => {
+    const clamped = Math.max(1, Math.min(100, Math.round(targetValue)));
+    setCustomGoalInput(String(clamped));
+    const updated = setDailyGoal(stats, clamped);
+    if (onUpdateStats) {
+      onUpdateStats(updated);
+    }
+    window.dispatchEvent(
+      new CustomEvent('az900_daily_goal_saved', { detail: { goal: clamped } })
+    );
+    setGoalSaveSuccess(true);
+    setTimeout(() => setGoalSaveSuccess(false), 3000);
+  };
 
   // Personal Account TOTP MFA Security Setup Modal state (Independent of Admin Console 2FA)
   const [showMfaSetupModal, setShowMfaSetupModal] = useState<boolean>(false);
@@ -350,6 +384,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     localStorage.setItem('az900_candidate_username', cleanUsername);
     localStorage.setItem('az900_candidate_role', cleanRole);
     localStorage.setItem('az900_candidate_avatar', candidateAvatar);
+
+    const parsedGoal = parseInt(customGoalInput, 10);
+    if (!isNaN(parsedGoal) && parsedGoal > 0) {
+      handleSaveDailyGoal(parsedGoal);
+    }
 
     setIsEditingProfileCard(false);
     setIsEditingName(false);
@@ -552,7 +591,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   };
 
   return (
-    <div className="space-y-4 sm:space-y-5 max-w-6xl mx-auto">
+    <div className="space-y-4 sm:space-y-5 w-full max-w-full min-w-0">
       {/* =====================================================================
           TOP-LEVEL PROFILE VIEW NAVIGATION TABS ('Overview' vs 'Knowledge Gaps')
          ===================================================================== */}
@@ -1329,7 +1368,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
             {/* Expandable Inline Username, Display Name & Avatar Editor Drawer */}
             {isEditingProfileCard && (
-              <div className="mt-4 pt-4 border-t border-white/15 grid grid-cols-1 md:grid-cols-3 gap-3 animate-in fade-in duration-150">
+              <div className="mt-4 pt-4 border-t border-white/15 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 animate-in fade-in duration-150">
                 <div>
                   <label className="text-[10px] font-black uppercase tracking-wider text-amber-200 block mb-1">
                     Display Name
@@ -1366,14 +1405,35 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
                 <div>
                   <label className="text-[10px] font-black uppercase tracking-wider text-amber-200 block mb-1">
-                    Certification Title / Cohort Bio
+                    Daily Questions Goal
+                  </label>
+                  <div className="relative">
+                    <Target className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={customGoalInput}
+                      onChange={(e) => setCustomGoalInput(e.target.value)}
+                      placeholder="10"
+                      className="w-full pl-8 pr-12 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs border border-sky-300 focus:outline-none"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
+                      Qs/day
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-amber-200 block mb-1">
+                    Certification Title / Bio
                   </label>
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
                       value={tempRole}
                       onChange={(e) => setTempRole(e.target.value)}
-                      placeholder="e.g., AZ-900 Cloud Architect Aspirant"
+                      placeholder="e.g., AZ-900 Cloud Aspirant"
                       maxLength={60}
                       className="w-full px-3 py-2 rounded-xl bg-white text-slate-900 text-xs font-bold border border-sky-300 focus:outline-none"
                     />
@@ -1420,6 +1480,182 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </div>
               )}
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* =====================================================================
+          CUSTOM DAILY STUDY GOAL CONFIGURATION CARD (INPUT FIELD & LIVE STATS)
+         ===================================================================== */}
+      {profileMainTab === 'overview' && (
+        <section
+          id="profile-daily-goal-settings"
+          aria-label="Custom Daily Study Goal Settings"
+          className="bg-white rounded-2xl border border-sky-200/90 p-4 sm:p-5 card-elevation shadow-xs relative overflow-hidden transition-all"
+        >
+          <KitengeRibbon height={3} />
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mt-1">
+            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Target className="w-5 h-5 text-amber-300" />
+              </div>
+              <div className="space-y-0.5 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm sm:text-base font-black text-slate-900">
+                    Custom Daily Study Goal Target
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-[#0078D4] border border-blue-200">
+                    Target: {activeDailyGoal} Questions / Day
+                  </span>
+                  {isDailyGoalMet ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      Goal Achieved Today! 🔥
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                      {Math.max(0, activeDailyGoal - todaySolved)} Qs to Goal
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Set a custom daily questions goal (1–100 questions) to maintain your daily study streak and trigger celebratory milestone badges (25%, 50%, 75%, 100%).
+                </p>
+              </div>
+            </div>
+
+            {/* Live Progress Pill */}
+            <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 shrink-0">
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                  Today's Progress
+                </span>
+                <span className="text-xs font-black text-slate-900 font-mono">
+                  {todaySolved} / {activeDailyGoal} Qs ({todayGoalPct}%)
+                </span>
+              </div>
+              <div className="w-16 h-2 rounded-full bg-slate-200 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    isDailyGoalMet
+                      ? 'bg-gradient-to-r from-emerald-500 to-amber-400'
+                      : 'bg-[#0078D4]'
+                  }`}
+                  style={{ width: `${todayGoalPct}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Stepper & Input Row */}
+          <div className="mt-4 pt-3.5 border-t border-slate-100 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <label
+                  htmlFor="profile-custom-daily-goal-input"
+                  className="text-xs font-extrabold text-slate-700 whitespace-nowrap"
+                >
+                  Set Daily Target:
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => handleSaveDailyGoal(Math.max(1, activeDailyGoal - 1))}
+                  className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center justify-center font-black transition-colors cursor-pointer"
+                  title="Decrease daily goal by 1 question"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+
+                <div className="relative w-32">
+                  <input
+                    id="profile-custom-daily-goal-input"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={customGoalInput}
+                    onChange={(e) => setCustomGoalInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const parsed = parseInt(customGoalInput, 10);
+                        if (!isNaN(parsed)) handleSaveDailyGoal(parsed);
+                      }
+                    }}
+                    placeholder="10"
+                    className="w-full h-9 px-3 pr-10 rounded-xl border border-slate-300 text-center font-black text-sm text-slate-900 focus:outline-none focus:border-[#0078D4] focus:ring-2 focus:ring-sky-100"
+                    aria-label="Custom daily questions to answer goal"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none">
+                    Qs/day
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleSaveDailyGoal(Math.min(100, activeDailyGoal + 1))}
+                  className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center justify-center font-black transition-colors cursor-pointer"
+                  title="Increase daily goal by 1 question"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const parsed = parseInt(customGoalInput, 10);
+                    if (!isNaN(parsed)) handleSaveDailyGoal(parsed);
+                  }}
+                  className="px-4 h-9 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white font-black text-xs inline-flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Save Goal</span>
+                </button>
+              </div>
+
+              {onNavigateToPractice && (
+                <button
+                  type="button"
+                  onClick={onNavigateToPractice}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs inline-flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                  <span>Practice Toward Goal ({todaySolved}/{activeDailyGoal})</span>
+                </button>
+              )}
+            </div>
+
+            {/* Quick Presets Strip */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 mr-1">
+                Quick Presets:
+              </span>
+              {[5, 10, 15, 20, 25, 30, 50].map((preset) => {
+                const isActive = activeDailyGoal === preset;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => handleSaveDailyGoal(preset)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-[#0078D4] text-white border-[#0078D4] shadow-2xs scale-105'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {preset} Qs/day
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Goal Save Success Toast */}
+            {goalSaveSuccess && (
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-in fade-in duration-150">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  Daily target successfully updated to {activeDailyGoal} questions/day! Celebration milestone overlay has been synced to your dynamic goal.
+                </span>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -1731,8 +1967,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
             <button
               type="button"
-              onClick={onOpenManageGoal}
+              onClick={() => {
+                const el = document.getElementById('profile-daily-goal-settings');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth' });
+                  const input = document.getElementById('profile-custom-daily-goal-input');
+                  if (input) input.focus();
+                } else {
+                  onOpenManageGoal();
+                }
+              }}
               className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-[11px] whitespace-nowrap transition-colors cursor-pointer"
+              title="Configure custom daily questions target"
             >
               Daily Goal ({stats.dailyGoal || 10}Q)
             </button>
@@ -2625,8 +2871,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
                 <button
                   type="button"
-                  onClick={onOpenManageGoal}
+                  onClick={() => {
+                    const el = document.getElementById('profile-daily-goal-settings');
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth' });
+                      const input = document.getElementById('profile-custom-daily-goal-input');
+                      if (input) input.focus();
+                    } else {
+                      onOpenManageGoal();
+                    }
+                  }}
                   className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-900 text-left flex items-center gap-2.5 transition-all cursor-pointer"
+                  title="Configure custom daily questions target"
                 >
                   <div className="p-2 rounded-lg bg-slate-800 text-white shrink-0">
                     <ShieldCheck className="w-4 h-4 text-sky-300" />

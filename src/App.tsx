@@ -67,6 +67,7 @@ import { AzureThemesView } from './components/AzureThemesView';
 import { ReviewHistoryView } from './components/ReviewHistoryView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { DailyGoalMilestoneOverlay } from './components/DailyGoalMilestoneOverlay';
+import { MobileBottomNavBar } from './components/MobileBottomNavBar';
 import { GlassyStudyHubDropdown } from './components/GlassyStudyHubDropdown';
 import { ResetModuleModal } from './components/ResetModuleModal';
 import { LearningPathOverview } from './components/LearningPathOverview';
@@ -2387,7 +2388,7 @@ export default function App() {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 w-[100vw] max-w-full min-w-0 overflow-x-hidden lg:mx-0 lg:pl-[2.7cm] lg:pr-8 px-2.5 sm:px-6 py-4 sm:py-8 relative z-10">
+      <main className="flex-1 max-w-[1560px] 2xl:max-w-[1680px] w-full min-w-0 overflow-x-hidden mx-auto px-3 sm:px-5 lg:px-6 xl:px-8 py-4 sm:py-6 portrait:max-md:pb-24 relative z-10">
         {/* TAB 1: PRACTICE MODULES */}
         {activeTab === 'quiz' && (
           <div className="space-y-4 sm:space-y-5 w-full min-w-0">
@@ -4295,7 +4296,7 @@ export default function App() {
 
         {/* TAB: ADAPTIVE QUIZ MODE (DYNAMIC DIFFICULTY BALANCER & MODULE LEARNING PATH ENGINE) */}
         {activeTab === 'adaptive' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <AdaptiveQuizView
               questions={questions}
               stats={stats}
@@ -4312,7 +4313,7 @@ export default function App() {
 
         {/* TAB: PERSONALIZED STUDY PLANNER (TARGET EXAM DATE & CONFIDENCE SCHEDULE) */}
         {activeTab === 'planner' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <StudyPlannerView
               stats={stats}
               onSelectModulePractice={(modId) => {
@@ -4338,7 +4339,7 @@ export default function App() {
 
         {/* TAB: IMAGE TUTOR (MICROSOFT CERTIFIED: AZURE FUNDAMENTALS VISUAL DIAGRAMS FOR ALL 12 MODULES) */}
         {activeTab === 'image-tutor' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <AzureImageTutorView
               stats={stats}
               onPracticeModule={(modId) => {
@@ -4355,7 +4356,7 @@ export default function App() {
 
         {/* TAB: AZURE THEMES (INTERCONNECTING WOVEN THEORIES ACROSS ALL 12 MODULES) */}
         {activeTab === 'azure-themes' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <AzureThemesView
               stats={stats}
               questions={questions}
@@ -4385,7 +4386,7 @@ export default function App() {
 
         {/* TAB: REVIEW HISTORY & LEARNING TRAJECTORY */}
         {activeTab === 'history' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <ReviewHistoryView
               stats={stats}
               onStartAdaptiveQuiz={() => setActiveTab('adaptive')}
@@ -4408,7 +4409,7 @@ export default function App() {
 
         {/* TAB: FLASHCARDS (FRONT/BACK SYSTEM FOCUSED ON MISSED CONCEPTS) */}
         {activeTab === 'flashcards' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <FlashcardsView
               stats={stats}
               initialModuleId={selectedModuleId}
@@ -4419,7 +4420,7 @@ export default function App() {
 
         {/* TAB: GLOBAL PEER LEADERBOARD (GLOBAL HARAMBEE AZURE COHORT) */}
         {activeTab === 'leaderboard' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <GlobalLeaderboard
               stats={stats}
               onPracticeClick={() => setActiveTab('quiz')}
@@ -4434,8 +4435,8 @@ export default function App() {
 
         {/* TAB: TIMED MOCK EXAM SIMULATION (45-90Q & 15-25Q WEAKNESS TARGETING) */}
         {activeTab === 'mock' && (
-          <div className="responsive-tab-page-shell max-w-5xl mx-auto space-y-6">
-            <div className="bg-white rounded-xl border border-slate-200 card-elevation p-5 sm:p-8 max-w-4xl mx-auto text-center space-y-6">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto space-y-6">
+            <div className="bg-white rounded-xl border border-slate-200 card-elevation p-5 sm:p-8 max-w-5xl mx-auto text-center space-y-6">
               <div className="w-16 h-16 rounded-2xl bg-blue-50 text-[#0078D4] flex items-center justify-center mx-auto shadow-xs">
                 <Award className="w-8 h-8 text-amber-500" />
               </div>
@@ -4502,7 +4503,7 @@ export default function App() {
 
         {/* TAB: AI SCENARIO GENERATOR */}
         {activeTab === 'ai-builder' && (
-          <div className="responsive-tab-page-shell max-w-5xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <AiScenarioGenerator
               onQuestionGenerated={handleQuestionGenerated}
               stats={stats}
@@ -4513,7 +4514,7 @@ export default function App() {
 
         {/* TAB: KNOWLEDGE ASSISTANT & TUTOR */}
         {activeTab === 'assistant' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <KnowledgeAssistant
               initialQuestionContext={tutorQuestionContext}
               onClearContext={() => setTutorQuestionContext(null)}
@@ -4523,7 +4524,7 @@ export default function App() {
 
         {/* TAB: STUDY DECKS & MATRIX */}
         {activeTab === 'study-decks' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <StudyDeck
               initialPathId={selectedPathId === 'all' ? 1 : (selectedPathId as 1 | 2 | 3)}
               initialModuleId={selectedModuleId === 'all' ? 1 : selectedModuleId}
@@ -4534,7 +4535,7 @@ export default function App() {
 
         {/* TAB: HARAMBEE EXAM WISDOM SLIDES & VITAL CUES */}
         {activeTab === 'wisdom' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <HarambeeWisdomDeck
               onQuizTopic={(modId) => {
                 setMicroDrillTargetModuleId(modId);
@@ -4546,7 +4547,7 @@ export default function App() {
 
         {/* TAB: DOMAIN CONFIDENCE & SKILL RADAR */}
         {activeTab === 'analytics' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto space-y-5">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto space-y-5">
             <AzureServiceConceptHeatmap
               stats={stats}
               questions={questions}
@@ -4611,7 +4612,7 @@ export default function App() {
 
         {/* TAB: PERFORMANCE TRENDS (RECHARTS HISTORICAL MODULE & PATH ACCURACY) */}
         {activeTab === 'trends' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <PerformanceTrendsView
               stats={stats}
               questions={questions}
@@ -4632,7 +4633,7 @@ export default function App() {
 
         {/* TAB: COHORT PERFORMANCE VISUALIZATION (D3.js GLOBAL HARAMBEE AZURE COHORT BENCHMARKS) */}
         {activeTab === 'cohort' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <CohortPerformanceView
               stats={stats}
               onSelectPathForPractice={(pathId) => {
@@ -4658,7 +4659,7 @@ export default function App() {
 
         {/* TAB: CANDIDATE PROFILE & BADGES */}
         {activeTab === 'profile' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <ProfileView
               stats={stats}
               onUpdateStats={setStats}
@@ -4696,7 +4697,7 @@ export default function App() {
 
         {/* TAB: AZURE GLOSSARY & DICTIONARY (PLACED AFTER PROFILE) */}
         {activeTab === 'glossary' && (
-          <div className="responsive-tab-page-shell max-w-6xl mx-auto">
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
             <AzureGlossaryView
               onDrillTermInPractice={(term) => {
                 setSearchQuery(term);
@@ -5181,7 +5182,7 @@ export default function App() {
           <FooterAfricanMotifsBackground />
 
           <KitengeRibbon height={3} className="mb-4 relative z-10" />
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10">
+          <div className="max-w-[1560px] 2xl:max-w-[1680px] w-full mx-auto px-3 sm:px-5 lg:px-6 xl:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10">
             <div className="flex items-center gap-2">
               <MaasaiMedallion size={20} />
               <span className="font-bold text-slate-700">
@@ -5242,6 +5243,16 @@ export default function App() {
       <AccessibilitySettingsModal
         isOpen={showAccessibilityModal}
         onClose={() => setShowAccessibilityModal(false)}
+      />
+
+      {/* Bottom-Docked Navigation Bar for Mobile Viewports (Portrait Mode: 1-Tap Access to Quiz, AI Assistant, History & Profile) */}
+      <MobileBottomNavBar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        todayAnsweredCount={todayAnsweredCount}
+        dailyGoal={stats.dailyGoal || 10}
+        streakDays={stats.streakDays || 1}
+        unresolvedMistakesCount={Array.from(getUnresolvedMistakesMap(stats).keys()).length}
       />
 
       {/* Relocated Semi-Bottom-Right Circular Focus Button with Rectangular Hover Features Popup */}

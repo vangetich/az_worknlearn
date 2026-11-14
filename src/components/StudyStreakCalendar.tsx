@@ -335,9 +335,9 @@ export const StudyStreakCalendar: React.FC<StudyStreakCalendarProps> = ({
 
     switch (day.level) {
       case 4:
-        return 'bg-gradient-to-br from-emerald-600 to-teal-600 border-amber-400 text-white shadow-sm ring-1 ring-amber-400/70';
+        return 'bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 border-amber-300 text-white shadow-xs ring-1 ring-amber-400/90';
       case 3:
-        return 'bg-emerald-500 border-emerald-600 text-white shadow-2xs';
+        return 'bg-gradient-to-br from-emerald-500 to-emerald-600 border-emerald-600 text-white shadow-2xs ring-1 ring-emerald-300/60';
       case 2:
         return 'bg-[#0078D4]/80 border-[#005A9E] text-white';
       case 1:
@@ -436,7 +436,41 @@ export const StudyStreakCalendar: React.FC<StudyStreakCalendarProps> = ({
       </div>
 
       {/* Body */}
-      <div className="p-4 sm:p-6 space-y-5">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+        {/* Long-Term Motivation & Daily Goal Engine Banner */}
+        <div className="p-3.5 sm:p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-sky-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Flame className="w-5 h-5 fill-amber-300 text-amber-300" />
+            </div>
+            <div>
+              <div className="font-black text-slate-900 flex items-center gap-1.5 flex-wrap">
+                <span>Daily Goal Consistency Engine</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  {summary.goalMetDays} of {summary.totalDays} Days Met
+                </span>
+                {summary.bestGoalStreak > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                    🔥 {summary.bestGoalStreak}d Best Streak
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Reaching your daily target of <strong className="text-slate-900">{dailyGoal} questions</strong> builds long-term cloud memory retention and earns Harambee celebration streaks.
+              </p>
+            </div>
+          </div>
+          {onOpenManageGoal && (
+            <button
+              type="button"
+              onClick={onOpenManageGoal}
+              className="px-3 py-1.5 rounded-lg text-xs font-black bg-white hover:bg-slate-50 text-emerald-800 border border-emerald-300 shadow-2xs shrink-0 self-start sm:self-center transition-all cursor-pointer"
+            >
+              Adjust Daily Goal
+            </button>
+          )}
+        </div>
+
         {/* 4 Summary KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200">
@@ -645,8 +679,12 @@ export const StudyStreakCalendar: React.FC<StudyStreakCalendarProps> = ({
                       >
                         <span className="leading-none">{day.dayOfMonth}</span>
                         {day.solved > 0 && !day.isFuture && (
-                          <span className="text-[8px] leading-none opacity-90 mt-0.5">
-                            {day.goalMet ? '✓' : `${day.solved}Q`}
+                          <span
+                            className={`text-[8px] leading-none mt-0.5 font-extrabold ${
+                              day.goalMet ? 'text-amber-200' : 'opacity-90'
+                            }`}
+                          >
+                            {day.goalMet ? (day.level === 4 ? '★ 150%' : '✓ Met') : `${day.solved}Q`}
                           </span>
                         )}
                       </button>

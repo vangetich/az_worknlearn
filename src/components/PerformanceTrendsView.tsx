@@ -111,6 +111,32 @@ interface DifficultySegmentSummary {
   sharePct: number;
 }
 
+interface ThirtyDayDifficultyDataPoint {
+  dateKey: string;
+  label: string;
+  fullDateLabel: string;
+  fundamentalDailyAcc: number | null;
+  intermediateDailyAcc: number | null;
+  advancedDailyAcc: number | null;
+  overallDailyAcc: number | null;
+  fundamentalCumAcc: number | null;
+  intermediateCumAcc: number | null;
+  advancedCumAcc: number | null;
+  overallCumAcc: number | null;
+  fundamentalAcc: number | null;
+  intermediateAcc: number | null;
+  advancedAcc: number | null;
+  overallAcc: number | null;
+  fundamentalTotal: number;
+  fundamentalCorrect: number;
+  intermediateTotal: number;
+  intermediateCorrect: number;
+  advancedTotal: number;
+  advancedCorrect: number;
+  dayTotal: number;
+  dayCorrect: number;
+}
+
 const PATH_COLORS: Record<1 | 2 | 3, string> = {
   1: '#0ea5e9', // Sky Azure
   2: '#10b981', // Emerald
@@ -161,6 +187,12 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
   const [calibrationViewMode, setCalibrationViewMode] =
     useState<CalibrationViewMode>('overlay');
   const [showTierOverlayLines, setShowTierOverlayLines] = useState<boolean>(true);
+  const [thirtyDayTrendMode, setThirtyDayTrendMode] = useState<'daily' | 'cumulative'>('daily');
+  const [visibleTiers, setVisibleTiers] = useState<Record<DifficultyTier, boolean>>({
+    Fundamental: true,
+    Intermediate: true,
+    Advanced: true,
+  });
   const [theme, setTheme] = useState<ThemeMode>(getStoredTheme);
 
   useEffect(() => {
@@ -819,6 +851,360 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
     );
   };
 
+  // 30-Day Question Accuracy Trends mapped against Fundamental, Intermediate, and Advanced difficulty levels
+  const thirtyDayDifficultyTrends = useMemo(() => {
+    const now = Date.now();
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+
+    const attemptsIn30d: Array<
+      QuestionAttempt & {
+        resolvedDifficulty: DifficultyTier;
+        dateKey: string;
+      }
+    > = [];
+
+    Object.values(stats.attempts || {}).forEach((list) => {
+      list.forEach((att) => {
+        if (!att || typeof att.timestamp !== 'number') return;
+        if (att.timestamp < thirtyDaysAgo) return;
+
+        const q = questionById.get(att.questionId);
+        const qDiff = q?.difficulty;
+        const resolvedDifficulty: DifficultyTier =
+          qDiff === 'Fundamental' || qDiff === 'Intermediate' || qDiff === 'Advanced'
+            ? qDiff
+            : 'Intermediate';
+
+        const d = new Date(att.timestamp);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const dateKey = `${y}-${m}-${day}`;
+
+        attemptsIn30d.push({
+          ...att,
+          resolvedDifficulty,
+          dateKey,
+        });
+      });
+    });
+
+    attemptsIn30d.sort((a, b) => a.timestamp - b.timestamp);
+
+    // Group attempts by dateKey
+    const byDate = new Map<string, typeof attemptsIn30d>();
+    attemptsIn30d.forEach((att) => {
+      const existing = byDate.get(att.dateKey) || [];
+      existing.push(att);
+      byDate.set(att.dateKey, existing);
+    });
+
+    // 30-day summary metrics per tier
+    const summary30d: Record<
+      DifficultyTier,
+      { total: number; correct: number; accuracy: number }
+    > & { total: number; correct: number; overallAccuracy: number } = {
+      total: attemptsIn30d.length,
+      correct: attemptsIn30d.filter((a) => a.isCorrect).length,
+      overallAccuracy:
+        attemptsIn30d.length > 0
+          ? Math.round((attemptsIn30d.filter((a) => a.isCorrect).length / attemptsIn30d.length) * 100)
+          : 0,
+      Fundamental: { total: 0, correct: 0, accuracy: 0 },
+      Intermediate: { total: 0, correct: 0, accuracy: 0 },
+      Advanced: { total: 0, correct: 0, accuracy: 0 },
+    };
+
+    attemptsIn30d.forEach((att) => {
+      summary30d[att.resolvedDifficulty].total += 1;
+      if (att.isCorrect) summary30d[att.resolvedDifficulty].correct += 1;
+    });
+
+    (['Fundamental', 'Intermediate', 'Advanced'] as DifficultyTier[]).forEach((tier) => {
+      const t = summary30d[tier].total;
+      const c = summary30d[tier].correct;
+      summary30d[tier].accuracy = t > 0 ? Math.round((c / t) * 100) : 0;
+    });
+
+    // Build timeline points
+    const runningCum = {
+      Fundamental: { t: 0, c: 0 },
+      Intermediate: { t: 0, c: 0 },
+      Advanced: { t: 0, c: 0 },
+      overall: { t: 0, c: 0 },
+    };
+
+    let points: ThirtyDayDifficultyDataPoint[] = [];
+
+    if (byDate.size >= 3) {
+      // User has >= 3 distinct days in the last 30 days: plot day-by-day progression
+      points = Array.from(byDate.entries()).map(([dateKey, items]) => {
+        const counts = {
+          Fundamental: { t: 0, c: 0 },
+          Intermediate: { t: 0, c: 0 },
+          Advanced: { t: 0, c: 0 },
+          overall: { t: items.length, c: items.filter((a) => a.isCorrect).length },
+        };
+
+        items.forEach((att) => {
+          counts[att.resolvedDifficulty].t += 1;
+          if (att.isCorrect) counts[att.resolvedDifficulty].c += 1;
+
+          runningCum[att.resolvedDifficulty].t += 1;
+          if (att.isCorrect) runningCum[att.resolvedDifficulty].c += 1;
+          runningCum.overall.t += 1;
+          if (att.isCorrect) runningCum.overall.c += 1;
+        });
+
+        const dObj = new Date(`${dateKey}T12:00:00`);
+        const shortLabel = dObj.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        });
+        const fullDateLabel = dObj.toLocaleDateString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        });
+
+        const fundDaily =
+          counts.Fundamental.t > 0
+            ? Math.round((counts.Fundamental.c / counts.Fundamental.t) * 100)
+            : null;
+        const interDaily =
+          counts.Intermediate.t > 0
+            ? Math.round((counts.Intermediate.c / counts.Intermediate.t) * 100)
+            : null;
+        const advDaily =
+          counts.Advanced.t > 0
+            ? Math.round((counts.Advanced.c / counts.Advanced.t) * 100)
+            : null;
+        const overallDaily =
+          counts.overall.t > 0
+            ? Math.round((counts.overall.c / counts.overall.t) * 100)
+            : null;
+
+        const fundCum =
+          runningCum.Fundamental.t > 0
+            ? Math.round((runningCum.Fundamental.c / runningCum.Fundamental.t) * 100)
+            : null;
+        const interCum =
+          runningCum.Intermediate.t > 0
+            ? Math.round((runningCum.Intermediate.c / runningCum.Intermediate.t) * 100)
+            : null;
+        const advCum =
+          runningCum.Advanced.t > 0
+            ? Math.round((runningCum.Advanced.c / runningCum.Advanced.t) * 100)
+            : null;
+        const overallCum =
+          runningCum.overall.t > 0
+            ? Math.round((runningCum.overall.c / runningCum.overall.t) * 100)
+            : null;
+
+        const isCum = thirtyDayTrendMode === 'cumulative';
+
+        return {
+          dateKey,
+          label: shortLabel,
+          fullDateLabel,
+          fundamentalDailyAcc: fundDaily,
+          intermediateDailyAcc: interDaily,
+          advancedDailyAcc: advDaily,
+          overallDailyAcc: overallDaily,
+          fundamentalCumAcc: fundCum,
+          intermediateCumAcc: interCum,
+          advancedCumAcc: advCum,
+          overallCumAcc: overallCum,
+          fundamentalAcc: isCum ? fundCum : fundDaily,
+          intermediateAcc: isCum ? interCum : interDaily,
+          advancedAcc: isCum ? advCum : advDaily,
+          overallAcc: isCum ? overallCum : overallDaily,
+          fundamentalTotal: counts.Fundamental.t,
+          fundamentalCorrect: counts.Fundamental.c,
+          intermediateTotal: counts.Intermediate.t,
+          intermediateCorrect: counts.Intermediate.c,
+          advancedTotal: counts.Advanced.t,
+          advancedCorrect: counts.Advanced.c,
+          dayTotal: counts.overall.t,
+          dayCorrect: counts.overall.c,
+        };
+      });
+    } else if (attemptsIn30d.length > 0) {
+      // 1-2 days of practice in the 30-day window: divide chronologically into checkpoints
+      const batchSize = Math.max(1, Math.min(3, Math.ceil(attemptsIn30d.length / 6)));
+      for (let i = 0; i < attemptsIn30d.length; i += batchSize) {
+        const slice = attemptsIn30d.slice(i, i + batchSize);
+        const counts = {
+          Fundamental: { t: 0, c: 0 },
+          Intermediate: { t: 0, c: 0 },
+          Advanced: { t: 0, c: 0 },
+          overall: { t: slice.length, c: slice.filter((a) => a.isCorrect).length },
+        };
+
+        slice.forEach((att) => {
+          counts[att.resolvedDifficulty].t += 1;
+          if (att.isCorrect) counts[att.resolvedDifficulty].c += 1;
+
+          runningCum[att.resolvedDifficulty].t += 1;
+          if (att.isCorrect) runningCum[att.resolvedDifficulty].c += 1;
+          runningCum.overall.t += 1;
+          if (att.isCorrect) runningCum.overall.c += 1;
+        });
+
+        const endQ = Math.min(attemptsIn30d.length, i + batchSize);
+        const sampleAtt = slice[slice.length - 1];
+        const dObj = new Date(sampleAtt.timestamp);
+        const shortDate = dObj.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        });
+        const label = `Q${endQ} (${shortDate})`;
+        const fullDateLabel = `30d Checkpoint Q${i + 1}–Q${endQ} • ${shortDate}`;
+
+        const fundDaily =
+          counts.Fundamental.t > 0
+            ? Math.round((counts.Fundamental.c / counts.Fundamental.t) * 100)
+            : null;
+        const interDaily =
+          counts.Intermediate.t > 0
+            ? Math.round((counts.Intermediate.c / counts.Intermediate.t) * 100)
+            : null;
+        const advDaily =
+          counts.Advanced.t > 0
+            ? Math.round((counts.Advanced.c / counts.Advanced.t) * 100)
+            : null;
+        const overallDaily =
+          counts.overall.t > 0
+            ? Math.round((counts.overall.c / counts.overall.t) * 100)
+            : null;
+
+        const fundCum =
+          runningCum.Fundamental.t > 0
+            ? Math.round((runningCum.Fundamental.c / runningCum.Fundamental.t) * 100)
+            : null;
+        const interCum =
+          runningCum.Intermediate.t > 0
+            ? Math.round((runningCum.Intermediate.c / runningCum.Intermediate.t) * 100)
+            : null;
+        const advCum =
+          runningCum.Advanced.t > 0
+            ? Math.round((runningCum.Advanced.c / runningCum.Advanced.t) * 100)
+            : null;
+        const overallCum =
+          runningCum.overall.t > 0
+            ? Math.round((runningCum.overall.c / runningCum.overall.t) * 100)
+            : null;
+
+        const isCum = thirtyDayTrendMode === 'cumulative';
+
+        points.push({
+          dateKey: `q-${endQ}`,
+          label,
+          fullDateLabel,
+          fundamentalDailyAcc: fundDaily,
+          intermediateDailyAcc: interDaily,
+          advancedDailyAcc: advDaily,
+          overallDailyAcc: overallDaily,
+          fundamentalCumAcc: fundCum,
+          intermediateCumAcc: interCum,
+          advancedCumAcc: advCum,
+          overallCumAcc: overallCum,
+          fundamentalAcc: isCum ? fundCum : fundDaily,
+          intermediateAcc: isCum ? interCum : interDaily,
+          advancedAcc: isCum ? advCum : advDaily,
+          overallAcc: isCum ? overallCum : overallDaily,
+          fundamentalTotal: counts.Fundamental.t,
+          fundamentalCorrect: counts.Fundamental.c,
+          intermediateTotal: counts.Intermediate.t,
+          intermediateCorrect: counts.Intermediate.c,
+          advancedTotal: counts.Advanced.t,
+          advancedCorrect: counts.Advanced.c,
+          dayTotal: counts.overall.t,
+          dayCorrect: counts.overall.c,
+        });
+      }
+    }
+
+    return {
+      points,
+      summary30d,
+      activeDaysCount: byDate.size,
+      totalAttemptsIn30d: attemptsIn30d.length,
+    };
+  }, [stats.attempts, questionById, thirtyDayTrendMode]);
+
+  const CustomThirtyDayDifficultyTooltip = ({ active, payload }: any) => {
+    if (!active || !payload || payload.length === 0) return null;
+    const pt: ThirtyDayDifficultyDataPoint = payload[0]?.payload;
+    if (!pt) return null;
+
+    return (
+      <div className="bg-slate-950/95 text-white p-3.5 rounded-2xl border border-sky-400/50 shadow-2xl text-xs space-y-2 min-w-[240px]">
+        <div className="font-black text-sky-300 border-b border-slate-800 pb-1.5 flex items-center justify-between gap-2">
+          <span>{pt.fullDateLabel}</span>
+          <span className="text-[10px] text-slate-400 font-mono">
+            {pt.dayTotal} Qs {thirtyDayTrendMode === 'cumulative' ? 'cum.' : 'period'}
+          </span>
+        </div>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-1.5 text-sky-300 font-bold">
+              <span className="w-2 h-2 rounded-full bg-[#0ea5e9]" />
+              Fundamental:
+            </span>
+            <span className="font-mono font-black text-white">
+              {pt.fundamentalAcc !== null ? `${pt.fundamentalAcc}%` : '—'}
+              {pt.fundamentalTotal > 0 && (
+                <span className="text-[10px] text-slate-400 font-normal ml-1">
+                  ({pt.fundamentalCorrect}/{pt.fundamentalTotal})
+                </span>
+              )}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-1.5 text-amber-300 font-bold">
+              <span className="w-2 h-2 rounded-full bg-[#f59e0b]" />
+              Intermediate:
+            </span>
+            <span className="font-mono font-black text-white">
+              {pt.intermediateAcc !== null ? `${pt.intermediateAcc}%` : '—'}
+              {pt.intermediateTotal > 0 && (
+                <span className="text-[10px] text-slate-400 font-normal ml-1">
+                  ({pt.intermediateCorrect}/{pt.intermediateTotal})
+                </span>
+              )}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-1.5 text-violet-300 font-bold">
+              <span className="w-2 h-2 rounded-full bg-[#8b5cf6]" />
+              Advanced:
+            </span>
+            <span className="font-mono font-black text-white">
+              {pt.advancedAcc !== null ? `${pt.advancedAcc}%` : '—'}
+              {pt.advancedTotal > 0 && (
+                <span className="text-[10px] text-slate-400 font-normal ml-1">
+                  ({pt.advancedCorrect}/{pt.advancedTotal})
+                </span>
+              )}
+            </span>
+          </div>
+
+          {pt.overallAcc !== null && (
+            <div className="border-t border-slate-800 pt-1.5 flex items-center justify-between gap-3 text-slate-300">
+              <span className="font-bold">Overall Accuracy:</span>
+              <span className="font-mono font-black text-emerald-400">
+                {pt.overallAcc}%
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-5 w-full min-w-0">
       {/* Header Banner */}
@@ -1158,6 +1544,231 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* 30-Day Question Accuracy by Difficulty Level (Fundamental, Intermediate, Advanced) Recharts LineChart */}
+      <div className="bg-white rounded-2xl border border-slate-200 card-elevation p-4 sm:p-6 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base sm:text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                <Gauge className="w-4 h-4 text-[#0078D4]" />
+                <span>30-Day Question Accuracy by Difficulty Level</span>
+              </h3>
+              <span className="px-2.5 py-0.5 rounded-full bg-sky-50 border border-sky-200 text-[#0078D4] text-[10px] font-black uppercase tracking-wider">
+                Fundamental • Intermediate • Advanced (30 Days)
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Maps how your question accuracy evolves across Fundamental, Intermediate, and Advanced tiers over the last 30 days compared to the 70% passing threshold.
+            </p>
+          </div>
+
+          {/* Controls: Daily vs Cumulative & Tier Visibility */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setThirtyDayTrendMode('daily')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                  thirtyDayTrendMode === 'daily'
+                    ? 'bg-[#0078D4] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Daily Accuracy
+              </button>
+              <button
+                type="button"
+                onClick={() => setThirtyDayTrendMode('cumulative')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                  thirtyDayTrendMode === 'cumulative'
+                    ? 'bg-[#0078D4] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                30-Day Cumulative
+              </button>
+            </div>
+
+            {/* Tier Toggles */}
+            <div className="flex items-center gap-1">
+              {(['Fundamental', 'Intermediate', 'Advanced'] as DifficultyTier[]).map((tier) => {
+                const isVisible = visibleTiers[tier];
+                const color = DIFFICULTY_COLORS[tier];
+                return (
+                  <button
+                    key={tier}
+                    type="button"
+                    onClick={() =>
+                      setVisibleTiers((prev) => ({ ...prev, [tier]: !prev[tier] }))
+                    }
+                    className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                      isVisible
+                        ? 'bg-white text-slate-800 shadow-2xs'
+                        : 'bg-slate-100 text-slate-400 border-slate-200 opacity-60'
+                    }`}
+                    style={{ borderColor: isVisible ? color : undefined }}
+                    title={`Toggle ${tier} line`}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span>{tier}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* 30-Day KPI Tiers Summary Pills */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {(['Fundamental', 'Intermediate', 'Advanced'] as DifficultyTier[]).map((tier) => {
+            const sum = thirtyDayDifficultyTrends.summary30d[tier];
+            const color = DIFFICULTY_COLORS[tier];
+            const isAbovePass = sum.accuracy >= 70;
+            return (
+              <div
+                key={`30d-kpi-${tier}`}
+                className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
+              >
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span className="text-xs font-black text-slate-900">
+                      {tier}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    {sum.correct}/{sum.total} Qs in 30 days
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-base font-black font-mono text-slate-900 block">
+                    {sum.total > 0 ? `${sum.accuracy}%` : '—'}
+                  </span>
+                  {sum.total > 0 && (
+                    <span
+                      className={`text-[10px] font-extrabold ${
+                        isAbovePass ? 'text-emerald-600' : 'text-amber-600'
+                      }`}
+                    >
+                      {isAbovePass ? 'Pass Ready (≥70%)' : 'Needs Practice (<70%)'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Recharts LineChart */}
+        {thirtyDayDifficultyTrends.totalAttemptsIn30d > 0 &&
+        thirtyDayDifficultyTrends.points.length > 0 ? (
+          <div className="w-full h-76 sm:h-84">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={thirtyDayDifficultyTrends.points}
+                margin={{ top: 14, right: 16, left: -12, bottom: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStrokeColor} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: axisTickColor, fontSize: 11, fontWeight: 700 }}
+                  stroke={gridStrokeColor}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tickFormatter={(v) => `${v}%`}
+                  tick={{ fill: axisTickColor, fontSize: 11, fontWeight: 700 }}
+                  stroke={gridStrokeColor}
+                />
+                <Tooltip content={<CustomThirtyDayDifficultyTooltip />} />
+                <Legend
+                  wrapperStyle={{ fontSize: '12px', fontWeight: 700, paddingTop: '8px' }}
+                />
+                <ReferenceLine
+                  y={70}
+                  stroke="#ef4444"
+                  strokeDasharray="5 5"
+                  label={{
+                    value: '70% Pass Threshold',
+                    position: 'insideTopRight',
+                    fill: '#ef4444',
+                    fontSize: 10,
+                    fontWeight: 800,
+                  }}
+                />
+                {visibleTiers.Fundamental && (
+                  <Line
+                    type="monotone"
+                    dataKey="fundamentalAcc"
+                    name="Fundamental Tier %"
+                    stroke={DIFFICULTY_COLORS.Fundamental}
+                    strokeWidth={3}
+                    dot={{
+                      r: 4,
+                      fill: DIFFICULTY_COLORS.Fundamental,
+                      stroke: '#fff',
+                      strokeWidth: 1.5,
+                    }}
+                    activeDot={{ r: 6 }}
+                    connectNulls
+                  />
+                )}
+                {visibleTiers.Intermediate && (
+                  <Line
+                    type="monotone"
+                    dataKey="intermediateAcc"
+                    name="Intermediate Tier %"
+                    stroke={DIFFICULTY_COLORS.Intermediate}
+                    strokeWidth={3}
+                    dot={{
+                      r: 4,
+                      fill: DIFFICULTY_COLORS.Intermediate,
+                      stroke: '#fff',
+                      strokeWidth: 1.5,
+                    }}
+                    activeDot={{ r: 6 }}
+                    connectNulls
+                  />
+                )}
+                {visibleTiers.Advanced && (
+                  <Line
+                    type="monotone"
+                    dataKey="advancedAcc"
+                    name="Advanced Tier %"
+                    stroke={DIFFICULTY_COLORS.Advanced}
+                    strokeWidth={3}
+                    dot={{
+                      r: 4,
+                      fill: DIFFICULTY_COLORS.Advanced,
+                      stroke: '#fff',
+                      strokeWidth: 1.5,
+                    }}
+                    activeDot={{ r: 6 }}
+                    connectNulls
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-56 rounded-xl bg-slate-50 border border-dashed border-slate-300 flex flex-col items-center justify-center text-center p-6 space-y-2">
+            <Gauge className="w-7 h-7 text-[#0078D4]" />
+            <p className="text-sm font-bold text-slate-800">
+              No quiz attempts recorded in the last 30 days
+            </p>
+            <p className="text-xs text-slate-500 max-w-md">
+              Answer questions in Practice, Adaptive Quiz, or Mock Exams across Fundamental, Intermediate, and Advanced tiers to plot your 30-day difficulty trajectory.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Chart 3: Dynamic Difficulty Calibration (Recharts ComposedChart Overlaying Success Rate vs Difficulty Segments) */}
