@@ -41,6 +41,7 @@ import {
   X,
 } from 'lucide-react';
 import * as d3 from 'd3';
+import { motion, AnimatePresence } from 'motion/react';
 import { Header, AppTab } from './components/Header';
 import { HarambeeSuccessCompanion } from './components/HarambeeSuccessCompanion';
 import { QuizCard } from './components/QuizCard';
@@ -788,6 +789,7 @@ export default function App() {
   // Context for passing a question to Knowledge Assistant
   const [tutorQuestionContext, setTutorQuestionContext] = useState<Question | null>(null);
   const [isAiTutorDrawerOpen, setIsAiTutorDrawerOpen] = useState<boolean>(false);
+  const [aiTutorDrawerSelectedOption, setAiTutorDrawerSelectedOption] = useState<string | null>(null);
 
   // Quick Study Mode: 5-minute countdown timer + 10 curated high-frequency AZ-900 questions
   const QUICK_STUDY_DURATION_SECONDS = 300;
@@ -1994,7 +1996,16 @@ export default function App() {
     setActiveTab('quiz');
   };
 
-  // Ask AI Tutor about current question
+  // Ask AI Tutor about current question (opens slide-over drawer by default so quiz stays in view)
+  const handleOpenAiTutorDrawerForQuestion = useCallback(
+    (_q: Question, selOpt?: string | null) => {
+      setAiTutorDrawerSelectedOption(selOpt ?? null);
+      setIsAiTutorDrawerOpen(true);
+    },
+    []
+  );
+
+  // Ask AI Tutor in full Assistant tab
   const handleAskTutorAboutQuestion = (q: Question) => {
     setTutorQuestionContext(q);
     setActiveTab('assistant');
@@ -2026,6 +2037,11 @@ export default function App() {
   };
 
   const currentQ = filteredQuestions[currentQuestionIndex];
+
+  // Clear previously selected distractor option badge when moving to a new question
+  useEffect(() => {
+    setAiTutorDrawerSelectedOption(null);
+  }, [currentQ?.id]);
 
   // Track active study seconds per Azure Learning Path (1, 2, 3) when tab is visible
   useEffect(() => {
@@ -4298,10 +4314,7 @@ export default function App() {
                   </div>
                 )}
 
-                <div
-                  key={`filtered-results-${searchQuery}-${currentQ?.id || currentQuestionIndex}`}
-                  className="animate-quiz-card-fade-in-up"
-                >
+                <div key="quiz-practice-stage">
                 <PaymentGatekeeper
                   moduleId={
                     selectedModuleId !== 'all'
@@ -4328,26 +4341,33 @@ export default function App() {
                 >
                 {filteredQuestions.length > 0 && currentQ ? (
                   <div className="flex flex-col xl:flex-row gap-4 items-start w-full min-w-0">
-                    <div className="flex-1 min-w-0 w-full">
-                      <QuizCard
-                        key={currentQ.id}
-                        question={currentQ}
-                        questionIndex={currentQuestionIndex}
-                        totalQuestions={filteredQuestions.length}
-                        onAnswer={handleAnswerQuestion}
-                        onNext={() =>
-                          setCurrentQuestionIndex((prev) =>
-                            prev + 1 < filteredQuestions.length ? prev + 1 : 0
-                          )
-                        }
-                        onPrev={() =>
-                          setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))
-                        }
-                        onSkipQuestion={handleSkipQuestion}
-                        onBookmark={handleToggleBookmark}
-                        isBookmarked={stats.bookmarks.includes(currentQ.id)}
-                        onAskTutorAboutQuestion={handleAskTutorAboutQuestion}
-                        stats={stats}
+                    <motion.div
+                      layout
+                      transition={{ layout: { duration: 0.28, ease: [0.22, 1, 0.36, 1] } }}
+                      className="flex-1 min-w-0 w-full"
+                    >
+                      <AnimatePresence mode="wait" initial={false}>
+                        <QuizCard
+                          key={currentQ.id}
+                          question={currentQ}
+                          questionIndex={currentQuestionIndex}
+                          totalQuestions={filteredQuestions.length}
+                          onAnswer={handleAnswerQuestion}
+                          onNext={() =>
+                            setCurrentQuestionIndex((prev) =>
+                              prev + 1 < filteredQuestions.length ? prev + 1 : 0
+                            )
+                          }
+                          onPrev={() =>
+                            setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))
+                          }
+                          onSkipQuestion={handleSkipQuestion}
+                          onBookmark={handleToggleBookmark}
+                          isBookmarked={stats.bookmarks.includes(currentQ.id)}
+                          onAskTutorAboutQuestion={handleAskTutorAboutQuestion}
+                          onOpenAiTutorDrawer={handleOpenAiTutorDrawerForQuestion}
+                          isAiTutorDrawerOpen={isAiTutorDrawerOpen}
+                          stats={stats}
                         isFocusMode={isFocusMode}
                         onToggleFocusMode={() => toggleFocusMode('button')}
                         dynamicDifficulty={effectiveDynamicDifficulty}
@@ -4432,7 +4452,8 @@ export default function App() {
                         externalOpenNotesDrawerTrigger={externalOpenNotesDrawerTrigger}
                         onOpenAzureTheme={handleOpenAzureTheme}
                       />
-                    </div>
+                      </AnimatePresence>
+                    </motion.div>
                     <PersonalStudyNotesSidebar
                       question={currentQ}
                       savedNotesMap={savedNotesMap}
@@ -5628,6 +5649,7 @@ export default function App() {
         isOpen={isAiTutorDrawerOpen}
         onClose={() => setIsAiTutorDrawerOpen(false)}
         currentQuestion={currentQ}
+        selectedOption={aiTutorDrawerSelectedOption}
         onOpenFullTab={() => {
           setIsAiTutorDrawerOpen(false);
           if (currentQ) setTutorQuestionContext(currentQ);

@@ -3,7 +3,6 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
-  Area,
   BarChart,
   Bar,
   ComposedChart,
@@ -194,6 +193,7 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
     Intermediate: true,
     Advanced: true,
   });
+  const [showOverall30dLine, setShowOverall30dLine] = useState<boolean>(true);
   const [theme, setTheme] = useState<ThemeMode>(getStoredTheme);
 
   useEffect(() => {
@@ -905,10 +905,10 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
       byDate.set(att.dateKey, existing);
     });
 
-    // 30-day summary metrics per tier
+    // 30-day summary metrics + early-vs-recent progression per tier
     const summary30d: Record<
       DifficultyTier,
-      { total: number; correct: number; accuracy: number }
+      { total: number; correct: number; accuracy: number; delta: number | null }
     > & { total: number; correct: number; overallAccuracy: number } = {
       total: attemptsIn30d.length,
       correct: attemptsIn30d.filter((a) => a.isCorrect).length,
@@ -916,20 +916,40 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
         attemptsIn30d.length > 0
           ? Math.round((attemptsIn30d.filter((a) => a.isCorrect).length / attemptsIn30d.length) * 100)
           : 0,
-      Fundamental: { total: 0, correct: 0, accuracy: 0 },
-      Intermediate: { total: 0, correct: 0, accuracy: 0 },
-      Advanced: { total: 0, correct: 0, accuracy: 0 },
+      Fundamental: { total: 0, correct: 0, accuracy: 0, delta: null },
+      Intermediate: { total: 0, correct: 0, accuracy: 0, delta: null },
+      Advanced: { total: 0, correct: 0, accuracy: 0, delta: null },
+    };
+
+    const tierAttempts30d: Record<DifficultyTier, typeof attemptsIn30d> = {
+      Fundamental: [],
+      Intermediate: [],
+      Advanced: [],
     };
 
     attemptsIn30d.forEach((att) => {
       summary30d[att.resolvedDifficulty].total += 1;
       if (att.isCorrect) summary30d[att.resolvedDifficulty].correct += 1;
+      tierAttempts30d[att.resolvedDifficulty].push(att);
     });
 
     (['Fundamental', 'Intermediate', 'Advanced'] as DifficultyTier[]).forEach((tier) => {
       const t = summary30d[tier].total;
       const c = summary30d[tier].correct;
       summary30d[tier].accuracy = t > 0 ? Math.round((c / t) * 100) : 0;
+      const tierItems = tierAttempts30d[tier];
+      if (tierItems.length >= 2) {
+        const half = Math.max(1, Math.floor(tierItems.length / 2));
+        const earlySlice = tierItems.slice(0, half);
+        const recentSlice = tierItems.slice(half);
+        const earlyAcc = Math.round(
+          (earlySlice.filter((a) => a.isCorrect).length / earlySlice.length) * 100
+        );
+        const recentAcc = Math.round(
+          (recentSlice.filter((a) => a.isCorrect).length / recentSlice.length) * 100
+        );
+        summary30d[tier].delta = recentAcc - earlyAcc;
+      }
     });
 
     const runningCum = {
@@ -1401,7 +1421,7 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               {(['Fundamental', 'Intermediate', 'Advanced'] as DifficultyTier[]).map((tier) => {
                 const isVisible = visibleTiers[tier];
                 const color = DIFFICULTY_COLORS[tier];
@@ -1428,11 +1448,24 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => setShowOverall30dLine((prev) => !prev)}
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                  showOverall30dLine
+                    ? 'bg-white text-slate-800 border-slate-400 shadow-2xs'
+                    : 'bg-slate-100 text-slate-400 border-slate-200 opacity-60'
+                }`}
+                title="Toggle Overall 30d Accuracy reference line"
+              >
+                <span className="w-2 h-0.5 bg-slate-500 inline-block" />
+                <span>Overall</span>
+              </button>
             </div>
           </div>
         </div>
 
-        {/* 30-Day KPI Tiers Summary Cards */}
+        {/* 30-Day KPI Tiers Summary Cards with Early -> Recent Progression Delta */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
           {(['Fundamental', 'Intermediate', 'Advanced'] as DifficultyTier[]).map((tier) => {
             const sum = thirtyDayDifficultyTrends.summary30d[tier];
@@ -1452,6 +1485,19 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
                     <span className="text-xs font-black text-slate-900">
                       {tier}
                     </span>
+                    {sum.delta !== null && (
+                      <span
+                        className={`px-1.5 py-0.2 rounded text-[10px] font-black font-mono ${
+                          sum.delta > 0
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : sum.delta < 0
+                            ? 'bg-rose-100 text-rose-700'
+                            : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {sum.delta > 0 ? `+${sum.delta}%` : `${sum.delta}%`}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] text-slate-500 mt-0.5">
                     {sum.correct}/{sum.total} Qs in 30 days
@@ -1480,16 +1526,10 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
         thirtyDayDifficultyTrends.points.length > 0 ? (
           <div className="w-full h-80 sm:h-96">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
+              <LineChart
                 data={thirtyDayDifficultyTrends.points}
                 margin={{ top: 14, right: 16, left: -12, bottom: 8 }}
               >
-                <defs>
-                  <linearGradient id="overallTrendFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0078D4" stopOpacity={0.14} />
-                    <stop offset="95%" stopColor="#0078D4" stopOpacity={0.01} />
-                  </linearGradient>
-                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStrokeColor} />
                 <XAxis
                   dataKey="label"
@@ -1519,17 +1559,19 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
                     fontWeight: 800,
                   }}
                 />
-                <Area
-                  type="monotone"
-                  dataKey="overallAcc"
-                  name="Overall 30d Accuracy %"
-                  stroke="#64748b"
-                  strokeWidth={1.75}
-                  strokeDasharray="4 3"
-                  fill="url(#overallTrendFill)"
-                  dot={false}
-                  connectNulls
-                />
+                {showOverall30dLine && (
+                  <Line
+                    type="monotone"
+                    dataKey="overallAcc"
+                    name="Overall 30d Accuracy %"
+                    stroke={isDark ? '#cbd5e1' : '#64748b'}
+                    strokeWidth={2}
+                    strokeDasharray="4 4"
+                    dot={false}
+                    activeDot={{ r: 5 }}
+                    connectNulls
+                  />
+                )}
                 {visibleTiers.Fundamental && (
                   <Line
                     type="monotone"
@@ -1581,7 +1623,7 @@ export const PerformanceTrendsView: React.FC<PerformanceTrendsViewProps> = ({
                     connectNulls
                   />
                 )}
-              </ComposedChart>
+              </LineChart>
             </ResponsiveContainer>
           </div>
         ) : (

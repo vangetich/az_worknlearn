@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Award, Sparkles, X, CheckCircle2, Target, Flame, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -105,12 +106,27 @@ export const DailyGoalMilestoneOverlay: React.FC<DailyGoalMilestoneOverlayProps>
     prevAnsweredRef.current = todayAnsweredCount;
     prevGoalRef.current = safeGoal;
 
-    // Trigger celebration when user actively answered a question or if goal was reduced below answered count
+    // Always persist the updated goal into today's milestone state so changing target multiple times stays accurate
+    if (goalChanged && todayAnsweredCount === 0) {
+      const syncedState = readTodayMilestoneState(safeGoal);
+      writeTodayMilestoneState(syncedState);
+      return;
+    }
+
+    // Trigger celebration when user actively answered a question or when goal changed with progress today
     const shouldCheck = (todayAnsweredCount > prevCount) || (goalChanged && todayAnsweredCount > 0);
     if (!shouldCheck) return;
 
     const pct = Math.floor((todayAnsweredCount / safeGoal) * 100);
     const state = readTodayMilestoneState(safeGoal);
+
+    // If user raised their goal while an overlay was active so progress is now below 25%, clear stale overlay cleanly
+    if (goalChanged && pct < 25) {
+      writeTodayMilestoneState(state);
+      setActiveMilestone(null);
+      return;
+    }
+
     let triggered: MilestonePercent | null = null;
 
     if (pct >= 100 && !state.celebrated100) {
@@ -182,6 +198,9 @@ export const DailyGoalMilestoneOverlay: React.FC<DailyGoalMilestoneOverlayProps>
       dismissTimerRef.current = setTimeout(() => {
         setActiveMilestone(null);
       }, triggered === 100 ? 7500 : 6000);
+    } else if (goalChanged) {
+      state.lastGoal = safeGoal;
+      writeTodayMilestoneState(state);
     }
   }, [todayAnsweredCount, dynamicGoal]);
 
@@ -193,7 +212,7 @@ export const DailyGoalMilestoneOverlay: React.FC<DailyGoalMilestoneOverlayProps>
     };
   }, []);
 
-  if (activeMilestone === null) return null;
+  if (activeMilestone === null || typeof document === 'undefined') return null;
 
   const safeGoal = dynamicGoal;
   const progressPct = Math.min(100, Math.round((todayAnsweredCount / safeGoal) * 100));
@@ -246,9 +265,9 @@ export const DailyGoalMilestoneOverlay: React.FC<DailyGoalMilestoneOverlayProps>
 
   const MilestoneIcon = milestoneTheme.icon;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-x-0 top-16 sm:top-20 z-[110] flex justify-center px-3 pointer-events-none"
+      className="fixed inset-x-0 top-28 sm:top-32 z-[125] flex justify-center px-3 pointer-events-none"
       role="status"
       aria-live="polite"
     >
@@ -322,6 +341,7 @@ export const DailyGoalMilestoneOverlay: React.FC<DailyGoalMilestoneOverlayProps>
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

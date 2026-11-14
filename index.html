@@ -92,16 +92,18 @@
         var NativeWebSocket = window.WebSocket;
         if (NativeWebSocket) {
           window.WebSocket = function(url, protocols) {
-            var isViteHmr = (
+            var isAppSocket = typeof url === 'string' && (
+              url.indexOf('/api/') !== -1 ||
+              url.indexOf('supabase') !== -1 ||
+              url.indexOf('firebase') !== -1
+            );
+            var isViteHmr = !isAppSocket && (
               protocols === 'vite-hmr' ||
               (Array.isArray(protocols) && protocols.indexOf('vite-hmr') !== -1) ||
               (typeof url === 'string' && (
-                url.indexOf('token=') !== -1 ||
                 url.indexOf('vite-hmr') !== -1 ||
-                url.indexOf('run.app') !== -1 ||
-                url.indexOf('localhost') !== -1 ||
-                url.indexOf('127.0.0.1') !== -1 ||
-                url.indexOf('/@vite') !== -1
+                url.indexOf('/@vite') !== -1 ||
+                url.indexOf('token=') !== -1
               ))
             );
             if (isViteHmr) {

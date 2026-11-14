@@ -2948,6 +2948,28 @@ async function startServer() {
       }
     });
 
+    // Serve valid PWA manifest in dev mode instead of Vite HTML SPA fallback
+    app.get('/manifest.webmanifest', (_req, res) => {
+      res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+      res.json({
+        id: '/',
+        name: 'AZ-900 Azure Curriculum - Azure Fundamentals',
+        short_name: 'AZ900 Prep',
+        description:
+          'Azure Curriculum AZ-900 Study Decks, Flashcards, and Quizzes with offline caching and streak tracking.',
+        theme_color: '#0078D4',
+        background_color: '#F8FAFC',
+        display: 'standalone',
+        start_url: '/',
+        scope: '/',
+        icons: [
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      });
+    });
+
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.resolve(__dirname, 'dist')));

@@ -13,15 +13,27 @@ import {
   X,
   Flame,
   Volume2,
+  AlertTriangle,
+  ShieldCheck,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import {
+  evaluateStudyOverwork,
+  getTodayBreaksCount,
+  getTodayBreaksKey,
+  incrementTodayBreaksCount,
+  setTodayBreaksCount,
+  STUDY_BREAKS_UPDATED_EVENT,
+} from '../utils/studyBreakTracker';
 
 interface FocusSessionWidgetProps {
   onOpenStudyBreak?: () => void;
   className?: string;
 }
 
-const POMODORO_OPTIONS = [15, 20, 25, 30, 45]; // in minutes
+const POMODORO_OPTIONS = [10, 15, 20, 25, 30, 45]; // in minutes
 const DEFAULT_POMODORO_MINS = 25;
 
 export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
@@ -63,6 +75,8 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
   const [isRunning, setIsRunning] = useState<boolean>(true);
   const [showSettingsPopover, setShowSettingsPopover] = useState<boolean>(false);
   const [showBreakAlert, setShowBreakAlert] = useState<boolean>(false);
+  const [breaksTakenToday, setBreaksTakenToday] = useState<number>(() => getTodayBreaksCount());
+  const [breakConfirmedToast, setBreakConfirmedToast] = useState<boolean>(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerButtonRef = useRef<HTMLButtonElement>(null);
   const [popoverCoords, setPopoverCoords] = useState<{ top: number; left: number; width: number }>({
@@ -109,16 +123,32 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSettingsPopover]);
 
-  // Sync total daily seconds across tabs via storage event
+  // Sync total daily seconds and confirmed breaks across tabs & components
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === getTodayKey() && e.newValue) {
         const val = parseInt(e.newValue, 10);
         if (!isNaN(val)) setTotalDailySeconds(val);
       }
+      if (e.key === getTodayBreaksKey() && e.newValue !== null) {
+        const val = parseInt(e.newValue, 10);
+        if (!isNaN(val)) setBreaksTakenToday(Math.max(0, val));
+      }
+    };
+    const handleBreaksUpdated = (e: Event) => {
+      const detail = (e as CustomEvent<{ count?: number }>).detail;
+      if (typeof detail?.count === 'number') {
+        setBreaksTakenToday(Math.max(0, detail.count));
+      } else {
+        setBreaksTakenToday(getTodayBreaksCount());
+      }
     };
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    window.addEventListener(STUDY_BREAKS_UPDATED_EVENT, handleBreaksUpdated);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(STUDY_BREAKS_UPDATED_EVENT, handleBreaksUpdated);
+    };
   }, []);
 
   // Main tick interval: runs while document is active and isRunning is true
@@ -192,6 +222,22 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
     setShowBreakAlert(false);
   };
 
+  const handleConfirmBreakTaken = (resetBlockTimer: boolean = true) => {
+    const next = incrementTodayBreaksCount(1);
+    setBreaksTakenToday(next);
+    setBreakConfirmedToast(true);
+    setTimeout(() => setBreakConfirmedToast(false), 2400);
+    if (resetBlockTimer) {
+      setSessionSeconds(0);
+      setShowBreakAlert(false);
+    }
+  };
+
+  const handleAdjustBreaks = (delta: number) => {
+    const next = setTodayBreaksCount(Math.max(0, breaksTakenToday + delta));
+    setBreaksTakenToday(next);
+  };
+
   const formatMinSec = (totalSecs: number) => {
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
@@ -209,6 +255,12 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
 
   const targetSeconds = pomodoroMins * 60;
   const progressPct = Math.min(100, Math.round((sessionSeconds / targetSeconds) * 100));
+  const overworkAssessment = evaluateStudyOverwork({
+    sessionSeconds,
+    totalDailySeconds,
+    pomodoroMins,
+    breaksTakenToday,
+  });
 
   return (
     <div className={`relative ${className}`}>
@@ -217,19 +269,57 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
         ref={triggerButtonRef}
         type="button"
         onClick={() => setShowSettingsPopover((prev) => !prev)}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-50 to-blue-50/80 hover:from-sky-100 hover:to-blue-100 text-slate-800 border border-sky-200/90 text-xs font-bold transition-all shadow-2xs cursor-pointer group shrink-0 whitespace-nowrap"
-        title="Focus Session & Daily Study Timer (Click to customize Pomodoro & view daily stats)"
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer group shrink-0 whitespace-nowrap border ${
+          overworkAssessment.status === 'overworking'
+            ? 'bg-gradient-to-r from-rose-50 to-amber-50 hover:from-rose-100 hover:to-amber-100 text-rose-900 border-rose-300 ring-1 ring-rose-300/60'
+            : overworkAssessment.status === 'break-due'
+            ? 'bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-900 border-amber-300'
+            : 'bg-gradient-to-r from-sky-50 to-blue-50/80 hover:from-sky-100 hover:to-blue-100 text-slate-800 border-sky-200/90'
+        }`}
+        title={`Focus Session (${pomodoroMins}m target) · ${breaksTakenToday} break(s) confirmed today · ${overworkAssessment.headline} — Click to change 10/15/20m+ session length or confirm breaks`}
       >
-        <Clock className="w-3.5 h-3.5 text-[#0078D4] group-hover:rotate-45 transition-transform shrink-0" />
-        <span className="font-mono font-black text-[#0078D4] whitespace-nowrap">
+        <Clock
+          className={`w-3.5 h-3.5 group-hover:rotate-45 transition-transform shrink-0 ${
+            overworkAssessment.status === 'overworking'
+              ? 'text-rose-600'
+              : overworkAssessment.status === 'break-due'
+              ? 'text-amber-600'
+              : 'text-[#0078D4]'
+          }`}
+        />
+        <span
+          className={`font-mono font-black whitespace-nowrap ${
+            overworkAssessment.status === 'overworking'
+              ? 'text-rose-700'
+              : overworkAssessment.status === 'break-due'
+              ? 'text-amber-800'
+              : 'text-[#0078D4]'
+          }`}
+        >
           {formatMinSec(sessionSeconds)}
         </span>
         <span className="text-[10px] text-slate-500 font-semibold hidden md:inline whitespace-nowrap">
           / {pomodoroMins}m
         </span>
-        <span className="hidden xl:inline px-1.5 py-0.2 rounded-md bg-white border border-sky-200 text-[10px] font-bold text-slate-600 whitespace-nowrap">
-          Today: {formatDailyTime(totalDailySeconds)}
+        <span
+          className={`hidden xl:inline px-1.5 py-0.2 rounded-md bg-white border text-[10px] font-bold whitespace-nowrap ${
+            overworkAssessment.status === 'overworking'
+              ? 'border-rose-300 text-rose-700'
+              : 'border-sky-200 text-slate-600'
+          }`}
+        >
+          {breaksTakenToday}B · {formatDailyTime(totalDailySeconds)}
         </span>
+        {overworkAssessment.status !== 'balanced' && (
+          <span
+            className={`w-2 h-2 rounded-full shrink-0 ${
+              overworkAssessment.status === 'overworking'
+                ? 'bg-rose-600 animate-ping'
+                : 'bg-amber-500 animate-pulse'
+            }`}
+            aria-label={overworkAssessment.headline}
+          />
+        )}
       </button>
 
       {/* Settings / Controls Popover rendered via Portal so horizontal scroll never clips it */}
@@ -241,7 +331,7 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
             style={{
               top: `${popoverCoords.top}px`,
               left: `${popoverCoords.left}px`,
-              width: `${popoverCoords.width}px`,
+              width: `${Math.max(popoverCoords.width, Math.min(320, typeof window !== 'undefined' ? window.innerWidth - 24 : 320))}px`,
             }}
             className="fixed max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain rounded-2xl bg-white border border-slate-200 shadow-2xl p-4 z-[95] animate-in fade-in zoom-in-95 duration-150 text-left space-y-3.5"
           >
@@ -332,12 +422,17 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
             </button>
           </div>
 
-          {/* Configurable Pomodoro Duration */}
+          {/* Configurable Study Session Duration (10, 15, 20, 25, 30, 45 mins) */}
           <div className="space-y-1.5 pt-2 border-t border-slate-100">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-              Break Interval Target:
-            </span>
-            <div className="grid grid-cols-5 gap-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Study Session Length:
+              </span>
+              <span className="text-[10px] font-extrabold text-[#0078D4] font-mono">
+                {pomodoroMins} mins
+              </span>
+            </div>
+            <div className="grid grid-cols-6 gap-1">
               {POMODORO_OPTIONS.map((mins) => {
                 const isSelected = pomodoroMins === mins;
                 return (
@@ -345,9 +440,9 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
                     key={mins}
                     type="button"
                     onClick={() => handleSelectPomodoroMins(mins)}
-                    className={`py-1 rounded-lg text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                    className={`py-1.5 rounded-lg text-[11px] font-mono font-bold transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-[#0078D4] text-white shadow-2xs'
+                        ? 'bg-[#0078D4] text-white shadow-2xs ring-1 ring-sky-300'
                         : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                     }`}
                   >
@@ -356,6 +451,87 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
                 );
               })}
             </div>
+          </div>
+
+          {/* Break Confirmation & Overwork Check */}
+          <div
+            className={`p-3 rounded-xl border space-y-2.5 ${
+              overworkAssessment.status === 'overworking'
+                ? 'bg-rose-50/90 border-rose-300 text-rose-950'
+                : overworkAssessment.status === 'break-due'
+                ? 'bg-amber-50/90 border-amber-300 text-amber-950'
+                : 'bg-emerald-50/75 border-emerald-200 text-emerald-950'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2 min-w-0">
+                {overworkAssessment.status === 'overworking' ? (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                ) : overworkAssessment.status === 'break-due' ? (
+                  <Coffee className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                )}
+                <div className="min-w-0">
+                  <div className="text-[11px] font-black leading-tight">
+                    {overworkAssessment.headline}
+                  </div>
+                  <p className="text-[10.5px] opacity-85 leading-snug mt-0.5">
+                    {overworkAssessment.detail}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 bg-white/80 rounded-lg px-2.5 py-2 border border-black/5">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Breaks Confirmed Today
+                </div>
+                <div className="text-xs font-black text-slate-900 tabular-nums">
+                  {breaksTakenToday} break{breaksTakenToday === 1 ? '' : 's'}{' '}
+                  <span className="font-semibold text-[10.5px] text-slate-500">
+                    (Rec: {overworkAssessment.recommendedBreaks}+)
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleAdjustBreaks(-1)}
+                  disabled={breaksTakenToday <= 0}
+                  className="w-6 h-6 rounded-md bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+                  title="Decrease confirmed break count"
+                  aria-label="Decrease confirmed break count"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmBreakTaken(true)}
+                  className="px-2 py-1 rounded-md bg-[#0078D4] hover:bg-[#005A9E] text-white text-[10.5px] font-extrabold flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
+                  title="Confirm you took a break and reset the current study block timer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>{breakConfirmedToast ? 'Logged!' : 'Confirm Break'}</span>
+                </button>
+              </div>
+            </div>
+
+            {onOpenStudyBreak && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSettingsPopover(false);
+                  onOpenStudyBreak();
+                }}
+                className="w-full py-1.5 px-2.5 rounded-lg bg-white hover:bg-sky-50 text-[#005A9E] border border-sky-200 text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                <span>Open Kahawa Break &amp; Breathing Reset</span>
+              </button>
+            )}
           </div>
 
           {/* Ambient Sound Selector */}
@@ -431,13 +607,13 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        setShowBreakAlert(false);
+                        handleConfirmBreakTaken(true);
                         onOpenStudyBreak();
                       }}
                       className="w-full sm:flex-1 py-2 px-3 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-colors"
                     >
                       <Coffee className="w-4 h-4" />
-                      <span>Take 5-Min Breather</span>
+                      <span>Confirm &amp; Take Breather</span>
                     </button>
                   )}
 

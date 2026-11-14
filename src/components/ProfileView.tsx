@@ -201,6 +201,37 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     setTimeout(() => setGoalSaveSuccess(false), 3000);
   };
 
+  // Automatically sync dynamic target with stats & DailyGoalMilestoneOverlay as user edits input
+  const handleGoalInputChange = (rawVal: string) => {
+    setCustomGoalInput(rawVal);
+    if (rawVal.trim() === '') return;
+    const parsed = parseInt(rawVal, 10);
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= 100) {
+      const updated = setDailyGoal(stats, parsed);
+      if (onUpdateStats) {
+        onUpdateStats(updated);
+      }
+      window.dispatchEvent(
+        new CustomEvent('az900_daily_goal_saved', {
+          detail: { goal: parsed, source: 'profile-input' },
+        })
+      );
+    }
+  };
+
+  const handleGoalInputBlur = () => {
+    const parsed = parseInt(customGoalInput, 10);
+    if (isNaN(parsed)) {
+      setCustomGoalInput(String(activeDailyGoal));
+      return;
+    }
+    const clamped = Math.max(1, Math.min(100, Math.round(parsed)));
+    setCustomGoalInput(String(clamped));
+    if (clamped !== activeDailyGoal) {
+      handleSaveDailyGoal(clamped);
+    }
+  };
+
   // Personal Account TOTP MFA Security Setup Modal state (Independent of Admin Console 2FA)
   const [showMfaSetupModal, setShowMfaSetupModal] = useState<boolean>(false);
   const [userMfaState, setUserMfaState] = useState<UserMfaSettings>(() => {
@@ -1414,7 +1445,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       min={1}
                       max={100}
                       value={customGoalInput}
-                      onChange={(e) => setCustomGoalInput(e.target.value)}
+                      onChange={(e) => handleGoalInputChange(e.target.value)}
+                      onBlur={handleGoalInputBlur}
                       placeholder="10"
                       className="w-full pl-8 pr-12 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs border border-sky-300 focus:outline-none"
                     />
@@ -1554,7 +1586,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   htmlFor="profile-custom-daily-goal-input"
                   className="text-xs font-extrabold text-slate-700 whitespace-nowrap"
                 >
-                  Set Daily Target:
+                  Daily Questions to Answer Goal:
                 </label>
 
                 <button
@@ -1573,15 +1605,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     min={1}
                     max={100}
                     value={customGoalInput}
-                    onChange={(e) => setCustomGoalInput(e.target.value)}
+                    onChange={(e) => handleGoalInputChange(e.target.value)}
+                    onBlur={handleGoalInputBlur}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         const parsed = parseInt(customGoalInput, 10);
                         if (!isNaN(parsed)) handleSaveDailyGoal(parsed);
                       }
                     }}
-                    placeholder="10"
-                    className="w-full h-9 px-3 pr-10 rounded-xl border border-slate-300 text-center font-black text-sm text-slate-900 focus:outline-none focus:border-[#0078D4] focus:ring-2 focus:ring-sky-100"
+                    placeholder="e.g. 15"
+                    className="w-full h-9 px-3 pr-11 rounded-xl border border-slate-300 text-center font-black text-sm text-slate-900 focus:outline-none focus:border-[#0078D4] focus:ring-2 focus:ring-sky-100"
                     aria-label="Custom daily questions to answer goal"
                   />
                   <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none">
@@ -1645,6 +1678,33 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   </button>
                 );
               })}
+            </div>
+
+            {/* Live DailyGoalMilestoneOverlay Thresholds Preview */}
+            <div className="p-2.5 rounded-xl bg-sky-50/70 border border-sky-200/80 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <span className="font-extrabold text-[#004578] inline-flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-[#0078D4]" />
+                <span>Milestone Overlay Auto-Synced ({activeDailyGoal} Qs target):</span>
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {([25, 50, 75, 100] as const).map((pctMark) => {
+                  const neededQs = Math.max(1, Math.ceil((activeDailyGoal * pctMark) / 100));
+                  const reached = todaySolved >= neededQs;
+                  return (
+                    <span
+                      key={pctMark}
+                      className={`px-2 py-0.5 rounded-lg font-mono font-bold border ${
+                        reached
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          : 'bg-white text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {reached ? '✓ ' : ''}
+                      {pctMark}% ({neededQs} Q{neededQs === 1 ? '' : 's'})
+                    </span>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Goal Save Success Toast */}

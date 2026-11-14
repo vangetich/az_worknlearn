@@ -27,12 +27,22 @@ import { MaasaiMedallion } from './MotifDecorations';
 interface KnowledgeAssistantProps {
   initialQuestionContext?: Question | null;
   activeQuestionContext?: Question | null;
+  selectedOptionContext?: string | null;
   onClearContext?: () => void;
   variant?: 'page' | 'drawer';
   onOpenFullTab?: () => void;
   onCloseDrawer?: () => void;
   isDrawerExpanded?: boolean;
   onToggleDrawerExpand?: () => void;
+}
+
+function buildDrawerPrefillPrompt(q: Question, selectedOpt?: string | null): string {
+  const distractorLetters = (q.distractorBreakdown || []).map((d) => d.letter).join(', ');
+  if (selectedOpt && selectedOpt !== q.correctAnswer) {
+    const selectedText = q.options.find((o) => o.letter === selectedOpt)?.text;
+    return `I selected Option ${selectedOpt}${selectedText ? ` ("${selectedText}")` : ''} on Module ${q.moduleId}: "${q.question}". Explain why Option ${selectedOpt} is a distractor and how the right choice differs from ${distractorLetters || 'the other options'}.`;
+  }
+  return `Explain Module ${q.moduleId} (${q.moduleTitle}) question: "${q.question}" — walk me through why the distractors (${distractorLetters || 'other choices'}) are wrong and the key AZ-900 exam rule.`;
 }
 
 interface OfficialAzureDocEntry {
@@ -196,6 +206,7 @@ const QUICK_QUESTIONS = [
 export const KnowledgeAssistant: React.FC<KnowledgeAssistantProps> = ({
   initialQuestionContext,
   activeQuestionContext,
+  selectedOptionContext = null,
   onClearContext,
   variant = 'page',
   onOpenFullTab,
@@ -220,15 +231,35 @@ What concept would you like to master today?`,
     },
   ]);
 
-  const [inputQuery, setInputQuery] = useState<string>('');
+  const [inputQuery, setInputQuery] = useState<string>(() =>
+    variant === 'drawer' && activeQuestionContext
+      ? buildDrawerPrefillPrompt(activeQuestionContext, selectedOptionContext)
+      : ''
+  );
   const [docsSearchQuery, setDocsSearchQuery] = useState<string>('');
   const [selectedDocEntry, setSelectedDocEntry] = useState<OfficialAzureDocEntry | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isDictating, setIsDictating] = useState<boolean>(false);
   const [useActiveQuestionContext, setUseActiveQuestionContext] = useState<boolean>(true);
-  const [isContextExpanded, setIsContextExpanded] = useState<boolean>(false);
+  const [isContextExpanded, setIsContextExpanded] = useState<boolean>(isDrawer);
   const [isDocsPanelOpen, setIsDocsPanelOpen] = useState<boolean>(!isDrawer);
+  const lastPrefilledContextKeyRef = useRef<string>(
+    variant === 'drawer' && activeQuestionContext
+      ? `${activeQuestionContext.id}:${selectedOptionContext || ''}`
+      : ''
+  );
+
+  // Keep the drawer input pre-filled with the active question & distractor context whenever the question changes
+  useEffect(() => {
+    if (!isDrawer || !activeQuestionContext) return;
+    const contextKey = `${activeQuestionContext.id}:${selectedOptionContext || ''}`;
+    if (lastPrefilledContextKeyRef.current !== contextKey) {
+      lastPrefilledContextKeyRef.current = contextKey;
+      setUseActiveQuestionContext(true);
+      setInputQuery(buildDrawerPrefillPrompt(activeQuestionContext, selectedOptionContext));
+    }
+  }, [isDrawer, activeQuestionContext, selectedOptionContext]);
 
   // Listen to incoming tutorial requests from the Adaptive Learning Path Dashboard
   useEffect(() => {
@@ -370,8 +401,15 @@ What concept would you like to master today?`,
       )
       .join('\n');
 
+    const distractorSummaryLines = (effectiveQuestion?.distractorBreakdown || [])
+      .map((d) => {
+        const optText = effectiveQuestion?.options?.find((o) => o.letter === d.letter)?.text || '';
+        return `Option ${d.letter}${optText ? ` (${optText})` : ''}: ${d.reason}`;
+      })
+      .join('\n  - ');
+
     const questionContextBlock = effectiveQuestion
-      ? `\n\n[Active Quiz Question Context — Module ${effectiveQuestion.moduleId} (${effectiveQuestion.moduleTitle}) | Difficulty: ${effectiveQuestion.difficulty}]\nScenario: ${effectiveQuestion.scenario}\nQuestion: ${effectiveQuestion.question}\nOptions: ${(effectiveQuestion.options || []).map((opt) => `${opt.letter}. ${opt.text}`).join(' | ')}\nCorrect Answer: ${effectiveQuestion.correctAnswer}`
+      ? `\n\n[Active Quiz Question Context — Module ${effectiveQuestion.moduleId} (${effectiveQuestion.moduleTitle}) | Difficulty: ${effectiveQuestion.difficulty}]\nScenario: ${effectiveQuestion.scenario}\nQuestion: ${effectiveQuestion.question}\nOptions: ${(effectiveQuestion.options || []).map((opt) => `${opt.letter}. ${opt.text}`).join(' | ')}\n${selectedOptionContext ? `Learner Selected Option: ${selectedOptionContext}\n` : ''}Correct Answer: ${effectiveQuestion.correctAnswer}\nWhy Correct: ${effectiveQuestion.whyCorrect}\nDistractor Context:\n  - ${distractorSummaryLines}\nExam Tip: ${effectiveQuestion.examTip}`
       : '';
 
     const userMsg: ChatMessage = {
@@ -629,24 +667,63 @@ ${citationsList}`;
           </p>
 
           {isContextExpanded && (
-            <div className="space-y-1.5 pt-1 text-[11px] text-slate-600 dark:text-slate-300 border-t border-sky-200/70 dark:border-slate-700">
+            <div className="space-y-2 pt-1 text-[11px] text-slate-600 dark:text-slate-300 border-t border-sky-200/70 dark:border-slate-700 max-h-48 overflow-y-auto pr-1">
               <p className="italic text-slate-500 dark:text-slate-400">
                 Scenario: {activeQuestionContext.scenario}
               </p>
               <div className="grid grid-cols-1 gap-1">
-                {(activeQuestionContext.options || []).map((opt) => (
-                  <div
-                    key={opt.letter}
-                    className="px-2 py-1 rounded bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700 text-slate-700 dark:text-slate-200"
-                  >
-                    <strong className="text-[#005A9E] dark:text-sky-300">{opt.letter}.</strong> {opt.text}
-                  </div>
-                ))}
+                {(activeQuestionContext.options || []).map((opt) => {
+                  const isUserPick = selectedOptionContext === opt.letter;
+                  return (
+                    <div
+                      key={opt.letter}
+                      className={`px-2 py-1 rounded border text-slate-700 dark:text-slate-200 flex items-center justify-between gap-2 ${
+                        isUserPick
+                          ? 'bg-amber-50/90 border-amber-300 dark:bg-amber-950/40 dark:border-amber-600'
+                          : 'bg-white/80 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-700'
+                      }`}
+                    >
+                      <span>
+                        <strong className="text-[#005A9E] dark:text-sky-300">{opt.letter}.</strong> {opt.text}
+                      </span>
+                      {isUserPick && (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-200/90 text-amber-950 text-[9.5px] font-black shrink-0">
+                          Selected
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+
+              {(activeQuestionContext.distractorBreakdown || []).length > 0 && (
+                <div className="p-2 rounded-lg bg-rose-50/75 dark:bg-rose-950/30 border border-rose-200/80 dark:border-rose-800/60 space-y-1">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-rose-800 dark:text-rose-300">
+                    Pre-filled Distractor Context ({activeQuestionContext.distractorBreakdown.length} Exam Traps)
+                  </div>
+                  {activeQuestionContext.distractorBreakdown.map((distractor) => {
+                    const optText = activeQuestionContext.options?.find(
+                      (o) => o.letter === distractor.letter
+                    )?.text;
+                    return (
+                      <div
+                        key={distractor.letter}
+                        className="text-[10.5px] leading-snug text-slate-700 dark:text-slate-200"
+                      >
+                        <strong className="text-rose-700 dark:text-rose-300">
+                          Option {distractor.letter}
+                          {optText ? ` (${optText})` : ''}:
+                        </strong>{' '}
+                        {distractor.reason}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
-          {/* 1-Tap Question Context Prompts */}
+          {/* 1-Tap Question & Distractor Context Prompts */}
           <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
             <button
               type="button"
@@ -666,12 +743,12 @@ ${citationsList}`;
               disabled={isLoading}
               onClick={() =>
                 handleSendMessage(
-                  `Why is option ${activeQuestionContext.correctAnswer} the right answer here, and why are the other options exam distractors?`
+                  `Why is option ${activeQuestionContext.correctAnswer} the right answer here, and why does each distractor (${(activeQuestionContext.distractorBreakdown || []).map((d) => d.letter).join(', ')}) fail?`
                 )
               }
               className="px-2.5 py-1 rounded-lg bg-white hover:bg-amber-50 text-slate-800 border border-slate-300 text-[11px] font-bold transition-colors disabled:opacity-40 cursor-pointer"
             >
-              Why Option {activeQuestionContext.correctAnswer}?
+              Explain Distractors
             </button>
             <button
               type="button"

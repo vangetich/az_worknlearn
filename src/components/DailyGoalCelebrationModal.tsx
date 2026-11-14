@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Flame,
   Sparkles,
@@ -217,6 +218,18 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
     }
   };
 
+  useEffect(() => {
+    if (!isModalVisible) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setAutoOpen(false);
+        if (externalOnClose) externalOnClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModalVisible, externalOnClose]);
+
   const handleIgniteFlameBoost = () => {
     const nextLevel: 1 | 2 | 3 = flameIntensity === 1 ? 2 : flameIntensity === 2 ? 3 : 1;
     setFlameIntensity(nextLevel);
@@ -301,7 +314,7 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
     });
   };
 
-  if (!isModalVisible) return null;
+  if (!isModalVisible || typeof document === 'undefined') return null;
 
   const flameTitle =
     flameIntensity === 3
@@ -310,14 +323,18 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
       ? 'Rift Valley Firestorm (2x Fire-Streak)'
       : 'Savanna Streak Flame (1x Fire-Streak)';
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[130] flex items-start sm:items-center justify-center pt-20 sm:pt-24 pb-4 px-3 sm:px-6 overflow-y-auto overscroll-contain bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       aria-labelledby="daily-goal-celebration-title"
+      onClick={handleClose}
     >
-      <div className="relative w-full max-w-lg rounded-3xl bg-gradient-to-b from-slate-950 via-[#0f172a] to-[#1e1b4b] text-white border-2 border-amber-400/80 shadow-2xl overflow-hidden max-h-[92dvh] flex flex-col">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-lg my-auto rounded-3xl bg-gradient-to-b from-slate-950 via-[#0f172a] to-[#1e1b4b] text-white border-2 border-amber-400/80 shadow-2xl overflow-hidden max-h-[calc(100dvh-6.5rem)] flex flex-col"
+      >
         <KitengeRibbon height={4} />
 
         {/* Ambient Animated Fire Glow Backdrop */}
@@ -735,6 +752,7 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

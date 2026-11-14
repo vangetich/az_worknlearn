@@ -839,7 +839,39 @@ body.gateway-no-scrollbar::-webkit-scrollbar {
 }
 
 [data-theme="midnight-azure"] .studio-subtitle-standout {
-  background-image: linear-gradient(90deg, #38bdf8 0%, #7dd3fc 50%, #fbbf24 100%) !important;
+  color: #031528 !important;
+  background-image: none !important;
+}
+
+@keyframes lightAzureTextShimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.studio-subtitle-azure-shimmer {
+  background-image: linear-gradient(
+    110deg,
+    #0284c7 0%,
+    #38bdf8 26%,
+    #bae6fd 48%,
+    #7dd3fc 64%,
+    #0ea5e9 84%,
+    #0284c7 100%
+  );
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 1px rgba(3, 21, 40, 0.18));
+  animation: lightAzureTextShimmer 4.5s ease-in-out infinite;
 }
 
 /* =====================================================================

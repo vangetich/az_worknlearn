@@ -81,8 +81,9 @@ export function handleFirestoreError(
 }
 
 async function testConnection() {
+  if (!auth.currentUser) return;
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await getDocFromServer(doc(db, 'users', auth.currentUser.uid));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.error('Please check your Firebase configuration.');
@@ -90,7 +91,11 @@ async function testConnection() {
   }
 }
 
-testConnection();
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    void testConnection();
+  }
+});
 
 export async function signInWithGooglePopup(): Promise<FirebaseUser> {
   const result = await signInWithPopup(auth, googleProvider);

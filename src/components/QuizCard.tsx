@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { motion } from 'motion/react';
 import {
   CheckCircle,
   XCircle,
@@ -81,6 +82,8 @@ interface QuizCardProps {
   onBookmark: (questionId: string) => void;
   isBookmarked: boolean;
   onAskTutorAboutQuestion?: (question: Question) => void;
+  onOpenAiTutorDrawer?: (question: Question, selectedOption?: string | null) => void;
+  isAiTutorDrawerOpen?: boolean;
   stats?: UserStats;
   isFocusMode?: boolean;
   onToggleFocusMode?: () => void;
@@ -449,6 +452,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   onBookmark,
   isBookmarked,
   onAskTutorAboutQuestion,
+  onOpenAiTutorDrawer,
+  isAiTutorDrawerOpen = false,
   stats,
   isFocusMode = false,
   onToggleFocusMode,
@@ -571,6 +576,11 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   };
 
   const handleAskAiAboutOption = (option: { letter: string; text: string }) => {
+    if (onOpenAiTutorDrawer) {
+      onOpenAiTutorDrawer(question, option.letter);
+      return;
+    }
+
     setShowAiTutorSidebar(true);
     const isCorrect = option.letter === question.correctAnswer;
     const distractor = question.distractorBreakdown?.find((d) => d.letter === option.letter);
@@ -1717,11 +1727,20 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   ].filter(Boolean).length;
 
   return (
-    <div
+    <motion.div
       ref={cardRootRef}
+      layout
+      initial={{ opacity: 0, y: 14, scale: 0.992 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.992 }}
+      transition={{
+        duration: 0.24,
+        ease: [0.22, 1, 0.36, 1],
+        layout: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+      }}
       onTouchStart={handleCardTouchStart}
       onTouchEnd={handleCardTouchEnd}
-      className="w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden transition-all animate-quiz-card-fade-in-up"
+      className="w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden"
     >
       {/* Mobile-Responsive 'Quick Switcher' Swipe Gesture Bar (Toggle Active Filtered Lists Without Opening Menu) */}
       {onSelectQuickFilter && (
@@ -2090,6 +2109,35 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               />
             </div>
           )}
+
+          {/* Persistent 'Ask AI' Button: Opens AI Tutor Drawer with Question & Distractor Context Pre-filled */}
+          <button
+            id="quizcard-ask-ai-btn"
+            type="button"
+            onClick={() => {
+              if (onOpenAiTutorDrawer) {
+                onOpenAiTutorDrawer(question, selectedOption);
+              } else if (onAskTutorAboutQuestion) {
+                onAskTutorAboutQuestion(question);
+              } else {
+                setShowAiTutorSidebar((prev) => !prev);
+              }
+            }}
+            aria-pressed={isAiTutorDrawerOpen}
+            title={`Open Ask AI Tutor drawer with Module ${question.moduleId} question and distractor context pre-filled`}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 ${
+              isAiTutorDrawerOpen
+                ? 'bg-gradient-to-r from-[#C2410C] to-[#D97706] text-white border-amber-400 ring-2 ring-amber-400/35'
+                : 'bg-gradient-to-r from-amber-50 via-white to-sky-50 hover:from-amber-100 hover:to-sky-100 text-slate-900 border-amber-300/90'
+            }`}
+          >
+            <Sparkles
+              className={`w-3.5 h-3.5 shrink-0 ${
+                isAiTutorDrawerOpen ? 'text-yellow-200' : 'text-[#C2410C]'
+              }`}
+            />
+            <span>Ask AI</span>
+          </button>
 
           {/* Quick-Drill (3 Missed Questions) Button */}
           <button
@@ -3088,14 +3136,16 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           />
         )}
 
-        <div
+        <motion.div
           key={`quiz-card-body-${question.id}`}
-          className={`grid gap-6 min-w-0 w-full animate-quiz-card-fade-in-up ${
+          layout
+          transition={{ layout: { duration: 0.26, ease: [0.22, 1, 0.36, 1] } }}
+          className={`grid gap-6 min-w-0 w-full ${
             showKnowledgeCheck || showAiTutorSidebar ? 'grid-cols-1 lg:grid-cols-12 items-start' : 'grid-cols-1'
           }`}
         >
           {/* Main Question & Answering Column */}
-          <div className={`space-y-6 min-w-0 ${showKnowledgeCheck || showAiTutorSidebar ? 'lg:col-span-8' : 'w-full'}`}>
+          <motion.div layout className={`space-y-6 min-w-0 ${showKnowledgeCheck || showAiTutorSidebar ? 'lg:col-span-8' : 'w-full'}`}>
             {/* Focus Mode Top Review Window: Presented at the top part of the view when a question is answered in Focus Mode */}
             {isFocusMode && showImmediateFeedback && (
               <div
@@ -4210,7 +4260,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
         {/* INSTANT FEEDBACK & BREAKDOWN ENGINE (Shown immediately in Study Mode, or when revealed in Exam Mode) */}
         {showImmediateFeedback && (
-          <div className="mt-8 space-y-5 animate-feedback-entrance">
+          <motion.div
+            layout
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            className="mt-8 space-y-5"
+          >
             {/* Status Header Banner */}
             <div
               className={`p-4 rounded-xl border flex items-center justify-between gap-3 animate-cascade-1 ${
@@ -4237,11 +4293,16 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 </div>
               </div>
 
-              {onAskTutorAboutQuestion && (
+              {(onOpenAiTutorDrawer || onAskTutorAboutQuestion) && (
                 <button
+                  type="button"
                   onClick={() => {
-                    setShowAiTutorSidebar(true);
-                    onAskTutorAboutQuestion(question);
+                    if (onOpenAiTutorDrawer) {
+                      onOpenAiTutorDrawer(question, selectedOption);
+                    } else if (onAskTutorAboutQuestion) {
+                      setShowAiTutorSidebar(true);
+                      onAskTutorAboutQuestion(question);
+                    }
                   }}
                   className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:border-amber-500 hover:text-amber-700 text-xs font-semibold text-slate-700 shadow-2xs flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer"
                 >
@@ -4607,7 +4668,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* Footer Navigation Buttons */}
@@ -4694,7 +4755,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             )}
           </div>
         </div>
-      </div>
+      </motion.div>
 
         {/* Right Side-Panel: Contextual AI Tutor Sidebar or Key Concept Side Panel */}
         {(showKnowledgeCheck || showAiTutorSidebar) && (
@@ -4817,14 +4878,18 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 selectedConceptId={selectedConceptId}
                 onSelectConceptId={setSelectedConceptId}
                 onAskTutor={(q) => {
-                  setShowAiTutorSidebar(true);
-                  if (onAskTutorAboutQuestion) onAskTutorAboutQuestion(q);
+                  if (onOpenAiTutorDrawer) {
+                    onOpenAiTutorDrawer(q, selectedOption);
+                  } else {
+                    setShowAiTutorSidebar(true);
+                    if (onAskTutorAboutQuestion) onAskTutorAboutQuestion(q);
+                  }
                 }}
               />
             )}
           </div>
         )}
-      </div>
+      </motion.div>
     </div>
 
     {/* Quick Notes Slide-Out Panel */}
@@ -5011,6 +5076,6 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>,
         document.body
       )}
-  </div>
+  </motion.div>
 );
 };

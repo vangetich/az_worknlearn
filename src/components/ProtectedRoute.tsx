@@ -89,7 +89,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return null;
   });
 
-  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(
+    () => !authService.getStoredBackendUser()
+  );
   // Default to 'signup' ("Register Learner Account") for first-time learners opening the app
   const [authMode, setAuthMode] = useState<'login' | 'signup' | 'admin_reset'>('signup');
   const [email, setEmail] = useState<string>('student@az900.ke');
@@ -290,10 +292,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
     const resolveSession = async () => {
       try {
-        // 1. Check Supabase Auth session if direct Supabase is configured
+        // 1. Check Supabase Auth session if direct Supabase is configured (with timeout guard)
         if (isSupabaseDirectConfigured) {
-          const { data } = await supabase.auth.getSession();
-          const sbUser = data?.session?.user;
+          const sessionResult = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+          ]);
+          const sbUser = sessionResult?.data?.session?.user;
           if (sbUser && isMounted) {
             const stored = authService.getStoredBackendUser();
             const isPaid =

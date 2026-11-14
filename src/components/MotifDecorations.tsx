@@ -114,7 +114,8 @@ export const MoranShieldMotif: React.FC<{
   className?: string;
   size?: number;
   animate?: boolean;
-}> = ({ className = '', size = 28, animate = true }) => (
+  dark?: boolean;
+}> = ({ className = '', size = 28, animate = true, dark = false }) => (
   <div
     className={`relative inline-flex items-center justify-center shrink-0 ${
       animate ? 'hover:scale-110 transition-transform' : ''
@@ -131,27 +132,65 @@ export const MoranShieldMotif: React.FC<{
       className={animate ? 'animate-warrior-vitality' : ''}
     >
       {/* Crossed Warrior Spears */}
-      <line x1="6" y1="34" x2="34" y2="6" stroke="#93C5FD" strokeWidth="1.8" strokeLinecap="round" />
-      <polygon points="34,6 37,3 32,8" fill="#F8FAFC" />
-      <line x1="34" y1="34" x2="6" y2="6" stroke="#93C5FD" strokeWidth="1.8" strokeLinecap="round" />
-      <polygon points="6,6 3,3 8,8" fill="#F8FAFC" />
+      <line
+        x1="6"
+        y1="34"
+        x2="34"
+        y2="6"
+        stroke={dark ? '#0F172A' : '#93C5FD'}
+        strokeWidth={dark ? '2' : '1.8'}
+        strokeLinecap="round"
+      />
+      <polygon points="34,6 37,3 32,8" fill={dark ? '#334155' : '#F8FAFC'} />
+      <line
+        x1="34"
+        y1="34"
+        x2="6"
+        y2="6"
+        stroke={dark ? '#0F172A' : '#93C5FD'}
+        strokeWidth={dark ? '2' : '1.8'}
+        strokeLinecap="round"
+      />
+      <polygon points="6,6 3,3 8,8" fill={dark ? '#334155' : '#F8FAFC'} />
 
       {/* Central Warrior Shield Body (Elliptical Maasai Shield) */}
       <path
         d="M20 4 C13 12, 13 28, 20 36 C27 28, 27 12, 20 4 Z"
-        fill="#C2410C"
-        stroke="#EAB308"
-        strokeWidth="1.4"
+        fill={dark ? '#451208' : '#C2410C'}
+        stroke={dark ? '#78350F' : '#EAB308'}
+        strokeWidth={dark ? '1.6' : '1.4'}
       />
 
       {/* Traditional Moran Shield Geometric Markings (Red, Black, White, Ochre) */}
-      <path d="M20 4 L20 36" stroke="#FFFFFF" strokeWidth="1" strokeDasharray="2 1.5" />
-      <path d="M15 16 C17 19, 17 21, 15 24" stroke="#0F172A" strokeWidth="1.2" fill="none" />
-      <path d="M25 16 C23 19, 23 21, 25 24" stroke="#FFFFFF" strokeWidth="1.2" fill="none" />
+      <path
+        d="M20 4 L20 36"
+        stroke={dark ? '#94A3B8' : '#FFFFFF'}
+        strokeWidth="1"
+        strokeDasharray="2 1.5"
+      />
+      <path
+        d="M15 16 C17 19, 17 21, 15 24"
+        stroke={dark ? '#020617' : '#0F172A'}
+        strokeWidth="1.3"
+        fill="none"
+      />
+      <path
+        d="M25 16 C23 19, 23 21, 25 24"
+        stroke={dark ? '#64748B' : '#FFFFFF'}
+        strokeWidth="1.2"
+        fill="none"
+      />
 
       {/* Central Boss / Medallion */}
-      <circle cx="20" cy="20" r="3" fill="#D97706" stroke="#FFFFFF" strokeWidth="0.8" />
-      <circle cx="20" cy="20" r="1.2" fill="#0078D4" />
+      <circle
+        cx="20"
+        cy="20"
+        r="3"
+        fill={dark ? '#78350F' : '#D97706'}
+        stroke={dark ? '#0F172A' : '#FFFFFF'}
+        strokeWidth="0.9"
+      />
+      <circle cx="20" cy="20" r="1.2" fill={dark ? '#00204A' : '#0078D4'} />
     </svg>
   </div>
 );

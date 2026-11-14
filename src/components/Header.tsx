@@ -885,6 +885,10 @@ export const Header: React.FC<HeaderProps> = ({
       clearTimeout(navDropdownCloseTimerRef.current);
       navDropdownCloseTimerRef.current = null;
     }
+    if (navBarAutoHideTimerRef.current) {
+      clearTimeout(navBarAutoHideTimerRef.current);
+      navBarAutoHideTimerRef.current = null;
+    }
     setIsClosingHoverActive(false);
   };
 
@@ -905,6 +909,11 @@ export const Header: React.FC<HeaderProps> = ({
       clearTimeout(navBarAutoHideTimerRef.current);
       navBarAutoHideTimerRef.current = null;
     }
+    if (navDropdownCloseTimerRef.current) {
+      clearTimeout(navDropdownCloseTimerRef.current);
+      navDropdownCloseTimerRef.current = null;
+    }
+    setIsClosingHoverActive(false);
   };
 
   const handleNavBarMouseLeave = () => {
@@ -915,6 +924,24 @@ export const Header: React.FC<HeaderProps> = ({
     navBarAutoHideTimerRef.current = setTimeout(() => {
       setIsMenuBarHidden(true);
     }, 450);
+  };
+
+  const handleShowTabsMouseEnter = () => {
+    if (navDropdownCloseTimerRef.current) {
+      clearTimeout(navDropdownCloseTimerRef.current);
+      navDropdownCloseTimerRef.current = null;
+    }
+    if (navBarAutoHideTimerRef.current) {
+      clearTimeout(navBarAutoHideTimerRef.current);
+      navBarAutoHideTimerRef.current = null;
+    }
+    setIsClosingHoverActive(false);
+    setIsMenuBarHidden(false);
+    setSelectedNavDropdownGroup('all');
+    setIsNavDropdownOpen(true);
+    setIsMobileDetailsOpen(false);
+    setIsMoreMenuOpen(false);
+    setShowCloudStatsPopup(false);
   };
 
   // State & timer handlers for Cloud Logo 1/4 screen student stats popup with random encouraging message
@@ -1130,41 +1157,54 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div className="max-w-[1680px] w-full mx-auto px-2 sm:px-4 lg:px-6 xl:px-8 relative z-10 min-w-0">
         {/* =====================================================================
-            RESPONSIVE TAILWIND GRID & INLINE-BLOCK HEADER BAR (NO FLEXBOX)
-            - Transparent branding area with pure black title & zero flexbox
-            - Fluid grid & inline-block alignment across laptop and mobile sizes
+            ELONGATED CENTERED HEADER BRANDING + SINGLE-FILE SCROLL RAIL (NO FLEXBOX)
+            - Stationary, enlarged, elongated logo & heading centered on central axis
+            - Soft feathered light-azure radial haze behind logo & heading
+            - Full-width single-file intuitive horizontal scroll controls below
            ===================================================================== */}
-        <div className="relative grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)] items-center gap-2 sm:gap-3 lg:gap-4 w-full pt-1.5 sm:pt-2 pb-1 mobile-landscape:py-1 min-w-0">
-          {/* BRANDING TITLE (Pure black title color, transparent surface, non-flex Tailwind, +11% scale) */}
-          <div className="block">
+        <div className="relative grid grid-cols-1 gap-1.5 sm:gap-2 w-full pt-2 sm:pt-2.5 pb-1 mobile-landscape:py-1 min-w-0">
+          {/* STATIONARY ENLARGED & ELONGATED CENTERED HEADING WITH LIGHT AZURE HAZE */}
+          <div className="relative block w-full text-center py-1 px-2 sm:px-6 overflow-visible">
+            {/* Soft Feathered Light-Azure Radial Haze Backdrop */}
             <div
-              className="inline-block align-middle cursor-pointer group/logo"
+              aria-hidden="true"
+              className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(94%,48rem)] h-[125%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(56,189,248,0.26)_0%,rgba(125,211,252,0.14)_50%,rgba(224,242,254,0)_78%)] blur-md"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(86%,42rem)] h-full rounded-full bg-gradient-to-r from-transparent via-sky-200/35 to-transparent"
+            />
+
+            <div
+              className="relative z-10 inline-block align-middle cursor-pointer group/logo px-4 sm:px-8 py-0.5 max-w-full"
               onClick={handleCloudLogoClick}
               onMouseEnter={handleCloudMouseEnter}
               onMouseLeave={handleCloudMouseLeave}
               title="Click or hover to view Student Stats & Daily Encouragement"
             >
-              <div className="relative inline-block align-middle w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shadow-blue-500/20 group-hover/logo:scale-105 transition-transform mr-2 sm:mr-2.5 text-center leading-8 sm:leading-9 lg:leading-10">
-                <svg className="w-4 h-4 sm:w-[18px] sm:h-[18px] lg:w-5 lg:h-5 text-white inline-block align-middle" viewBox="0 0 24 24" fill="currentColor">
+              {/* Enlarged Cloud Emblem & Maasai Medallion */}
+              <div className="relative inline-block align-middle w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-2xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-md shadow-sky-400/35 group-hover/logo:scale-105 transition-transform mr-2.5 sm:mr-3.5 text-center leading-10 sm:leading-[44px] lg:leading-[48px] ring-2 ring-sky-200/70">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 lg:w-6.5 lg:h-6.5 text-white inline-block align-middle" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
                 </svg>
                 <div className="absolute -bottom-1 -right-1 leading-none">
-                  <MaasaiMedallion size={12} />
+                  <MaasaiMedallion size={14} />
                 </div>
               </div>
 
-              <div className="inline-block align-middle text-left">
+              {/* Elongated Centered Title + Badge + Subtitle */}
+              <div className="inline-block align-middle text-left max-w-full">
                 <div className="block leading-none">
-                  <span className="inline-block align-middle font-black text-[13.5px] xs:text-[14.5px] sm:text-[15.5px] lg:text-[20px] xl:text-[22.5px] tracking-tight text-black leading-none whitespace-nowrap mr-1.5 sm:mr-2">
+                  <span className="inline-block align-middle font-black text-[15px] xs:text-[17px] sm:text-xl lg:text-2xl xl:text-[27px] tracking-wide text-black leading-none whitespace-nowrap mr-2 sm:mr-2.5 drop-shadow-[0_1px_4px_rgba(186,230,253,0.75)]">
                     Azure Cloud Explorer
                   </span>
-                  <span className="inline-block align-middle px-1.5 py-0.5 rounded text-[9.5px] sm:text-[11px] lg:text-[12px] font-black bg-[#0078D4] text-white shadow-2xs leading-none">
+                  <span className="inline-block align-middle px-2 py-0.5 sm:px-2.5 rounded-md text-[10px] sm:text-xs lg:text-[13px] font-black tracking-wider bg-[#0078D4] text-white shadow-xs leading-none ring-1 ring-sky-200/70">
                     AZ-900
                   </span>
                 </div>
-                <div className="mt-0.5 block leading-none">
-                  <Sparkles className="w-3 h-3 text-[#0078D4] inline-block align-middle mr-1" />
-                  <span className="inline-block align-middle text-[9px] xs:text-[10px] sm:text-[11px] lg:text-[12.25px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 dark:from-sky-300 dark:via-sky-200 dark:to-amber-300 bg-clip-text text-transparent studio-subtitle-standout leading-none whitespace-nowrap">
+                <div className="mt-1 block leading-none">
+                  <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-400 inline-block align-middle mr-1.5 drop-shadow-[0_1px_1px_rgba(3,21,40,0.2)]" />
+                  <span className="inline-block align-middle text-[10.2px] xs:text-[11.25px] sm:text-[12.9px] lg:text-[14.5px] font-normal tracking-[0.14em] uppercase studio-subtitle-azure-shimmer leading-none whitespace-nowrap">
                     Fundamentals Practice Studio
                   </span>
                 </div>
@@ -1798,12 +1838,12 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <WavyAzureFabricMotif className="opacity-50" />
           <div className="relative z-10 block text-center px-2 py-0.5 lg:py-0 w-full [&>*]:inline-block [&>*]:align-middle [&>*]:m-0.5">
-              {/* Left Kenyan Moran Warrior Shield Motif */}
+              {/* Left Kenyan Moran Warrior Shield Motif (Darkened for Tabs Bar) */}
               <div
-                className="hidden xl:inline-block align-middle px-0.5 opacity-95 hover:opacity-100 transition-opacity"
+                className="hidden xl:inline-block align-middle px-0.5 opacity-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)] transition-transform hover:scale-110"
                 title="Kenyan Warrior Heritage Motif"
               >
-                <MoranShieldMotif size={14} animate={true} />
+                <MoranShieldMotif size={15} animate={true} dark={true} />
               </div>
 
               {/* 4 Categorized Dropdown Triggers */}
@@ -1881,12 +1921,12 @@ export const Header: React.FC<HeaderProps> = ({
                 />
               </button>
 
-              {/* Right Kenyan Moran Warrior Shield Motif */}
+              {/* Right Kenyan Moran Warrior Shield Motif (Darkened for Tabs Bar) */}
               <div
-                className="hidden xl:inline-block align-middle px-0.5 opacity-95 hover:opacity-100 transition-opacity"
+                className="hidden xl:inline-block align-middle px-0.5 opacity-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)] transition-transform hover:scale-110"
                 title="Kenyan Warrior Heritage Motif"
               >
-                <MoranShieldMotif size={14} animate={true} />
+                <MoranShieldMotif size={15} animate={true} dark={true} />
               </div>
 
               {/* Interactive Auto-Hide + Hide Tabs Controls */}
@@ -1939,7 +1979,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Dropdown Top Strip: Category Filter Pills + Quick Path Switcher + Closing Hover Controls */}
             <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mobile-landscape:pb-1.5 border-b border-slate-100">
               <div className="flex flex-wrap items-center gap-1 min-w-0">
-                <MoranShieldMotif size={15} animate={false} />
+                <MoranShieldMotif size={16} animate={false} dark={true} />
                 <button
                   type="button"
                   onClick={() => setSelectedNavDropdownGroup('all')}
@@ -2265,12 +2305,22 @@ export const Header: React.FC<HeaderProps> = ({
               {isMenuBarHidden && (
                 <button
                   type="button"
-                  onClick={toggleMenuBar}
+                  onClick={() => {
+                    setIsMenuBarHidden(false);
+                    try {
+                      localStorage.setItem('az900_hide_menu_bar', 'false');
+                    } catch (e) {
+                      console.error(e);
+                    }
+                    setSelectedNavDropdownGroup('all');
+                    setIsNavDropdownOpen(true);
+                  }}
+                  onMouseEnter={handleShowTabsMouseEnter}
                   className="inline-block align-middle translate-y-[3px] px-4 py-1 mobile-landscape:px-3 mobile-landscape:py-0.5 rounded-full bg-gradient-to-r from-[#003865] to-[#005a9e] hover:from-[#004578] hover:to-[#0078d4] text-white text-[11px] mobile-landscape:text-[10px] font-extrabold shadow-md border border-sky-400/50 cursor-pointer transition-all hover:scale-105 whitespace-nowrap"
-                  title="Expand navigation menu tabs"
+                  title="Hover or click to auto-open the full navigation tabs section"
                 >
                   <span className="inline-block align-middle mr-1.5">
-                    <MoranShieldMotif size={14} animate={false} />
+                    <MoranShieldMotif size={15} animate={false} dark={true} />
                   </span>
                   <span className="inline-block align-middle">Show Tabs ({activeTab.toUpperCase()})</span>
                   <ChevronDown className="w-3.5 h-3.5 text-sky-200 inline-block align-middle ml-1.5" />
