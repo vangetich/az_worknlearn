@@ -62,6 +62,12 @@ import { authService } from '../services/authService';
 import { getUnresolvedMistakesMap } from '../utils/storage';
 import { BUILTIN_QUESTIONS } from '../data/questionBank';
 import { ThreadMasteryBadgesPanel } from './ThreadMasteryBadgesPanel';
+import {
+  CelebrationIntensityMode,
+  getStoredCelebrationIntensity,
+  saveCelebrationIntensity,
+  fireDailyGoalCompletionConfetti,
+} from '../utils/confetti';
 
 export interface CandidateAvatarPreset {
   id: string;
@@ -177,10 +183,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     String(stats.dailyGoal || 10)
   );
   const [goalSaveSuccess, setGoalSaveSuccess] = useState<boolean>(false);
+  const [celebrationIntensity, setCelebrationIntensity] = useState<CelebrationIntensityMode>(() =>
+    getStoredCelebrationIntensity()
+  );
 
   useEffect(() => {
     setCustomGoalInput(String(stats.dailyGoal || 10));
   }, [stats.dailyGoal]);
+
+  const handleSelectCelebrationIntensity = (mode: CelebrationIntensityMode) => {
+    setCelebrationIntensity(mode);
+    saveCelebrationIntensity(mode);
+    fireDailyGoalCompletionConfetti(mode);
+  };
 
   const todaySolved = useMemo(() => getTodaySolvedQuestionsCount(stats), [stats]);
   const activeDailyGoal = Math.max(1, stats.dailyGoal || 10);
@@ -1716,6 +1731,67 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </span>
               </div>
             )}
+
+            {/* Celebration Intensity Setting (Minimalist / Standard / Showstopping) */}
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
+                    Celebration Intensity
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-[10px] font-bold text-amber-800 capitalize">
+                    {celebrationIntensity} Mode
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Toggle between Minimalist, Standard, and Showstopping confetti animation modes for goal completion.
+                </p>
+              </div>
+
+              <div
+                role="group"
+                aria-label="Celebration Intensity Mode"
+                className="inline-flex items-center p-1 rounded-xl bg-white border border-slate-200 shadow-2xs shrink-0"
+              >
+                {(
+                  [
+                    {
+                      id: 'minimalist',
+                      label: 'Minimalist',
+                      desc: 'Subtle single burst',
+                    },
+                    {
+                      id: 'standard',
+                      label: 'Standard',
+                      desc: 'Balanced dual fanfare',
+                    },
+                    {
+                      id: 'showstopping',
+                      label: 'Showstopping',
+                      desc: 'Grand multi-stage celebration',
+                    },
+                  ] as const
+                ).map((option) => {
+                  const isSelected = celebrationIntensity === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => handleSelectCelebrationIntensity(option.id)}
+                      title={`${option.label}: ${option.desc} (click to apply & preview)`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#0078D4] text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
       )}

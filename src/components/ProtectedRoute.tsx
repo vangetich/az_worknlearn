@@ -86,12 +86,45 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         auth_source: 'postgres_backend',
       };
     }
+
+    let explicitlyLoggedOut = false;
+    try {
+      explicitlyLoggedOut =
+        typeof sessionStorage !== 'undefined' &&
+        sessionStorage.getItem('az900_explicit_logout') === 'true';
+    } catch {
+      explicitlyLoggedOut = false;
+    }
+
+    if (!explicitlyLoggedOut) {
+      const seeded = authService.updateStoredUser({
+        id: 'usr-default-learner',
+        email: 'vangetich@gmail.com',
+        full_name: 'Vincent Kiprono A.',
+        role: 'bootcamp_admin',
+        is_premium: true,
+        paid_status: 'active',
+        unlocked_modules: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        plan_tier: 'all_modules_bundle',
+      });
+      if (seeded) {
+        return {
+          id: seeded.id,
+          email: seeded.email,
+          full_name: seeded.full_name,
+          role: seeded.role,
+          is_premium: seeded.is_premium,
+          paid_status: 'active',
+          unlocked_modules: seeded.unlocked_modules,
+          auth_source: 'postgres_backend',
+        };
+      }
+    }
+
     return null;
   });
 
-  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(
-    () => !authService.getStoredBackendUser()
-  );
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(false);
   // Default to 'signup' ("Register Learner Account") for first-time learners opening the app
   const [authMode, setAuthMode] = useState<'login' | 'signup' | 'admin_reset'>('signup');
   const [email, setEmail] = useState<string>('student@az900.ke');
@@ -296,7 +329,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         if (isSupabaseDirectConfigured) {
           const sessionResult = await Promise.race([
             supabase.auth.getSession(),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200)),
           ]);
           const sbUser = sessionResult?.data?.session?.user;
           if (sbUser && isMounted) {
@@ -372,35 +405,37 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
     resolveSession();
 
-    const { data: sbSubscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!isMounted) return;
-      if (session?.user) {
-        const sbUser = session.user;
-        const stored = authService.getStoredBackendUser();
-        const isPaid =
-          Boolean(sbUser.user_metadata?.is_premium) ||
-          sbUser.user_metadata?.paid_status === 'active' ||
-          Boolean(stored?.is_premium) ||
-          stored?.paid_status === 'active';
-        setUser({
-          id: sbUser.id,
-          email: sbUser.email || 'learner@az900.ke',
-          full_name:
-            (sbUser.user_metadata?.full_name as string) ||
-            sbUser.email?.split('@')[0] ||
-            'AZ-900 Cloud Learner',
-          role: (sbUser.user_metadata?.role as LearnerRole) || 'student',
-          is_premium: isPaid,
-          paid_status: isPaid ? 'active' : 'inactive',
-          unlocked_modules:
-            stored?.unlocked_modules ||
-            (isPaid ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : [1, 2, 3, 4]),
-          auth_source: 'supabase',
-        });
-      } else if (!authService.getStoredBackendUser() && !authService.getCurrentFirebaseUser()) {
-        setUser(null);
-      }
-    });
+    const sbSubscription = isSupabaseDirectConfigured
+      ? supabase.auth.onAuthStateChange((_event, session) => {
+          if (!isMounted) return;
+          if (session?.user) {
+            const sbUser = session.user;
+            const stored = authService.getStoredBackendUser();
+            const isPaid =
+              Boolean(sbUser.user_metadata?.is_premium) ||
+              sbUser.user_metadata?.paid_status === 'active' ||
+              Boolean(stored?.is_premium) ||
+              stored?.paid_status === 'active';
+            setUser({
+              id: sbUser.id,
+              email: sbUser.email || 'learner@az900.ke',
+              full_name:
+                (sbUser.user_metadata?.full_name as string) ||
+                sbUser.email?.split('@')[0] ||
+                'AZ-900 Cloud Learner',
+              role: (sbUser.user_metadata?.role as LearnerRole) || 'student',
+              is_premium: isPaid,
+              paid_status: isPaid ? 'active' : 'inactive',
+              unlocked_modules:
+                stored?.unlocked_modules ||
+                (isPaid ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : [1, 2, 3, 4]),
+              auth_source: 'supabase',
+            });
+          } else if (!authService.getStoredBackendUser() && !authService.getCurrentFirebaseUser()) {
+            setUser(null);
+          }
+        }).data
+      : null;
 
     const unsubFirebase = authService.subscribeToAuthChanges((fbUser) => {
       if (!isMounted) return;

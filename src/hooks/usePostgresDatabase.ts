@@ -116,11 +116,16 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
     const activeUserId = resolveActiveUserId();
     setIsLoading(true);
     setError(null);
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? window.setTimeout(() => controller.abort(), 8000) : null;
     try {
       const headers = await authService.getAuthHeaders(activeUserId);
       const [curriculumPayload, progressRes] = await Promise.all([
         fetchPostgresCurriculumModules(activeUserId),
-        fetch(`/api/user/progress?userId=${encodeURIComponent(activeUserId)}`, { headers }),
+        fetch(`/api/user/progress?userId=${encodeURIComponent(activeUserId)}`, {
+          headers,
+          signal: controller?.signal,
+        }),
       ]);
 
       setLearningPaths(curriculumPayload.learning_paths || []);
@@ -154,6 +159,9 @@ export function usePostgresDatabase(explicitUserId?: string): UsePostgresDatabas
     } catch (err: any) {
       setError(err.message || 'Failed to load curriculum modules from Postgres backend.');
     } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
       setIsLoading(false);
     }
   }, [resolveActiveUserId]);

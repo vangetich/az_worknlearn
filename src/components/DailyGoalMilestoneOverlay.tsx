@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Award, Sparkles, X, CheckCircle2, Target, Flame, Trophy } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { fireMilestoneTierConfetti, getStoredCelebrationIntensity } from '../utils/confetti';
 
 const MILESTONE_STORAGE_KEY = 'az900_daily_goal_milestones_v2';
 
@@ -154,43 +154,8 @@ export const DailyGoalMilestoneOverlay: React.FC<DailyGoalMilestoneOverlayProps>
       writeTodayMilestoneState(state);
       setActiveMilestone(triggered);
 
-      try {
-        const confettiConfigs: Record<
-          MilestonePercent,
-          { particleCount: number; spread: number; colors: string[] }
-        > = {
-          25: {
-            particleCount: 45,
-            spread: 55,
-            colors: ['#0078D4', '#38BDF8', '#F59E0B'],
-          },
-          50: {
-            particleCount: 65,
-            spread: 75,
-            colors: ['#10B981', '#0078D4', '#F59E0B'],
-          },
-          75: {
-            particleCount: 80,
-            spread: 85,
-            colors: ['#F59E0B', '#F97316', '#10B981', '#0078D4'],
-          },
-          100: {
-            particleCount: 110,
-            spread: 100,
-            colors: ['#10B981', '#F59E0B', '#0078D4', '#FBBF24', '#EF4444'],
-          },
-        };
-
-        const config = confettiConfigs[triggered];
-        confetti({
-          particleCount: config.particleCount,
-          spread: config.spread,
-          origin: { y: 0.25 },
-          colors: config.colors,
-        });
-      } catch {
-        // ignore confetti failure in headless/SSR environments
-      }
+      const milestoneTier = triggered === 75 ? 50 : triggered;
+      fireMilestoneTierConfetti(milestoneTier, getStoredCelebrationIntensity());
 
       if (dismissTimerRef.current) {
         clearTimeout(dismissTimerRef.current);

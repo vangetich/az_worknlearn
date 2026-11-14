@@ -1,7 +1,7 @@
-import { Question } from '../types/quiz';
-import { PATH1_EXPANSION_QUESTIONS } from './examQuestionsPath1';
-import { PATH2_EXPANSION_QUESTIONS } from './examQuestionsPath2';
-import { PATH3_EXPANSION_QUESTIONS } from './examQuestionsPath3';
+import type { Question } from '../types/quiz.ts';
+import { PATH1_EXPANSION_QUESTIONS } from './examQuestionsPath1.ts';
+import { PATH2_EXPANSION_QUESTIONS } from './examQuestionsPath2.ts';
+import { PATH3_EXPANSION_QUESTIONS } from './examQuestionsPath3.ts';
 
 export const BUILTIN_QUESTIONS: Question[] = [
   // --- MODULE 1: Fundamental Cloud Concepts ---

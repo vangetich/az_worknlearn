@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import { WebSocketServer, WebSocket } from 'ws';
-import { backendDb, UserRole } from './src/backend/store.ts';
+import { backendDb, type UserRole } from './src/backend/store.ts';
 
 dotenv.config();
 
@@ -1016,6 +1016,8 @@ server.on('upgrade', (request, socket, head) => {
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
     });
+  } else {
+    socket.destroy();
   }
 });
 
@@ -2922,6 +2924,8 @@ async function startServer() {
         middlewareMode: true,
         hmr: false,
         ws: false,
+        allowedHosts: true,
+        cors: true,
       },
       appType: 'spa',
     });
@@ -2972,9 +2976,32 @@ async function startServer() {
 
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+    const distDir = path.resolve(__dirname, 'dist');
+    app.use(
+      express.static(distDir, {
+        setHeaders: (res, filePath) => {
+          if (
+            filePath.endsWith('index.html') ||
+            filePath.endsWith('sw.js') ||
+            filePath.endsWith('registerSW.js') ||
+            filePath.endsWith('manifest.webmanifest')
+          ) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+          } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          }
+        },
+      })
+    );
     app.get('*', (req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      if (
+        req.path.startsWith('/api/') ||
+        /\.(js|mjs|css|map|png|jpg|jpeg|svg|ico|webp|woff2?|json|webmanifest)$/i.test(req.path)
+      ) {
+        return res.status(404).end();
+      }
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.sendFile(path.resolve(distDir, 'index.html'));
     });
   }
 

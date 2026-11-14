@@ -36,6 +36,7 @@ import {
   syncLearnerToGlobalCohort,
   sendHarambeePeerKudos,
 } from '../lib/supabase';
+import { StreakLeaderboard } from './StreakLeaderboard';
 import { MaasaiMedallion, KitengeRibbon, KenyanFlagMiniEmblem } from './MotifDecorations';
 
 const FALLBACK_COHORT_DATA: CohortLeaderboardEntry[] = [
@@ -670,6 +671,14 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
         </div>
 
       </div>
+
+      {/* Dedicated Top 10 Continuous Study Streak Leaderboard for the Global Harambee Azure Cohort */}
+      <StreakLeaderboard
+        entries={fullLeaderboard}
+        kudosGiven={kudosSentIds}
+        onGiveKudos={handleGiveKudos}
+        currentUserStreakDays={stats.streakDays || 1}
+      />
 
       {/* Recharts Cohort Performance Analytics & Comparison Chart */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">

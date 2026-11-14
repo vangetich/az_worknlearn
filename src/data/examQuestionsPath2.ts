@@ -1,4 +1,4 @@
-import { Question } from '../types/quiz';
+import type { Question } from '../types/quiz.ts';
 
 export const PATH2_EXPANSION_QUESTIONS: Question[] = [
   // =========================================================================

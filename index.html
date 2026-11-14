@@ -4,157 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script>
-      (function() {
-        // AI Studio Preview: HMR is disabled in this environment.
-        // Prevent and filter benign Vite HMR WebSocket connection errors.
-        var origError = console.error;
-        console.error = function() {
-          for (var i = 0; i < arguments.length; i++) {
-            var arg = arguments[i];
-            if (arg) {
-              var msg = (arg && (arg.message || arg.stack || String(arg))) || '';
-              if (
-                msg.indexOf('WebSocket') !== -1 ||
-                msg.indexOf('closed without opened') !== -1 ||
-                msg.indexOf('vite-hmr') !== -1 ||
-                msg.indexOf('@vite/client') !== -1 ||
-                msg.indexOf('failed to connect to websocket') !== -1
-              ) {
-                return;
+      (function () {
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              for (var i = 0; i < regs.length; i++) {
+                regs[i].unregister();
               }
-            }
+            }).catch(function () {});
           }
-          return origError.apply(console, arguments);
-        };
-
-        var origWarn = console.warn;
-        console.warn = function() {
-          for (var i = 0; i < arguments.length; i++) {
-            var arg = arguments[i];
-            if (arg) {
-              var msg = (arg && (arg.message || arg.stack || String(arg))) || '';
-              if (
-                msg.indexOf('WebSocket') !== -1 ||
-                msg.indexOf('closed without opened') !== -1 ||
-                msg.indexOf('vite-hmr') !== -1 ||
-                msg.indexOf('@vite/client') !== -1
-              ) {
-                return;
+          if ('caches' in window) {
+            window.caches.keys().then(function (keys) {
+              for (var j = 0; j < keys.length; j++) {
+                if (keys[j].indexOf('workbox') !== -1 || keys[j].indexOf('precache') !== -1) {
+                  window.caches.delete(keys[j]);
+                }
               }
-            }
+            }).catch(function () {});
           }
-          return origWarn.apply(console, arguments);
-        };
-
-        window.addEventListener('error', function(e) {
-          var msg = (e && (e.message || (e.error && (e.error.message || e.error.stack)))) || '';
-          if (
-            typeof msg === 'string' &&
-            (msg.indexOf('WebSocket') !== -1 ||
-             msg.indexOf('closed without opened') !== -1 ||
-             msg.indexOf('@vite/client') !== -1)
-          ) {
-            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-            if (e.preventDefault) e.preventDefault();
-            return true;
-          }
-        }, true);
-
-        window.addEventListener('unhandledrejection', function(e) {
-          var reason = e.reason;
-          var msg = (reason && (reason.message || reason.stack || String(reason))) || '';
-          if (
-            typeof msg === 'string' &&
-            (msg.indexOf('WebSocket') !== -1 ||
-             msg.indexOf('closed without opened') !== -1 ||
-             msg.indexOf('@vite/client') !== -1)
-          ) {
-            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-            if (e.preventDefault) e.preventDefault();
-            return true;
-          }
-        }, true);
-
-        var origOnError = window.onerror;
-        window.onerror = function(msg) {
-          var str = String(msg || '');
-          if (
-            str.indexOf('WebSocket') !== -1 ||
-            str.indexOf('closed without opened') !== -1 ||
-            str.indexOf('@vite/client') !== -1
-          ) {
-            return true;
-          }
-          if (origOnError) return origOnError.apply(window, arguments);
-        };
-
-        // Bulletproof mock for Vite HMR WebSocket so socket.readyState === socket.OPEN evaluates to true immediately
-        var NativeWebSocket = window.WebSocket;
-        if (NativeWebSocket) {
-          window.WebSocket = function(url, protocols) {
-            var isAppSocket = typeof url === 'string' && (
-              url.indexOf('/api/') !== -1 ||
-              url.indexOf('supabase') !== -1 ||
-              url.indexOf('firebase') !== -1
-            );
-            var isViteHmr = !isAppSocket && (
-              protocols === 'vite-hmr' ||
-              (Array.isArray(protocols) && protocols.indexOf('vite-hmr') !== -1) ||
-              (typeof url === 'string' && (
-                url.indexOf('vite-hmr') !== -1 ||
-                url.indexOf('/@vite') !== -1 ||
-                url.indexOf('token=') !== -1
-              ))
-            );
-            if (isViteHmr) {
-              var listeners = {};
-              var dummyWs = {
-                CONNECTING: 0,
-                OPEN: 1,
-                CLOSING: 2,
-                CLOSED: 3,
-                readyState: 1, // OPEN
-                url: url,
-                protocol: Array.isArray(protocols) ? protocols[0] : (protocols || 'vite-hmr'),
-                binaryType: 'blob',
-                bufferedAmount: 0,
-                extensions: '',
-                onopen: null,
-                onclose: null,
-                onerror: null,
-                onmessage: null,
-                send: function() {},
-                close: function() {
-                  this.readyState = 3;
-                },
-                addEventListener: function(evt, cb) {
-                  if (!listeners[evt]) listeners[evt] = [];
-                  listeners[evt].push(cb);
-                  if (evt === 'open') {
-                    try { cb.call(this, { type: 'open', target: this }); } catch (err) {}
-                  }
-                },
-                removeEventListener: function(evt, cb) {
-                  if (listeners[evt]) {
-                    listeners[evt] = listeners[evt].filter(function(fn) { return fn !== cb; });
-                  }
-                },
-                dispatchEvent: function() { return true; },
-              };
-              dummyWs.OPEN = 1;
-              dummyWs.CLOSED = 3;
-              dummyWs.CLOSING = 2;
-              dummyWs.CONNECTING = 0;
-              return dummyWs;
-            }
-            return new NativeWebSocket(url, protocols);
-          };
-          window.WebSocket.prototype = NativeWebSocket.prototype;
-          window.WebSocket.CONNECTING = 0;
-          window.WebSocket.OPEN = 1;
-          window.WebSocket.CLOSING = 2;
-          window.WebSocket.CLOSED = 3;
-        }
+        } catch (e) {}
       })();
     </script>
     <title>AZ-900 Smart Quiz Builder &amp; Knowledge Assistant</title>
@@ -168,11 +36,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="AZ-900 Prep" />
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>

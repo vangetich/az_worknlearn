@@ -48,6 +48,7 @@ import {
   ArrowLeftRight,
   Eye,
   EyeOff,
+  AlertTriangle,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion, KitengeRibbon } from './MotifDecorations';
@@ -59,6 +60,11 @@ import { ShareQuestionModal } from './ShareQuestionModal';
 import { QuickStudyOverlay } from './QuickStudyOverlay';
 import { DeepWorkTimerWidget } from './DeepWorkTimerWidget';
 import { SessionCountdownTimer } from './SessionCountdownTimer';
+import {
+  PersistentExamTimer,
+  TARGET_PACE_STORAGE_KEY,
+  TARGET_PACE_OPTIONS,
+} from './PersistentExamTimer';
 import { QuizTtsBar } from './QuizTtsBar';
 import { HoverInfoFeedback } from './HoverInfoFeedback';
 import { BUILTIN_QUESTIONS } from '../data/questionBank';
@@ -662,15 +668,29 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [scenarioElapsedSeconds, setScenarioElapsedSeconds] = useState<number>(0);
   const [targetPaceSeconds, setTargetPaceSeconds] = useState<number>(() => {
     try {
-      const saved = localStorage.getItem('az900_quiz_target_pace_secs');
+      const saved = localStorage.getItem(TARGET_PACE_STORAGE_KEY);
       return saved ? parseInt(saved, 10) || 60 : 60;
     } catch {
       return 60;
     }
   });
   const [isScenarioTimerRunning, setIsScenarioTimerRunning] = useState<boolean>(true);
+  const [isExamTimerPaused, setIsExamTimerPaused] = useState<boolean>(false);
   const [showPaceSettingsPopover, setShowPaceSettingsPopover] = useState<boolean>(false);
   const cardRootRef = React.useRef<HTMLDivElement>(null);
+  const feedbackExplanationRef = React.useRef<HTMLDivElement>(null);
+  const prevAutoScrollQuestionIdRef = React.useRef<string>(question.id);
+  const prevAutoScrollShownRef = React.useRef<boolean>(false);
+
+  const handleChangeTargetPace = React.useCallback((secs: number) => {
+    const validSecs = Math.max(15, Math.round(secs));
+    setTargetPaceSeconds(validSecs);
+    try {
+      localStorage.setItem(TARGET_PACE_STORAGE_KEY, String(validSecs));
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
 
   React.useEffect(() => {
     setScenarioElapsedSeconds(0);
@@ -678,12 +698,12 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   }, [question.id]);
 
   React.useEffect(() => {
-    if (!isScenarioTimerRunning || hasSubmitted) return;
+    if (!isScenarioTimerRunning || hasSubmitted || isExamTimerPaused) return;
     const interval = setInterval(() => {
       setScenarioElapsedSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [isScenarioTimerRunning, hasSubmitted]);
+  }, [isScenarioTimerRunning, hasSubmitted, isExamTimerPaused]);
 
   const handlePinCurrentAnchor = () => {
     saveMemoryAnchor({
@@ -1389,14 +1409,14 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     onToggleRetryIncorrectInPath(question.learningPathId);
   };
 
-  // Increment per-question timer every second until user submits an answer
+  // Increment per-question timer every second until user submits an answer (respects active pause)
   React.useEffect(() => {
-    if (hasSubmitted) return;
+    if (hasSubmitted || isExamTimerPaused) return;
     const interval = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [hasSubmitted, question.id]);
+  }, [hasSubmitted, question.id, isExamTimerPaused]);
 
   // Cancel speech on unmount
   React.useEffect(() => {
@@ -1653,11 +1673,129 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const isSelectedCorrect = selectedOption === question.correctAnswer;
   const isQuestionSkipped = Boolean(stats?.skippedQuestionIds?.includes(question.id));
 
+  // Smoothly auto-scroll to center QuizCard in the viewport after submitting an answer,
+  // keeping the question feedback & explanation clearly visible
   React.useEffect(() => {
-    if (isFocusMode && showImmediateFeedback && typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (prevAutoScrollQuestionIdRef.current !== question.id) {
+      prevAutoScrollQuestionIdRef.current = question.id;
+      prevAutoScrollShownRef.current = showImmediateFeedback;
+      return;
     }
-  }, [isFocusMode, showImmediateFeedback]);
+
+    const justRevealedFeedback = showImmediateFeedback && !prevAutoScrollShownRef.current;
+    prevAutoScrollShownRef.current = showImmediateFeedback;
+
+    if (!justRevealedFeedback || typeof window === 'undefined') {
+      return;
+    }
+
+    const prefersReducedMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    let rafId: number | null = null;
+    let cancelled = false;
+
+    const cancelOnUserInput = () => {
+      cancelled = true;
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+    };
+
+    window.addEventListener('wheel', cancelOnUserInput, { passive: true, once: true });
+    window.addEventListener('touchstart', cancelOnUserInput, { passive: true, once: true });
+
+    const timerId = window.setTimeout(() => {
+      if (cancelled || !cardRootRef.current) return;
+
+      const cardEl = cardRootRef.current;
+      const expEl = feedbackExplanationRef.current;
+      const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+      const cardRect = cardEl.getBoundingClientRect();
+
+      if (cardRect.height === 0 && typeof cardEl.scrollIntoView === 'function') {
+        cardEl.scrollIntoView({
+          behavior: prefersReducedMotion ? 'auto' : 'smooth',
+          block: 'center',
+        });
+        return;
+      }
+
+      const currentY = window.scrollY || window.pageYOffset || 0;
+      const cardTop = currentY + cardRect.top;
+      let targetY: number;
+
+      if (isFocusMode) {
+        targetY =
+          cardRect.height <= vh * 0.9
+            ? Math.max(0, cardTop - (vh - cardRect.height) / 2)
+            : Math.max(0, cardTop - 16);
+      } else if (cardRect.height <= vh * 0.92) {
+        targetY = Math.max(0, cardTop - (vh - cardRect.height) / 2);
+      } else if (expEl) {
+        const expRect = expEl.getBoundingClientRect();
+        const expTop = currentY + expRect.top;
+        const expVisibleTarget = Math.min(expRect.height, vh * 0.72);
+        const explanationCenteredY = Math.max(0, expTop - (vh - expVisibleTarget) / 2);
+        const cardCenterY = Math.max(0, cardTop + cardRect.height / 2 - vh / 2);
+        const maxTopBeforeClippingExplanation = Math.max(0, expTop - 24);
+        const minTopToKeepExplanationVisible = Math.max(
+          0,
+          expTop + Math.min(expVisibleTarget, 260) - vh + 24
+        );
+        targetY = Math.min(
+          maxTopBeforeClippingExplanation,
+          Math.max(
+            cardCenterY,
+            minTopToKeepExplanationVisible,
+            explanationCenteredY * 0.65 + cardCenterY * 0.35
+          )
+        );
+      } else {
+        targetY = Math.max(0, cardTop + cardRect.height / 2 - vh / 2);
+      }
+
+      if (prefersReducedMotion || typeof window.requestAnimationFrame !== 'function') {
+        if (typeof window.scrollTo === 'function') {
+          window.scrollTo({ top: targetY, behavior: 'auto' });
+        }
+        return;
+      }
+
+      const startY = window.scrollY || window.pageYOffset || 0;
+      const distance = targetY - startY;
+      if (Math.abs(distance) < 4) return;
+
+      const durationMs = 440;
+      const startTime = performance.now();
+      const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+      const step = (now: number) => {
+        if (cancelled) return;
+        const elapsed = now - startTime;
+        const progress = Math.min(1, elapsed / durationMs);
+        window.scrollTo(0, startY + distance * easeOutCubic(progress));
+        if (progress < 1) {
+          rafId = window.requestAnimationFrame(step);
+        } else {
+          rafId = null;
+        }
+      };
+
+      rafId = window.requestAnimationFrame(step);
+    }, prefersReducedMotion ? 0 : 210);
+
+    return () => {
+      window.clearTimeout(timerId);
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      window.removeEventListener('wheel', cancelOnUserInput);
+      window.removeEventListener('touchstart', cancelOnUserInput);
+    };
+  }, [showImmediateFeedback, isFocusMode, question.id]);
 
   // Color-coded Difficulty Badge Configuration (Fundamental, Intermediate, Advanced)
   const difficultyBadgeConfig =
@@ -1999,52 +2137,61 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
         {/* Right Group: Scenario Pace Timer + Question Timer + Question X of Y + Study Zone Dropdown + Bookmark */}
         <div className="flex items-center gap-2">
-          {/* Floating Scenario Pace Timer per Scenario */}
+          {/* Compact Target Pace Trigger synced with PersistentExamTimer */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowPaceSettingsPopover((prev) => !prev)}
-              className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer ${
-                scenarioElapsedSeconds <= targetPaceSeconds
+              className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                scenarioElapsedSeconds <= targetPaceSeconds * 0.8
                   ? 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100'
-                  : scenarioElapsedSeconds <= targetPaceSeconds * 1.5
+                  : scenarioElapsedSeconds <= targetPaceSeconds
                   ? 'bg-amber-50 text-amber-950 border-amber-300 hover:bg-amber-100'
-                  : 'bg-rose-50 text-rose-950 border-rose-300 animate-pulse hover:bg-rose-100'
+                  : 'bg-rose-600 text-white border-rose-700 hover:bg-rose-700'
               }`}
-              title={`Scenario Pace Timer: ${formatTimer(scenarioElapsedSeconds)} (Target: ${targetPaceSeconds}s per question) • Click to adjust target pace`}
+              title={`Scenario Pace: ${formatTimer(scenarioElapsedSeconds)} vs Target ${targetPaceSeconds}s per question • Click to adjust target pace`}
             >
-              <Clock className={`w-3.5 h-3.5 ${scenarioElapsedSeconds <= targetPaceSeconds ? 'text-emerald-600' : scenarioElapsedSeconds <= targetPaceSeconds * 1.5 ? 'text-amber-600' : 'text-rose-600'}`} />
-              <span className="font-mono tracking-tight">{formatTimer(scenarioElapsedSeconds)}</span>
-              <span className={`w-1.5 h-1.5 rounded-full ${scenarioElapsedSeconds <= targetPaceSeconds ? 'bg-emerald-500' : scenarioElapsedSeconds <= targetPaceSeconds * 1.5 ? 'bg-amber-500' : 'bg-rose-500'}`} />
+              {scenarioElapsedSeconds > targetPaceSeconds ? (
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+              ) : (
+                <Clock
+                  className={`w-3.5 h-3.5 shrink-0 ${
+                    scenarioElapsedSeconds <= targetPaceSeconds * 0.8
+                      ? 'text-emerald-600'
+                      : 'text-amber-600'
+                  }`}
+                />
+              )}
+              <span className="font-mono tabular-nums tracking-tight">
+                {formatTimer(scenarioElapsedSeconds)}
+              </span>
+              <span className="text-[10px] opacity-85 font-mono tabular-nums">
+                /{targetPaceSeconds}s
+              </span>
             </button>
 
             {/* Target Pace Selection Popover */}
             {showPaceSettingsPopover && (
-              <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-slate-200 shadow-xl p-3 z-50 text-left space-y-2 animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute right-0 mt-2 w-60 rounded-2xl bg-white border border-slate-200 shadow-xl p-3 z-50 text-left space-y-2 animate-in fade-in zoom-in-95 duration-150">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
                   <span className="text-xs font-black uppercase text-slate-900">Target Pace / Question</span>
                   <button
                     type="button"
                     onClick={() => setShowPaceSettingsPopover(false)}
-                    className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                    className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer"
                   >
                     ✕
                   </button>
                 </div>
-                <div className="grid grid-cols-4 gap-1">
-                  {[45, 60, 90, 120].map((secs) => {
+                <div className="grid grid-cols-5 gap-1">
+                  {TARGET_PACE_OPTIONS.map((secs) => {
                     const isSelected = targetPaceSeconds === secs;
                     return (
                       <button
                         key={secs}
                         type="button"
                         onClick={() => {
-                          setTargetPaceSeconds(secs);
-                          try {
-                            localStorage.setItem('az900_quiz_target_pace_secs', String(secs));
-                          } catch {
-                            // ignore
-                          }
+                          handleChangeTargetPace(secs);
                           setShowPaceSettingsPopover(false);
                         }}
                         className={`py-1.5 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
@@ -3084,37 +3231,15 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         onFinishSession={onFinishSession}
       />
 
-      {/* Live Color-Coded Question Pace Bar (Green -> Amber -> Red Exam Readiness Indicator) */}
-      <div className="px-6 py-2 bg-slate-50/90 border-b border-slate-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-slate-700 flex items-center gap-1">
-            <Timer className={`w-3.5 h-3.5 ${timerColorConfig.icon}`} />
-            <span>Question Timer:</span>
-          </span>
-          <span className="font-mono font-black text-slate-900">
-            {formatTimer(elapsedSeconds)}
-          </span>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${timerColorConfig.badge}`}
-          >
-            {hasSubmitted ? `Completed in ${formatTimer(elapsedSeconds)}` : timerColorConfig.label}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2.5 grow sm:grow-0 sm:min-w-[240px]">
-          <div className="w-full sm:w-36 h-2 rounded-full bg-slate-200/90 overflow-hidden">
-            <div
-              className={`h-full rounded-full bg-gradient-to-r ${timerColorConfig.bar} transition-all duration-500`}
-              style={{
-                width: `${Math.min(100, Math.round((elapsedSeconds / (avgCompletionSeconds * 1.4)) * 100))}%`,
-              }}
-            />
-          </div>
-          <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">
-            Avg Pace: <strong className="text-slate-700">{formatTimer(avgCompletionSeconds)}</strong>
-          </span>
-        </div>
-      </div>
+      {/* Persistent Exam Timer Component (Tracks active session time + visual warning when exceeding target pace) */}
+      <PersistentExamTimer
+        questionElapsedSeconds={scenarioElapsedSeconds}
+        targetPaceSeconds={targetPaceSeconds}
+        onChangeTargetPace={handleChangeTargetPace}
+        hasSubmitted={hasSubmitted}
+        avgCompletionSeconds={avgCompletionSeconds}
+        onPausedStateChange={setIsExamTimerPaused}
+      />
 
       <div className="p-4 sm:p-6 lg:p-8 min-w-0 w-full">
         {/* Optional Deep Work Timer Widget */}
@@ -4261,6 +4386,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         {/* INSTANT FEEDBACK & BREAKDOWN ENGINE (Shown immediately in Study Mode, or when revealed in Exam Mode) */}
         {showImmediateFeedback && (
           <motion.div
+            ref={feedbackExplanationRef}
             layout
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}

@@ -173,8 +173,8 @@ export const supabase: SupabaseClient<Database> = createClient<Database>(
   effectiveSupabaseKey,
   {
     auth: {
-      persistSession: true,
-      autoRefreshToken: true,
+      persistSession: isSupabaseDirectConfigured,
+      autoRefreshToken: isSupabaseDirectConfigured,
       detectSessionInUrl: false,
     },
     global: {

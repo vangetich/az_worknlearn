@@ -1,4 +1,4 @@
-import { LearningPathInfo, ModuleComplexityLevel, ModuleInfo } from '../types/quiz';
+import type { LearningPathInfo, ModuleComplexityLevel, ModuleInfo } from '../types/quiz.ts';
 
 export const LEARNING_PATHS: LearningPathInfo[] = [
   {

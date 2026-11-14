@@ -608,6 +608,9 @@ export class FirebaseBackendAuthService {
 
   private persistSession(token: string, user: BackendUserProfile): void {
     try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('az900_explicit_logout');
+      }
       if (token) localStorage.setItem(BACKEND_TOKEN_STORAGE_KEY, token);
       if (user) {
         const normalized: BackendUserProfile = {
@@ -636,6 +639,9 @@ export class FirebaseBackendAuthService {
 
   private clearPersistedSession(): void {
     try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('az900_explicit_logout', 'true');
+      }
       localStorage.removeItem(BACKEND_TOKEN_STORAGE_KEY);
       localStorage.removeItem(BACKEND_USER_STORAGE_KEY);
       if (typeof window !== 'undefined') {
