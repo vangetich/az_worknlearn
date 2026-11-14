@@ -49,7 +49,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
-import { MaasaiMedallion } from './MotifDecorations';
+import { MaasaiMedallion, KitengeRibbon } from './MotifDecorations';
 import { KeyConceptSidePanel, extractScenarioTerminology } from './KeyConceptSidePanel';
 import { ScenarioTextWithTooltips } from './ScenarioTextWithTooltips';
 import { QuickNotesDrawer } from './QuickNotesDrawer';
@@ -103,11 +103,12 @@ interface QuizCardProps {
   isAudioMuted?: boolean;
   rollingAverageAccuracy?: number | null;
   rollingWindowCount?: number;
-  activeQuickFilter?: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue';
+  activeQuickFilter?: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence';
   onSelectQuickFilter?: (
-    nextFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue'
+    nextFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence'
   ) => void;
   bookmarksCount?: number;
+  confidenceCount?: number;
   savedNotesCount?: number;
   aiScenariosCount?: number;
   retryQueueCount?: number;
@@ -473,6 +474,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   activeQuickFilter = 'all',
   onSelectQuickFilter,
   bookmarksCount = 0,
+  confidenceCount = 0,
   savedNotesCount = 0,
   aiScenariosCount = 0,
   retryQueueCount = 0,
@@ -508,6 +510,97 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [userConfidence, setUserConfidence] = useState<number | null>(() => stats?.confidenceScores?.[question.id] || null);
   const [confidenceToast, setConfidenceToast] = useState<string | null>(null);
   const [showKnowledgeCheck, setShowKnowledgeCheck] = useState<boolean>(false);
+  const [showAiTutorSidebar, setShowAiTutorSidebar] = useState<boolean>(false);
+  const [aiTutorMessages, setAiTutorMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
+    {
+      role: 'assistant',
+      text: `Hello! I am your Contextual Azure AI Tutor. Ask me any clarifying question about this AZ-900 concept without navigating away.`,
+    },
+  ]);
+  const [aiTutorInput, setAiTutorInput] = useState<string>('');
+  const [isRecordingAiTutor, setIsRecordingAiTutor] = useState<boolean>(false);
+  const aiTutorRecognitionRef = React.useRef<any>(null);
+
+  const handleToggleAiTutorVoice = () => {
+    if (typeof window === 'undefined') return;
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) {
+      alert('Speech Recognition is not supported in this browser. Please use Chrome or Edge.');
+      return;
+    }
+
+    if (isRecordingAiTutor) {
+      if (aiTutorRecognitionRef.current) {
+        aiTutorRecognitionRef.current.stop();
+      }
+      setIsRecordingAiTutor(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRec();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsRecordingAiTutor(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setAiTutorInput(transcript);
+      };
+
+      recognition.onerror = () => {
+        setIsRecordingAiTutor(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecordingAiTutor(false);
+      };
+
+      aiTutorRecognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setIsRecordingAiTutor(false);
+    }
+  };
+
+  const handleAskAiAboutOption = (option: { letter: string; text: string }) => {
+    setShowAiTutorSidebar(true);
+    const isCorrect = option.letter === question.correctAnswer;
+    const distractor = question.distractorBreakdown?.find((d) => d.letter === option.letter);
+
+    const userPrompt = isCorrect
+      ? `Can you explain why Option ${option.letter} ("${option.text}") is the correct Azure architectural solution for this scenario?`
+      : `Why is Option ${option.letter} ("${option.text}") incorrect? What specific Azure constraint or distractor trap does it violate?`;
+
+    const assistantReply = isCorrect
+      ? `✅ Option ${option.letter} is the CORRECT answer!\n\n` +
+        `• Core Azure Principle: ${question.whyCorrect}\n\n` +
+        `💡 Exam Tip & Memory Anchor: ${question.examTip}`
+      : `❌ Option ${option.letter} is INCORRECT (Distractor Analysis):\n\n` +
+        `• Why Option ${option.letter} is a Distractor Trap: ${
+          distractor?.reason ||
+          'This option fails to meet the specific workload constraints, security boundary, or service tier required in this Azure scenario.'
+        }\n\n` +
+        `• Correct Solution (Option ${question.correctAnswer}): ${question.whyCorrect}\n\n` +
+        `💡 Exam Memory Anchor Rule: ${question.examTip}`;
+
+    setAiTutorMessages((prev) => [
+      ...prev,
+      { role: 'user', text: userPrompt },
+      { role: 'assistant', text: assistantReply },
+    ]);
+
+    if (onAskTutorAboutQuestion) {
+      onAskTutorAboutQuestion(question);
+    }
+  };
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
   const [showQuickNotes, setShowQuickNotes] = useState<boolean>(false);
   const [questionNoteText, setQuestionNoteText] = useState<string>(() =>
@@ -531,6 +624,56 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [showStudyZoneMenu, setShowStudyZoneMenu] = useState<boolean>(false);
   const studyZoneMenuRef = React.useRef<HTMLDivElement>(null);
   const studyZoneButtonRef = React.useRef<HTMLButtonElement>(null);
+
+  const [isRationaleExpanded, setIsRationaleExpanded] = useState<boolean>(true);
+  const [showQuickDrillModal, setShowQuickDrillModal] = useState<boolean>(false);
+  const [quickDrillQuestions, setQuickDrillQuestions] = useState<Question[]>([]);
+  const [quickDrillIndex, setQuickDrillIndex] = useState<number>(0);
+  const [quickDrillSelectedOption, setQuickDrillSelectedOption] = useState<string | null>(null);
+  const [quickDrillHasSubmitted, setQuickDrillHasSubmitted] = useState<boolean>(false);
+  const [quickDrillCorrectCount, setQuickDrillCorrectCount] = useState<number>(0);
+  const [quickDrillCompleted, setQuickDrillCompleted] = useState<boolean>(false);
+
+  const handleLaunchQuickDrill = () => {
+    const missedIds = new Set((stats?.mistakesHistory || []).map((m) => m.questionId));
+    const missedPool = BUILTIN_QUESTIONS.filter((q) => missedIds.has(q.id));
+    const fallbackPool = BUILTIN_QUESTIONS.filter((q) => !missedIds.has(q.id));
+    const combined = [...missedPool, ...fallbackPool].slice(0, 3);
+    setQuickDrillQuestions(combined);
+    setQuickDrillIndex(0);
+    setQuickDrillSelectedOption(null);
+    setQuickDrillHasSubmitted(false);
+    setQuickDrillCorrectCount(0);
+    setQuickDrillCompleted(false);
+    setShowQuickDrillModal(true);
+  };
+
+  // Floating Scenario Pace Timer & Target Pace State
+  const [scenarioElapsedSeconds, setScenarioElapsedSeconds] = useState<number>(0);
+  const [targetPaceSeconds, setTargetPaceSeconds] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('az900_quiz_target_pace_secs');
+      return saved ? parseInt(saved, 10) || 60 : 60;
+    } catch {
+      return 60;
+    }
+  });
+  const [isScenarioTimerRunning, setIsScenarioTimerRunning] = useState<boolean>(true);
+  const [showPaceSettingsPopover, setShowPaceSettingsPopover] = useState<boolean>(false);
+  const cardRootRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    setScenarioElapsedSeconds(0);
+    setIsScenarioTimerRunning(true);
+  }, [question.id]);
+
+  React.useEffect(() => {
+    if (!isScenarioTimerRunning || hasSubmitted) return;
+    const interval = setInterval(() => {
+      setScenarioElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isScenarioTimerRunning, hasSubmitted]);
 
   const handlePinCurrentAnchor = () => {
     saveMemoryAnchor({
@@ -627,7 +770,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
   const quickSwitcherOptions = React.useMemo(() => {
     const items: Array<{
-      id: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue';
+      id: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence';
       label: string;
       shortLabel: string;
       count?: number;
@@ -674,6 +817,14 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         description: 'Questions missed during previous drills that need mastery before the real exam.',
         tip: 'High-impact remediation queue',
       },
+      {
+        id: 'confidence',
+        label: 'Confidence Review (1-2★)',
+        shortLabel: 'Confidence Review',
+        count: confidenceCount,
+        description: 'Questions where you self-rated with 1 or 2 stars, enabling focused review on least confident topics.',
+        tip: 'Low confidence review queue',
+      },
     ];
     if (retryQueueCount > 0 && retryQueueSecondsLeft > 0) {
       items.unshift({
@@ -691,6 +842,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   }, [
     totalQuestions,
     bookmarksCount,
+    confidenceCount,
     savedNotesCount,
     aiScenariosCount,
     unresolvedMistakesCount,
@@ -1566,6 +1718,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
   return (
     <div
+      ref={cardRootRef}
       onTouchStart={handleCardTouchStart}
       onTouchEnd={handleCardTouchEnd}
       className="w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden transition-all animate-quiz-card-fade-in-up"
@@ -1590,6 +1743,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   ? 'purple'
                   : item.id === 'mistakes'
                   ? 'rose'
+                  : item.id === 'confidence'
+                  ? 'amber'
                   : item.id === 'retry-queue'
                   ? 'amber'
                   : 'slate';
@@ -1823,8 +1978,68 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           )}
         </div>
 
-        {/* Right Group: Compact Question Timer + Question X of Y + Neatly Ordered Study Zone Dropdown + Bookmark */}
+        {/* Right Group: Scenario Pace Timer + Question Timer + Question X of Y + Study Zone Dropdown + Bookmark */}
         <div className="flex items-center gap-2">
+          {/* Floating Scenario Pace Timer per Scenario */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowPaceSettingsPopover((prev) => !prev)}
+              className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer ${
+                scenarioElapsedSeconds <= targetPaceSeconds
+                  ? 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100'
+                  : scenarioElapsedSeconds <= targetPaceSeconds * 1.5
+                  ? 'bg-amber-50 text-amber-950 border-amber-300 hover:bg-amber-100'
+                  : 'bg-rose-50 text-rose-950 border-rose-300 animate-pulse hover:bg-rose-100'
+              }`}
+              title={`Scenario Pace Timer: ${formatTimer(scenarioElapsedSeconds)} (Target: ${targetPaceSeconds}s per question) • Click to adjust target pace`}
+            >
+              <Clock className={`w-3.5 h-3.5 ${scenarioElapsedSeconds <= targetPaceSeconds ? 'text-emerald-600' : scenarioElapsedSeconds <= targetPaceSeconds * 1.5 ? 'text-amber-600' : 'text-rose-600'}`} />
+              <span className="font-mono tracking-tight">{formatTimer(scenarioElapsedSeconds)}</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${scenarioElapsedSeconds <= targetPaceSeconds ? 'bg-emerald-500' : scenarioElapsedSeconds <= targetPaceSeconds * 1.5 ? 'bg-amber-500' : 'bg-rose-500'}`} />
+            </button>
+
+            {/* Target Pace Selection Popover */}
+            {showPaceSettingsPopover && (
+              <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-slate-200 shadow-xl p-3 z-50 text-left space-y-2 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                  <span className="text-xs font-black uppercase text-slate-900">Target Pace / Question</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowPaceSettingsPopover(false)}
+                    className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="grid grid-cols-4 gap-1">
+                  {[45, 60, 90, 120].map((secs) => {
+                    const isSelected = targetPaceSeconds === secs;
+                    return (
+                      <button
+                        key={secs}
+                        type="button"
+                        onClick={() => {
+                          setTargetPaceSeconds(secs);
+                          try {
+                            localStorage.setItem('az900_quiz_target_pace_secs', String(secs));
+                          } catch {
+                            // ignore
+                          }
+                          setShowPaceSettingsPopover(false);
+                        }}
+                        className={`py-1.5 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                          isSelected ? 'bg-[#0078D4] text-white shadow-2xs' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {secs}s
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
           {/* Compact Color-Coded Question Timer Pill */}
           <div
             className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs ${timerColorConfig.badge}`}
@@ -1875,6 +2090,18 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               />
             </div>
           )}
+
+          {/* Quick-Drill (3 Missed Questions) Button */}
+          <button
+            type="button"
+            onClick={handleLaunchQuickDrill}
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0"
+            title="Launch a rapid 3-question Quick-Drill of previously missed questions without leaving your flow"
+          >
+            <Zap className="w-3.5 h-3.5 fill-slate-950" />
+            <span className="hidden sm:inline">⚡ Quick-Drill (3 Missed)</span>
+            <span className="sm:hidden">⚡ Quick-Drill</span>
+          </button>
 
           {/* STUDY ZONE ACCORDION MENU (Centered Popup Modal in Middle of Page) */}
           <div className="relative">
@@ -2864,11 +3091,11 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         <div
           key={`quiz-card-body-${question.id}`}
           className={`grid gap-6 min-w-0 w-full animate-quiz-card-fade-in-up ${
-            showKnowledgeCheck ? 'grid-cols-1 lg:grid-cols-12 items-start' : 'grid-cols-1'
+            showKnowledgeCheck || showAiTutorSidebar ? 'grid-cols-1 lg:grid-cols-12 items-start' : 'grid-cols-1'
           }`}
         >
           {/* Main Question & Answering Column */}
-          <div className={`space-y-6 min-w-0 ${showKnowledgeCheck ? 'lg:col-span-8' : 'w-full'}`}>
+          <div className={`space-y-6 min-w-0 ${showKnowledgeCheck || showAiTutorSidebar ? 'lg:col-span-8' : 'w-full'}`}>
             {/* Focus Mode Top Review Window: Presented at the top part of the view when a question is answered in Focus Mode */}
             {isFocusMode && showImmediateFeedback && (
               <div
@@ -2923,26 +3150,42 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 rounded-xl bg-white/90 border border-emerald-200 space-y-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 block">
-                      Why Option {question.correctAnswer} is Correct
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsRationaleExpanded((prev) => !prev)}
+                    className="w-full flex items-center justify-between p-2 rounded-xl bg-white/60 hover:bg-white text-xs font-bold text-slate-700 border border-slate-200 transition-all cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <span>{isRationaleExpanded ? 'Hide Rationale & Exam Tip' : 'Inspect Rationale & Exam Tip (Why Correct & Tip)'}</span>
                     </span>
-                    <p className="text-slate-800 leading-relaxed">{question.whyCorrect}</p>
-                  </div>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isRationaleExpanded ? 'rotate-180' : ''}`} />
+                  </button>
 
-                  <div className="p-3 rounded-xl bg-white/90 border border-amber-200 space-y-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 block">
-                      {!isSelectedCorrect && selectedOption
-                        ? `Why Option ${selectedOption} Was a Distractor`
-                        : 'AZ-900 Exam Anchor Tip'}
-                    </span>
-                    <p className="text-slate-800 leading-relaxed">
-                      {!isSelectedCorrect && selectedOption
-                        ? question.distractorBreakdown.find((d) => d.letter === selectedOption)
-                            ?.reason || question.examTip
-                        : question.examTip}
-                    </p>
+                  <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isRationaleExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-1">
+                      <div className="p-3 rounded-xl bg-white/90 border border-emerald-200 space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 block">
+                          Why Option {question.correctAnswer} is Correct
+                        </span>
+                        <p className="text-slate-800 leading-relaxed">{question.whyCorrect}</p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-white/90 border border-amber-200 space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 block">
+                          {!isSelectedCorrect && selectedOption
+                            ? `Why Option ${selectedOption} Was a Distractor`
+                            : 'AZ-900 Exam Anchor Tip'}
+                        </span>
+                        <p className="text-slate-800 leading-relaxed">
+                          {!isSelectedCorrect && selectedOption
+                            ? question.distractorBreakdown.find((d) => d.letter === selectedOption)
+                                ?.reason || question.examTip
+                            : question.examTip}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3658,39 +3901,61 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             }
 
             return (
-              <button
+              <div
                 key={`${question.id}-${option.letter}`}
-                onClick={() => handleSelect(option.letter)}
-                disabled={hasSubmitted}
                 style={{ animationDelay: `${optIdx * 45}ms` }}
-                className={`w-full text-left p-3.5 sm:p-4 rounded-xl border transition-all duration-150 flex items-start gap-3 sm:gap-3.5 group cursor-pointer animate-quiz-option-fade-in-up ${cardStyles}`}
+                className={`w-full text-left p-3 sm:p-3.5 rounded-xl border transition-all duration-150 flex items-start gap-3 sm:gap-3.5 group animate-quiz-option-fade-in-up ${cardStyles}`}
               >
-                <span
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 border transition-colors ${badgeStyles}`}
+                <button
+                  type="button"
+                  onClick={() => handleSelect(option.letter)}
+                  disabled={hasSubmitted}
+                  className="flex items-start gap-3 sm:gap-3.5 grow text-left cursor-pointer focus:outline-none min-w-0"
                 >
-                  {showImmediateFeedback && isCorrectOption ? (
-                    <Check className="w-4 h-4 stroke-[3]" />
-                  ) : showImmediateFeedback && isSelected && !isCorrectOption ? (
-                    <XCircle className="w-4 h-4" />
-                  ) : (
-                    option.letter
-                  )}
-                </span>
-                <span className="text-sm sm:text-base font-medium pt-1 grow leading-relaxed">
-                  {option.text}
-                </span>
+                  <span
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 border transition-colors ${badgeStyles}`}
+                  >
+                    {showImmediateFeedback && isCorrectOption ? (
+                      <Check className="w-4 h-4 stroke-[3]" />
+                    ) : showImmediateFeedback && isSelected && !isCorrectOption ? (
+                      <XCircle className="w-4 h-4" />
+                    ) : (
+                      option.letter
+                    )}
+                  </span>
+                  <span className="text-sm sm:text-base font-medium pt-1 grow leading-relaxed">
+                    {option.text}
+                  </span>
+                </button>
 
-                {showImmediateFeedback && isCorrectOption && (
-                  <span className="shrink-0 text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-md self-center">
-                    Correct Answer
-                  </span>
-                )}
-                {isAnswered && isExamMode && !examFeedbackRevealed && isSelected && (
-                  <span className="shrink-0 text-xs font-bold text-[#0078D4] bg-blue-100 px-2.5 py-1 rounded-md self-center">
-                    Answer Recorded
-                  </span>
-                )}
-              </button>
+                <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-center mt-1 sm:mt-0">
+                  {showImmediateFeedback && isCorrectOption && (
+                    <span className="shrink-0 text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-md">
+                      Correct Answer
+                    </span>
+                  )}
+                  {isAnswered && isExamMode && !examFeedbackRevealed && isSelected && (
+                    <span className="shrink-0 text-xs font-bold text-[#0078D4] bg-blue-100 px-2.5 py-1 rounded-md">
+                      Answer Recorded
+                    </span>
+                  )}
+
+                  {/* 'Ask AI' button for this option */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAskAiAboutOption(option);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-extrabold bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-900 border border-amber-300/80 shadow-2xs hover:shadow-xs hover:border-amber-400 transition-all cursor-pointer shrink-0"
+                    title={`Ask AI why Option ${option.letter} is ${isCorrectOption ? 'correct' : 'incorrect'} in the Knowledge Assistant sidebar`}
+                    aria-label={`Ask AI why Option ${option.letter} is ${isCorrectOption ? 'correct' : 'incorrect'}`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-orange-600 fill-amber-400" />
+                    <span>Ask AI</span>
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -3974,8 +4239,11 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
               {onAskTutorAboutQuestion && (
                 <button
-                  onClick={() => onAskTutorAboutQuestion(question)}
-                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:border-amber-500 hover:text-amber-700 text-xs font-semibold text-slate-700 shadow-2xs flex items-center gap-1.5 transition-colors shrink-0"
+                  onClick={() => {
+                    setShowAiTutorSidebar(true);
+                    onAskTutorAboutQuestion(question);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:border-amber-500 hover:text-amber-700 text-xs font-semibold text-slate-700 shadow-2xs flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                   <span>Ask AI Tutor</span>
@@ -3983,25 +4251,71 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               )}
             </div>
 
-            {/* If Incorrect: Targeted Diagnostic Analysis */}
+            {/* If Incorrect: Targeted Diagnostic Analysis & Smart Knowledge Assistant Explanation */}
             {!isSelectedCorrect && selectedOption && (
-              <div className="bg-red-50/70 rounded-xl p-5 border border-red-200 space-y-2.5 animate-cascade-2">
-                <div className="flex items-center gap-2 text-red-900 font-bold text-sm">
-                  <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-black shrink-0">
-                    !
-                  </span>
-                  <span>Diagnostic Breakdown: Where & Why You Stumbled</span>
+              <div className="space-y-4 animate-cascade-2">
+                <div className="bg-red-50/70 rounded-xl p-5 border border-red-200 space-y-2.5">
+                  <div className="flex items-center gap-2 text-red-900 font-bold text-sm">
+                    <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-black shrink-0">
+                      !
+                    </span>
+                    <span>Diagnostic Breakdown: Where & Why You Stumbled</span>
+                  </div>
+                  <div className="text-xs sm:text-sm text-red-950 bg-white/80 p-3.5 rounded-lg border border-red-200/60 leading-relaxed">
+                    <span className="font-bold text-red-700 block mb-1">
+                      Your Selection: Option {selectedOption}
+                    </span>
+                    {question.distractorBreakdown.find((d) => d.letter === selectedOption)?.reason ||
+                      'This option does not satisfy all architectural constraints in the scenario.'}
+                  </div>
+                  <div className="text-xs text-red-800 flex items-center gap-1.5 pt-1 font-medium">
+                    <span className="font-bold">Corrective Prescription:</span>
+                    <span>Review the constraints in the scenario carefully before deciding between IaaS, PaaS, or SaaS boundaries.</span>
+                  </div>
                 </div>
-                <div className="text-xs sm:text-sm text-red-950 bg-white/80 p-3.5 rounded-lg border border-red-200/60 leading-relaxed">
-                  <span className="font-bold text-red-700 block mb-1">
-                    Your Selection: Option {selectedOption}
-                  </span>
-                  {question.distractorBreakdown.find((d) => d.letter === selectedOption)?.reason ||
-                    'This option does not satisfy all architectural constraints in the scenario.'}
-                </div>
-                <div className="text-xs text-red-800 flex items-center gap-1.5 pt-1 font-medium">
-                  <span className="font-bold">Corrective Prescription:</span>
-                  <span>Review the constraints in the scenario carefully before deciding between IaaS, PaaS, or SaaS boundaries.</span>
+
+                {/* Smart Explanation from Knowledge Assistant */}
+                <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 rounded-xl p-5 border-2 border-orange-300 space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-orange-950 font-black text-sm">
+                      <div className="w-6 h-6 rounded-lg bg-orange-600 text-white flex items-center justify-center text-xs shadow-xs">
+                        🤖
+                      </div>
+                      <span>Smart Knowledge Assistant Explanation &amp; Trap Analysis</span>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-200 text-orange-950">
+                      Personalized Breakdown
+                    </span>
+                  </div>
+
+                  <div className="text-xs sm:text-sm text-slate-900 bg-white/90 p-4 rounded-xl border border-orange-200 shadow-2xs space-y-2.5 leading-relaxed">
+                    <div>
+                      <span className="font-extrabold text-orange-800 block text-xs uppercase tracking-wide">
+                        Trap Analysis (Why Option {selectedOption} misled you):
+                      </span>
+                      <p className="text-slate-800 mt-0.5">
+                        {question.distractorBreakdown.find((d) => d.letter === selectedOption)?.reason ||
+                          'This choice overlooks the primary architectural boundary or pricing/governance tier required in the scenario.'}
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-orange-100">
+                      <span className="font-extrabold text-emerald-800 block text-xs uppercase tracking-wide">
+                        Step-by-Step Correct Principle (Why Option {question.correctAnswer} is correct):
+                      </span>
+                      <p className="text-slate-800 mt-0.5">
+                        {question.whyCorrect}
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-orange-100 flex items-start gap-2 bg-amber-50/80 p-2.5 rounded-lg border border-amber-300/60">
+                      <Lightbulb className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-black text-amber-950 text-xs">Exam Memory Anchor Rule:</span>
+                        <p className="text-amber-900 text-xs mt-0.5">{question.examTip}</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -4382,17 +4696,132 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
       </div>
 
-        {/* Right Side-Panel: Concise Key Concept Definition specifically for this scenario */}
-        {showKnowledgeCheck && (
-          <div className="lg:col-span-4 sticky top-4">
-            <KeyConceptSidePanel
-              question={question}
-              isOpen={showKnowledgeCheck}
-              onClose={() => setShowKnowledgeCheck(false)}
-              selectedConceptId={selectedConceptId}
-              onSelectConceptId={setSelectedConceptId}
-              onAskTutor={onAskTutorAboutQuestion}
-            />
+        {/* Right Side-Panel: Contextual AI Tutor Sidebar or Key Concept Side Panel */}
+        {(showKnowledgeCheck || showAiTutorSidebar) && (
+          <div className="lg:col-span-4 sticky top-4 space-y-4">
+            {showAiTutorSidebar && (
+              <div className="bg-white rounded-2xl border-2 border-orange-400 shadow-xl overflow-hidden flex flex-col h-[520px] animate-in slide-in-from-right-4 duration-200">
+                <div className="relative overflow-hidden bg-gradient-to-r from-slate-950 via-orange-950 to-slate-950 text-white p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shrink-0">
+                      🤖
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-amber-300">Knowledge Assistant • AI Tutor</h4>
+                      <p className="text-[11px] font-bold text-white truncate max-w-[200px]">{question.moduleTitle}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAiTutorSidebar(false)}
+                    className="text-slate-300 hover:text-white p-1 rounded-lg bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+                  >
+                    <XCircle className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 p-3.5 overflow-y-auto space-y-3 bg-slate-50/50 text-xs">
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 space-y-1">
+                    <span className="font-black text-[10px] uppercase text-orange-700 block">Active Question Context</span>
+                    <p className="font-bold text-slate-900 line-clamp-2">{question.question}</p>
+                    <p className="text-[10px] text-slate-600">Correct Answer: Option {question.correctAnswer}</p>
+                  </div>
+
+                  {aiTutorMessages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-2.5 rounded-xl leading-relaxed whitespace-pre-line ${
+                        msg.role === 'assistant'
+                          ? 'bg-white border border-slate-200 text-slate-800 shadow-2xs'
+                          : 'bg-[#0078D4] text-white ml-6 shadow-2xs'
+                      }`}
+                    >
+                      <span className="font-black block text-[10px] mb-0.5 opacity-80">
+                        {msg.role === 'assistant' ? 'Knowledge Assistant' : 'You'}
+                      </span>
+                      {msg.text}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-3 bg-white border-t border-slate-200 flex gap-2 items-center">
+                  <div className="relative flex-1 flex items-center">
+                    <input
+                      type="text"
+                      value={aiTutorInput}
+                      onChange={(e) => setAiTutorInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && aiTutorInput.trim()) {
+                          const userQ = aiTutorInput.trim();
+                          setAiTutorMessages((prev) => [
+                            ...prev,
+                            { role: 'user', text: userQ },
+                            {
+                              role: 'assistant',
+                              text: `Regarding "${userQ}" for ${question.moduleTitle}: The correct answer is Option ${question.correctAnswer}. ${question.whyCorrect}`,
+                            },
+                          ]);
+                          setAiTutorInput('');
+                        }
+                      }}
+                      placeholder={isRecordingAiTutor ? 'Listening to your voice...' : 'Ask for clarification...'}
+                      className={`w-full px-3 py-1.5 pr-8 rounded-xl border text-xs focus:outline-none focus:ring-2 ${
+                        isRecordingAiTutor
+                          ? 'border-rose-500 bg-rose-50/50 focus:ring-rose-400'
+                          : 'border-slate-300 focus:ring-amber-400'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleToggleAiTutorVoice}
+                      className={`absolute right-2 p-1 rounded-lg transition-colors cursor-pointer ${
+                        isRecordingAiTutor
+                          ? 'text-rose-600 bg-rose-100 animate-pulse'
+                          : 'text-slate-400 hover:text-orange-600'
+                      }`}
+                      title={isRecordingAiTutor ? 'Stop voice recording' : 'Speak your question (Web Speech API)'}
+                      aria-label="Toggle microphone voice input for AI tutor"
+                    >
+                      {isRecordingAiTutor ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (aiTutorInput.trim()) {
+                        const userQ = aiTutorInput.trim();
+                        setAiTutorMessages((prev) => [
+                          ...prev,
+                          { role: 'user', text: userQ },
+                          {
+                            role: 'assistant',
+                            text: `Regarding "${userQ}" for ${question.moduleTitle}: The correct answer is Option ${question.correctAnswer}. ${question.whyCorrect}`,
+                          },
+                        ]);
+                        setAiTutorInput('');
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-black text-xs shadow-xs cursor-pointer shrink-0"
+                  >
+                    Send
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {showKnowledgeCheck && (
+              <KeyConceptSidePanel
+                question={question}
+                isOpen={showKnowledgeCheck}
+                onClose={() => setShowKnowledgeCheck(false)}
+                selectedConceptId={selectedConceptId}
+                onSelectConceptId={setSelectedConceptId}
+                onAskTutor={(q) => {
+                  setShowAiTutorSidebar(true);
+                  if (onAskTutorAboutQuestion) onAskTutorAboutQuestion(q);
+                }}
+              />
+            )}
           </div>
         )}
       </div>
@@ -4429,6 +4858,159 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       onClose={() => setActiveThreadModalTag(null)}
       onOpenInAzureThemes={onOpenAzureTheme}
     />
+
+    {/* Quick-Drill Rapid-Fire Modal (3 Missed Questions Sequence) */}
+    {showQuickDrillModal &&
+      typeof document !== 'undefined' &&
+      createPortal(
+        <div className="fixed inset-0 z-[130] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto overscroll-contain animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-[min(32rem,calc(100vw-1.5rem))] max-h-[calc(100dvh-2rem)] my-auto rounded-2xl border border-slate-200 shadow-2xl overflow-y-auto overscroll-contain animate-in zoom-in-95 duration-200 text-left">
+            <div className="relative overflow-hidden bg-gradient-to-r from-slate-950 via-[#004C87] to-slate-950 text-white p-5">
+              <div className="absolute top-0 left-0 right-0">
+                <KitengeRibbon height={3} />
+              </div>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-slate-950 flex items-center justify-center font-black shadow-md shrink-0">
+                    <Zap className="w-5 h-5 fill-slate-950" />
+                  </div>
+                  <div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
+                      ⚡ Quick-Drill Rapid-Fire
+                    </span>
+                    <h3 className="text-base sm:text-lg font-black text-white mt-0.5">
+                      {quickDrillCompleted ? 'Quick-Drill Complete!' : `Drill Question ${quickDrillIndex + 1} of ${quickDrillQuestions.length}`}
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowQuickDrillModal(false)}
+                  className="text-slate-300 hover:text-white p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+                >
+                  <XCircle className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 sm:p-6 space-y-4">
+              {quickDrillCompleted ? (
+                <div className="text-center space-y-4 py-6">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto shadow-md">
+                    <CheckCircle className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-xl font-black text-slate-900">
+                      Drill Finished: {quickDrillCorrectCount}/{quickDrillQuestions.length} Correct
+                    </h4>
+                    <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
+                      You successfully completed this rapid-fire memory consolidation sprint without leaving your flow!
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickDrillModal(false)}
+                    className="px-6 py-2.5 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white font-black text-xs shadow-md cursor-pointer"
+                  >
+                    Return to Main Quiz Flow
+                  </button>
+                </div>
+              ) : quickDrillQuestions[quickDrillIndex] ? (
+                <div className="space-y-4">
+                  {/* Progress Bar */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                      <span>Progress</span>
+                      <span>{quickDrillIndex + 1} / {quickDrillQuestions.length}</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-300"
+                        style={{ width: `${((quickDrillIndex + 1) / quickDrillQuestions.length) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-[#0078D4] bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                      Module {quickDrillQuestions[quickDrillIndex].moduleId}: {quickDrillQuestions[quickDrillIndex].moduleTitle}
+                    </span>
+                    <p className="text-sm font-bold text-slate-900 leading-snug">
+                      {quickDrillQuestions[quickDrillIndex].scenario}
+                    </p>
+                    <p className="text-xs font-semibold text-slate-800">
+                      {quickDrillQuestions[quickDrillIndex].question}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {quickDrillQuestions[quickDrillIndex].options.map((opt) => {
+                      const isSelected = quickDrillSelectedOption === opt.letter;
+                      const isCorrectOpt = opt.letter === quickDrillQuestions[quickDrillIndex].correctAnswer;
+                      let style = 'bg-white hover:bg-sky-50/80 text-slate-800 border-slate-200';
+                      if (quickDrillHasSubmitted) {
+                        if (isCorrectOpt) {
+                          style = 'bg-emerald-50 text-emerald-950 border-emerald-500 font-extrabold';
+                        } else if (isSelected) {
+                          style = 'bg-rose-50 text-rose-950 border-rose-500 font-bold';
+                        } else {
+                          style = 'bg-slate-50 text-slate-400 border-slate-200';
+                        }
+                      }
+                      return (
+                        <button
+                          key={opt.letter}
+                          type="button"
+                          disabled={quickDrillHasSubmitted}
+                          onClick={() => {
+                            setQuickDrillSelectedOption(opt.letter);
+                            setQuickDrillHasSubmitted(true);
+                            if (opt.letter === quickDrillQuestions[quickDrillIndex].correctAnswer) {
+                              setQuickDrillCorrectCount((prev) => prev + 1);
+                            }
+                          }}
+                          className={`w-full p-3 rounded-xl border-2 text-left text-xs transition-all flex items-start gap-2.5 cursor-pointer ${style}`}
+                        >
+                          <span className="w-6 h-6 rounded-lg bg-slate-100 border border-slate-300 flex items-center justify-center font-black shrink-0 text-slate-800">
+                            {opt.letter}
+                          </span>
+                          <span className="leading-relaxed">{opt.text}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {quickDrillHasSubmitted && (
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 animate-in fade-in duration-150 text-xs">
+                      <p className="font-bold text-slate-900">
+                        <strong className="text-emerald-700">Why Correct: </strong>
+                        {quickDrillQuestions[quickDrillIndex].whyCorrect}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (quickDrillIndex + 1 < quickDrillQuestions.length) {
+                            setQuickDrillIndex((prev) => prev + 1);
+                            setQuickDrillSelectedOption(null);
+                            setQuickDrillHasSubmitted(false);
+                          } else {
+                            setQuickDrillCompleted(true);
+                          }
+                        }}
+                        className="w-full py-2 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white font-black flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <span>{quickDrillIndex + 1 < quickDrillQuestions.length ? 'Next Drill Question' : 'View Drill Summary'}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
   </div>
 );
 };

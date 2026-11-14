@@ -918,7 +918,7 @@ export const Header: React.FC<HeaderProps> = ({
         <WavyAzureFabricMotif />
       </div>
 
-      <div className="max-w-7xl w-full mx-auto px-2.5 sm:px-5 lg:px-6 relative z-10 min-w-0">
+      <div className="w-full max-w-full px-2.5 sm:px-5 lg:pl-[2.7cm] lg:pr-6 relative z-10 min-w-0 lg:mx-0">
         {/* =====================================================================
             MOBILE & TABLET COMPACT TOP BAR (< lg screens)
             - Always displays Azure Cloud Explorer • AZ-900 • Fundamentals Practice Studio
@@ -1143,7 +1143,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* =====================================================================
             LAPTOP & DESKTOP PERMANENT SLIM NAVIGATION BAR TOP TIER (lg+ screens)
            ===================================================================== */}
-        <div className="hidden lg:flex items-center justify-between py-1 gap-2">
+        <div className="hidden lg:flex items-center justify-between py-2 gap-4 xl:gap-6 w-full">
           {/* Left Brand: Logo & Slightly Larger Azure Curriculum Title in Laptop & Desktop Views */}
           <div className="relative shrink-0 flex items-center">
             <div
@@ -1232,6 +1232,25 @@ export const Header: React.FC<HeaderProps> = ({
               }}
               compact={true}
             />
+
+            {/* Harambee Streak Milestone Indicator (Triggers celebration on 7, 14, 30 day continuous study streaks) */}
+            {(() => {
+              const streak = stats.streakDays || 0;
+              const isMilestone = streak === 7 || streak === 14 || streak === 30 || streak >= 50;
+              if (!isMilestone) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setShowDailyGoalCelebrationModal(true)}
+                  className="hidden xl:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white text-xs font-black shadow-md animate-goal-celebrate cursor-pointer border border-amber-300 shrink-0"
+                  title={`Harambee Milestone Reached: ${streak}-Day Continuous Study Streak! Click to celebrate & share.`}
+                  aria-label={`Harambee Streak Milestone: ${streak} days`}
+                >
+                  <Flame className="w-3.5 h-3.5 text-amber-200 fill-amber-300 animate-bounce" />
+                  <span>🔥 {streak}d Milestone</span>
+                </button>
+              );
+            })()}
 
             <DailyStudyGoalRing
               todayAnsweredCount={todayAnsweredCount}
@@ -1338,7 +1357,7 @@ export const Header: React.FC<HeaderProps> = ({
           aria-label="Primary Studio Navigation"
           onMouseEnter={handleNavBarMouseEnter}
           onMouseLeave={handleNavBarMouseLeave}
-          className={`relative w-full lg:w-fit lg:max-w-full lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-lg lg:mb-0.5 shadow-xs backdrop-blur-md ${
+          className={`relative w-full lg:w-full lg:max-w-full lg:mx-0 overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-lg lg:mb-0.5 shadow-xs backdrop-blur-md ${
             isMenuBarHidden
               ? 'max-h-0 opacity-0 pointer-events-none py-0 border-transparent lg:mb-0'
               : 'max-h-24 sm:max-h-14 lg:max-h-8 mobile-landscape:max-h-10 opacity-100 py-1 lg:py-0.5 mobile-landscape:py-0.5 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'

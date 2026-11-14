@@ -556,6 +556,7 @@ export default function App() {
   const [savedNotesMap, setSavedNotesMap] = useState<Record<string, string>>(() => getAllQuestionNotes());
   const [onlyAiGenerated, setOnlyAiGenerated] = useState<boolean>(false);
   const [onlyUnresolvedMistakes, setOnlyUnresolvedMistakes] = useState<boolean>(false);
+  const [onlyLowConfidence, setOnlyLowConfidence] = useState<boolean>(false);
   const [retryQueueQuestionIds, setRetryQueueQuestionIds] = useState<string[]>([]);
   const [retryQueueExpiresAt, setRetryQueueExpiresAt] = useState<number | null>(null);
   const [retryQueueSecondsLeft, setRetryQueueSecondsLeft] = useState<number>(0);
@@ -662,8 +663,17 @@ export default function App() {
     setActiveTab('quiz');
   };
 
+  const lowConfidenceCount = React.useMemo(() => {
+    let count = 0;
+    questions.forEach((q) => {
+      const conf = stats?.confidenceScores?.[q.id];
+      if (conf && conf <= 2) count++;
+    });
+    return count;
+  }, [questions, stats?.confidenceScores]);
+
   // Active Quick Switcher filter state & handler for mobile horizontal swipe or pill tap
-  const activeQuickFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' =
+  const activeQuickFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence' =
     onlyRetryQueue && retryQueueSecondsLeft > 0
       ? 'retry-queue'
       : onlyBookmarks
@@ -674,10 +684,12 @@ export default function App() {
       ? 'ai'
       : onlyUnresolvedMistakes
       ? 'mistakes'
+      : onlyLowConfidence
+      ? 'confidence'
       : 'all';
 
   const handleSelectQuickFilter = (
-    nextFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue'
+    nextFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence'
   ) => {
     setRetryIncorrectPathId(null);
     setRetryIncorrectSnapshotIds([]);
@@ -685,6 +697,7 @@ export default function App() {
     setOnlySavedNotes(nextFilter === 'notes');
     setOnlyAiGenerated(nextFilter === 'ai');
     setOnlyUnresolvedMistakes(nextFilter === 'mistakes');
+    setOnlyLowConfidence(nextFilter === 'confidence');
     setOnlyRetryQueue(nextFilter === 'retry-queue' && retryQueueSecondsLeft > 0);
     if (nextFilter !== 'all') {
       setSelectedPathId('all');
@@ -1218,9 +1231,9 @@ export default function App() {
           handleQuickRetrySessionQuestions(activeQueueQuestions);
           audioManager.playChime(isAudioMuted);
           setFocusModeToast(
-            `Quick-Retry Session Active ('R') • Consolidating ${activeQueueQuestions.length} unresolved question${
+            `⚡ Quick-Retry ('R') Active: Loaded ${activeQueueQuestions.length} unresolved question${
               activeQueueQuestions.length === 1 ? '' : 's'
-            } in Retry Queue`
+            } into queue • 5-Minute Time Limit Active!`
           );
           return;
         } else if (activeQueueQuestions.length > 0) {
@@ -1229,9 +1242,9 @@ export default function App() {
           handleQuickRetrySessionQuestions(activeQueueQuestions);
           audioManager.playChime(isAudioMuted);
           setFocusModeToast(
-            `Quick-Retry Session Launched ('R') • Loaded ${activeQueueQuestions.length} unresolved question${
+            `⚡ Quick-Retry ('R') Launched: Loaded ${activeQueueQuestions.length} unresolved question${
               activeQueueQuestions.length === 1 ? '' : 's'
-            } into 5m Retry Queue`
+            } into queue • 5-Minute Time Limit Active!`
           );
           return;
         }
@@ -1369,6 +1382,12 @@ export default function App() {
       }
       if (onlyUnresolvedMistakes && !unresolvedMap.has(q.id)) {
         return false;
+      }
+      if (onlyLowConfidence) {
+        const conf = stats?.confidenceScores?.[q.id];
+        if (!conf || conf > 2) {
+          return false;
+        }
       }
       if (normalizedSearch) {
         const matchesSearch =
@@ -2286,6 +2305,24 @@ export default function App() {
           />
         )}
 
+      {/* Subtle, thin progress bar at the very top of the screen in Focus Mode */}
+      {isFocusMode && (
+        <div className="fixed top-0 left-0 right-0 z-[110] h-1 bg-slate-800/80 overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-emerald-500 to-sky-400 transition-all duration-300"
+            style={{
+              width: `${Math.min(
+                100,
+                Math.max(
+                  0,
+                  ((currentQuestionIndex + 1) / Math.max(1, filteredQuestions.length)) * 100
+                )
+              )}%`,
+            }}
+          />
+        </div>
+      )}
+
       {/* Floating Focus Mode Banner (Minimized UI for Test-Like Concentration) */}
       {isFocusMode && (
         <div className="sticky top-4 z-50 px-4 max-w-4xl w-full mx-auto animate-in slide-in-from-top-3 duration-200">
@@ -2350,7 +2387,7 @@ export default function App() {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-[100vw] max-w-[100vw] min-w-0 overflow-x-hidden mx-auto px-2.5 sm:px-6 lg:px-8 py-4 sm:py-8 relative z-10">
+      <main className="flex-1 w-[100vw] max-w-full min-w-0 overflow-x-hidden lg:mx-0 lg:pl-[2.7cm] lg:pr-8 px-2.5 sm:px-6 py-4 sm:py-8 relative z-10">
         {/* TAB 1: PRACTICE MODULES */}
         {activeTab === 'quiz' && (
           <div className="space-y-4 sm:space-y-5 w-full min-w-0">
@@ -4143,6 +4180,7 @@ export default function App() {
                         activeQuickFilter={activeQuickFilter}
                         onSelectQuickFilter={handleSelectQuickFilter}
                         bookmarksCount={stats.bookmarks.length}
+                        confidenceCount={lowConfidenceCount}
                         savedNotesCount={savedNotesCount}
                         aiScenariosCount={questions.filter((q) => q.isAiGenerated).length}
                         retryQueueCount={retryQueueQuestionIds.length}

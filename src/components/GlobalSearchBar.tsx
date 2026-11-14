@@ -193,10 +193,10 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
   };
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-md sm:w-72 md:w-80 lg:w-96">
+    <div ref={containerRef} className="relative w-36 sm:w-44 md:w-48 lg:w-44 xl:w-56 focus-within:w-60 focus-within:xl:w-64 transition-all duration-200 shrink min-w-0">
       {/* Search Input Box */}
       <div
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all bg-slate-50/90 ${
+        className={`flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-xl border transition-all bg-slate-50/90 ${
           isOpen || inputValue.trim().length > 0
             ? 'border-[#0078D4] ring-2 ring-[#0078D4]/20 bg-white shadow-xs'
             : 'border-slate-200/90 hover:border-slate-300 shadow-2xs'
@@ -210,7 +210,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
           onFocus={() => setIsOpen(true)}
           onChange={handleInputChange}
           onKeyDown={handleKeyDownInput}
-          placeholder="Search Azure services, terms, or scenarios..."
+          placeholder="Search Azure... ⌘K"
           aria-label="Global search for Azure services or key terms in question bank"
           className="w-full bg-transparent text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none"
         />
@@ -225,7 +225,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
             <X className="w-3.5 h-3.5" />
           </button>
         ) : (
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200/70 text-slate-500 border border-slate-300/60 shrink-0">
+          <kbd className="hidden xl:inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-slate-200/70 text-slate-500 border border-slate-300/60 shrink-0">
             ⌘K
           </kbd>
         )}
@@ -233,7 +233,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
 
       {/* Dropdown Search Results & Quick Filter Panel */}
       {isOpen && (
-        <div className="absolute left-0 right-0 sm:left-0 sm:right-auto sm:w-[min(30rem,calc(100vw-1.5rem))] max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain mt-2 bg-white rounded-2xl border border-slate-200/90 shadow-2xl card-elevation z-50 text-left animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="absolute right-0 sm:right-0 sm:left-auto sm:w-[min(28rem,calc(100vw-1.5rem))] max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain mt-2 bg-white rounded-2xl border border-slate-200/90 shadow-2xl card-elevation z-50 text-left animate-in fade-in slide-in-from-top-2 duration-150">
           {!normalizedQuery ? (
             /* Empty Query State: Popular Azure Services & Key Terms */
             <div className="p-4 space-y-3">
