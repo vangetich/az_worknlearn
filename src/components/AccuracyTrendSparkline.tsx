@@ -12,12 +12,9 @@ import {
   CartesianGrid,
 } from 'recharts';
 import {
-  TrendingUp,
   AlertTriangle,
-  CheckCircle2,
   Zap,
   Activity,
-  Sparkles,
   ArrowUpRight,
   ArrowDownRight,
   Minus,
@@ -165,6 +162,7 @@ export const AccuracyTrendSparkline: React.FC<AccuracyTrendSparklineProps> = ({
 }) => {
   const [showMovingAverage, setShowMovingAverage] = useState<boolean>(true);
   const [highlightPlateauBand, setHighlightPlateauBand] = useState<boolean>(true);
+  const [selectedSessionIdx, setSelectedSessionIdx] = useState<number | null>(null);
 
   const {
     sparklineData,
@@ -332,6 +330,13 @@ export const AccuracyTrendSparkline: React.FC<AccuracyTrendSparklineProps> = ({
     };
   }, [sessions, stats]);
 
+  const activeInspectedSession = useMemo(() => {
+    if (selectedSessionIdx !== null && sparklineData[selectedSessionIdx]) {
+      return sparklineData[selectedSessionIdx];
+    }
+    return sparklineData[sparklineData.length - 1] || null;
+  }, [selectedSessionIdx, sparklineData]);
+
   const CustomSparklineTooltip = ({ active, payload }: any) => {
     if (!active || !payload || !payload.length) return null;
     const data: SparklinePoint = payload[0].payload;
@@ -342,12 +347,12 @@ export const AccuracyTrendSparkline: React.FC<AccuracyTrendSparklineProps> = ({
           <span className="font-black text-sky-300 truncate">
             {data.label}: {data.sessionTitle}
           </span>
-          <span className="px-1.5 py-0.5 rounded bg-white/10 text-[10px] font-bold uppercase text-amber-300 shrink-0">
+          <span className="text-[10px] font-bold uppercase text-amber-300 shrink-0">
             {data.mode}
           </span>
         </div>
 
-        <div className="space-y-1 text-[11px]">
+        <div className="space-y-1 text-[11px] tabular-nums">
           <div className="flex items-center justify-between">
             <span className="text-slate-300">Session Accuracy:</span>
             <span
@@ -412,23 +417,31 @@ export const AccuracyTrendSparkline: React.FC<AccuracyTrendSparklineProps> = ({
               <h3 className="text-xs sm:text-sm font-black text-slate-900">
                 Accuracy Trend Sparkline (Last {sparklineData.length} Quiz Sessions)
               </h3>
+              <span aria-hidden="true" className="text-slate-400 text-xs">
+                ·
+              </span>
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${
+                className={`text-[11px] font-black ${
                   plateauAnalysis.statusType === 'plateau'
-                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                    ? 'text-amber-800'
                     : plateauAnalysis.statusType === 'mastery'
-                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                    ? 'text-emerald-800'
                     : plateauAnalysis.statusType === 'dip'
-                    ? 'bg-rose-100 text-rose-900 border-rose-300'
-                    : 'bg-sky-100 text-[#005A9E] border-sky-300'
+                    ? 'text-rose-800'
+                    : 'text-[#005A9E]'
                 }`}
               >
                 {plateauAnalysis.headline}
               </span>
               {!hasLiveSessions && (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200/80 text-slate-700">
-                  Preview Trajectory
-                </span>
+                <>
+                  <span aria-hidden="true" className="text-slate-400 text-xs">
+                    ·
+                  </span>
+                  <span className="text-[10.5px] font-semibold text-slate-500">
+                    10-Session Baseline Trajectory
+                  </span>
+                </>
               )}
             </div>
             <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
@@ -442,34 +455,34 @@ export const AccuracyTrendSparkline: React.FC<AccuracyTrendSparklineProps> = ({
           <button
             type="button"
             onClick={() => setShowMovingAverage((prev) => !prev)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer whitespace-nowrap ${
               showMovingAverage
                 ? 'bg-[#0078D4] text-white border-[#0078D4]'
                 : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
             }`}
           >
-            3-Sess Avg
+            3-Session Moving Avg
           </button>
 
           {plateauAnalysis.hasPlateau && (
             <button
               type="button"
               onClick={() => setHighlightPlateauBand((prev) => !prev)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer whitespace-nowrap ${
                 highlightPlateauBand
                   ? 'bg-amber-500 text-slate-950 border-amber-600 font-extrabold'
                   : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
               }`}
             >
-              Plateau Zone
+              Plateau Zone ({plateauAnalysis.startLabel}–{plateauAnalysis.endLabel})
             </button>
           )}
 
-          {onStartAdaptiveQuiz && plateauAnalysis.statusType === 'plateau' && (
+          {onStartAdaptiveQuiz && plateauAnalysis.hasPlateau && (
             <button
               type="button"
               onClick={onStartAdaptiveQuiz}
-              className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-[11px] font-black flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-[11px] font-black flex items-center gap-1 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
             >
               <Zap className="w-3 h-3 fill-current" />
               <span>Break Plateau</span>
@@ -481,7 +494,7 @@ export const AccuracyTrendSparkline: React.FC<AccuracyTrendSparklineProps> = ({
       {/* Main Sparkline & Telemetry Split */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
         {/* Recharts Area + Moving Average Sparkline (8 cols) */}
-        <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200/90 p-2.5 sm:p-3">
+        <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200/90 p-2.5 sm:p-3 space-y-2">
           <div className="w-full h-40 sm:h-44">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
@@ -556,19 +569,22 @@ export const AccuracyTrendSparkline: React.FC<AccuracyTrendSparklineProps> = ({
                   strokeWidth={2.5}
                   fill="url(#sparklineAccuracyGrad)"
                   dot={(props: any) => {
-                    const { cx, cy, payload } = props;
+                    const { cx, cy, payload, index } = props;
                     if (typeof cx !== 'number' || typeof cy !== 'number') return <g />;
                     const isPlateau = payload?.isPlateauPoint;
                     const isPass = payload?.accuracy >= 70;
+                    const isSelected = selectedSessionIdx === index;
                     return (
                       <circle
                         key={`dot-${payload.index}`}
                         cx={cx}
                         cy={cy}
-                        r={isPlateau ? 4.5 : 3.5}
+                        r={isSelected ? 6 : isPlateau ? 4.5 : 3.5}
                         fill={isPlateau ? '#F59E0B' : isPass ? '#10B981' : '#0078D4'}
                         stroke="#FFFFFF"
-                        strokeWidth={1.5}
+                        strokeWidth={isSelected ? 2.5 : 1.5}
+                        className="cursor-pointer"
+                        onClick={() => setSelectedSessionIdx(index)}
                       />
                     );
                   }}
@@ -590,82 +606,132 @@ export const AccuracyTrendSparkline: React.FC<AccuracyTrendSparklineProps> = ({
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+
+          {/* Interactive 10-Session Selector Strip */}
+          <div className="flex items-center justify-between gap-1 overflow-x-auto no-scrollbar pt-1 border-t border-slate-100">
+            {sparklineData.map((pt, idx) => {
+              const isSelected =
+                selectedSessionIdx === idx ||
+                (selectedSessionIdx === null && idx === sparklineData.length - 1);
+              return (
+                <button
+                  key={pt.label}
+                  type="button"
+                  onClick={() => setSelectedSessionIdx(idx)}
+                  title={`${pt.label}: ${pt.sessionTitle} (${pt.accuracy}% accuracy${
+                    pt.isPlateauPoint ? ' • Learning Plateau Band' : ''
+                  })`}
+                  className={`flex-1 min-w-[46px] px-1.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border text-center tabular-nums ${
+                    isSelected
+                      ? 'bg-[#0078D4] text-white border-[#005A9E] shadow-2xs'
+                      : pt.isPlateauPoint
+                      ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                      : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="font-black leading-none">{pt.label}</div>
+                  <div className="text-[9.5px] opacity-90 mt-0.5">{pt.accuracy}%</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* 4 Compact Sparkline Telemetry Cards (4 cols) */}
-        <div className="lg:col-span-4 grid grid-cols-2 gap-2">
-          <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
-            <span className="text-[10px] font-bold uppercase text-slate-500 block">
-              Latest Session
-            </span>
-            <span
-              className={`text-base sm:text-lg font-black ${
-                latestScore >= 70 ? 'text-emerald-600' : 'text-[#0078D4]'
-              }`}
-            >
-              {latestScore}%
-            </span>
-            <span className="text-[10px] text-slate-500 block">
-              {latestScore >= 70 ? 'Above 70% target' : `${70 - latestScore}% to pass mark`}
-            </span>
+        {/* 4 Compact Sparkline Telemetry Cards + Selected Session Inspector (4 cols) */}
+        <div className="lg:col-span-4 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                Latest Session
+              </span>
+              <span
+                className={`text-base sm:text-lg font-black tabular-nums ${
+                  latestScore >= 70 ? 'text-emerald-600' : 'text-[#0078D4]'
+                }`}
+              >
+                {latestScore}%
+              </span>
+              <span className="text-[10px] text-slate-500 block">
+                {latestScore >= 70 ? 'Above 70% target' : `${70 - latestScore}% to pass mark`}
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                10-Session Avg
+              </span>
+              <span className="text-base sm:text-lg font-black text-slate-900 tabular-nums">
+                {tenSessionAvg}%
+              </span>
+              <span className="text-[10px] text-slate-500 block">Rolling mean score</span>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                Net Momentum
+              </span>
+              <span
+                className={`text-base sm:text-lg font-black flex items-center gap-0.5 tabular-nums ${
+                  netMomentum > 0
+                    ? 'text-emerald-600'
+                    : netMomentum < 0
+                    ? 'text-rose-600'
+                    : 'text-amber-600'
+                }`}
+              >
+                {netMomentum > 0 ? (
+                  <ArrowUpRight className="w-4 h-4 shrink-0" />
+                ) : netMomentum < 0 ? (
+                  <ArrowDownRight className="w-4 h-4 shrink-0" />
+                ) : (
+                  <Minus className="w-4 h-4 shrink-0" />
+                )}
+                {netMomentum > 0 ? `+${netMomentum}%` : `${netMomentum}%`}
+              </span>
+              <span className="text-[10px] text-slate-500 block">
+                S1 → S{sparklineData.length} shift
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                Plateau Check
+              </span>
+              <span
+                className={`text-xs sm:text-sm font-black block mt-0.5 tabular-nums ${
+                  plateauAnalysis.hasPlateau ? 'text-amber-700' : 'text-emerald-700'
+                }`}
+              >
+                {plateauAnalysis.hasPlateau
+                  ? `${plateauAnalysis.startLabel}–${plateauAnalysis.endLabel} (~${plateauAnalysis.plateauMean}%)`
+                  : 'No Stall Detected'}
+              </span>
+              <span className="text-[10px] text-slate-500 block">
+                {plateauAnalysis.hasPlateau ? '≤5% variance band' : 'Healthy variance'}
+              </span>
+            </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
-            <span className="text-[10px] font-bold uppercase text-slate-500 block">
-              10-Session Avg
-            </span>
-            <span className="text-base sm:text-lg font-black text-slate-900">
-              {tenSessionAvg}%
-            </span>
-            <span className="text-[10px] text-slate-500 block">
-              Rolling mean score
-            </span>
-          </div>
-
-          <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
-            <span className="text-[10px] font-bold uppercase text-slate-500 block">
-              Net Momentum
-            </span>
-            <span
-              className={`text-base sm:text-lg font-black flex items-center gap-0.5 ${
-                netMomentum > 0
-                  ? 'text-emerald-600'
-                  : netMomentum < 0
-                  ? 'text-rose-600'
-                  : 'text-amber-600'
-              }`}
-            >
-              {netMomentum > 0 ? (
-                <ArrowUpRight className="w-4 h-4 shrink-0" />
-              ) : netMomentum < 0 ? (
-                <ArrowDownRight className="w-4 h-4 shrink-0" />
-              ) : (
-                <Minus className="w-4 h-4 shrink-0" />
-              )}
-              {netMomentum > 0 ? `+${netMomentum}%` : `${netMomentum}%`}
-            </span>
-            <span className="text-[10px] text-slate-500 block">
-              S1 → S{sparklineData.length} shift
-            </span>
-          </div>
-
-          <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
-            <span className="text-[10px] font-bold uppercase text-slate-500 block">
-              Plateau Check
-            </span>
-            <span
-              className={`text-xs sm:text-sm font-black block mt-0.5 ${
-                plateauAnalysis.hasPlateau ? 'text-amber-700' : 'text-emerald-700'
-              }`}
-            >
-              {plateauAnalysis.hasPlateau
-                ? `${plateauAnalysis.startLabel}–${plateauAnalysis.endLabel} (~${plateauAnalysis.plateauMean}%)`
-                : 'No Stall Detected'}
-            </span>
-            <span className="text-[10px] text-slate-500 block">
-              {plateauAnalysis.hasPlateau ? '≤5% variance band' : 'Healthy variance'}
-            </span>
-          </div>
+          {activeInspectedSession && (
+            <div className="p-2.5 rounded-xl bg-white border border-sky-200/90 text-[11px] flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="font-black text-slate-900 truncate">
+                  {activeInspectedSession.label}: {activeInspectedSession.sessionTitle}
+                </div>
+                <div className="text-[10px] text-slate-500 tabular-nums">
+                  {activeInspectedSession.correctCount}/{activeInspectedSession.totalQuestions} correct · 3-Sess Avg {activeInspectedSession.movingAvg}%
+                  {activeInspectedSession.isPlateauPoint ? ' · Plateau Zone' : ''}
+                </div>
+              </div>
+              <span
+                className={`font-black text-xs shrink-0 tabular-nums ${
+                  activeInspectedSession.accuracy >= 70 ? 'text-emerald-600' : 'text-amber-700'
+                }`}
+              >
+                {activeInspectedSession.accuracy}%
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>

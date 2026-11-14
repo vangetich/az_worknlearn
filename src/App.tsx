@@ -105,6 +105,7 @@ import {
 import { downloadNotesAndMemoryAnchorsMarkdown } from './utils/exportNotesMarkdown';
 import { usePostgresDatabase } from './hooks/usePostgresDatabase';
 import { authService } from './services/authService';
+import { audioManager } from './services/audioManager';
 import { isWhitelistedAdminEmail } from './utils/adminSecurity';
 import {
   getStoredReminderSettings,
@@ -1146,6 +1147,56 @@ export default function App() {
           );
           return next;
         });
+        return;
+      }
+
+      // 4. Global 'R' Shortcut: Instantly triggers 'Quick-Retry' session for unresolved questions if retry queue is active
+      if (
+        !isEditable &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !e.shiftKey &&
+        (e.key === 'r' || e.key === 'R')
+      ) {
+        const unresolvedMap = getUnresolvedMistakesMap(stats);
+        const isQueueCurrentlyActive =
+          retryQueueSecondsLeft > 0 && retryQueueQuestionIds.length > 0;
+
+        // Collect unresolved questions from active retry queue (or unresolved mistakes if present)
+        const activeQueueQuestions = isQueueCurrentlyActive
+          ? questions.filter(
+              (q) =>
+                retryQueueQuestionIds.includes(q.id) &&
+                (unresolvedMap.size === 0 ||
+                  unresolvedMap.has(q.id) ||
+                  retryQueueQuestionIds.includes(q.id))
+            )
+          : questions.filter((q) => unresolvedMap.has(q.id));
+
+        if (isQueueCurrentlyActive && activeQueueQuestions.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleQuickRetrySessionQuestions(activeQueueQuestions);
+          audioManager.playChime(isAudioMuted);
+          setFocusModeToast(
+            `Quick-Retry Session Active ('R') • Consolidating ${activeQueueQuestions.length} unresolved question${
+              activeQueueQuestions.length === 1 ? '' : 's'
+            } in Retry Queue`
+          );
+          return;
+        } else if (activeQueueQuestions.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleQuickRetrySessionQuestions(activeQueueQuestions);
+          audioManager.playChime(isAudioMuted);
+          setFocusModeToast(
+            `Quick-Retry Session Launched ('R') • Loaded ${activeQueueQuestions.length} unresolved question${
+              activeQueueQuestions.length === 1 ? '' : 's'
+            } into 5m Retry Queue`
+          );
+          return;
+        }
       }
     };
 
@@ -1157,6 +1208,11 @@ export default function App() {
     activeShortcuts,
     detectedPlatform,
     showAccessibilityModal,
+    retryQueueSecondsLeft,
+    retryQueueQuestionIds,
+    questions,
+    stats,
+    isAudioMuted,
   ]);
 
   // Scoped Module Confidence Reset Handler
@@ -1517,9 +1573,45 @@ export default function App() {
       timestamp: Date.now(),
     };
 
+    const prevTodayCount = getTodaySolvedQuestionsCount(stats);
     const updatedStats = saveUserAttempt(stats, attempt);
+    const nextTodayCount = getTodaySolvedQuestionsCount(updatedStats);
+    const goalTarget = Math.max(1, updatedStats.dailyGoal || 10);
+
+    // Check if this answer crossed a daily study goal milestone (25%, 50%, 75%, or 100%) or a 5-question streak milestone
+    const milestoneThresholds = [
+      Math.max(1, Math.ceil(goalTarget * 0.25)),
+      Math.max(1, Math.ceil(goalTarget * 0.5)),
+      Math.max(1, Math.ceil(goalTarget * 0.75)),
+      goalTarget,
+    ];
+    const crossedGoalMilestone =
+      nextTodayCount > prevTodayCount &&
+      milestoneThresholds.some((t) => prevTodayCount < t && nextTodayCount >= t);
+    const nextConsecutiveCorrect = isCorrect ? consecutiveCorrect + 1 : 0;
+    const crossedStreakMilestone =
+      isCorrect && nextConsecutiveCorrect > 0 && nextConsecutiveCorrect % 5 === 0;
+
+    // Trigger subtle audio effect ('ping' for correct, 'woosh' for incorrect, 'chime' for goal/streak milestones)
+    audioManager.handleQuestionFeedback({
+      isCorrect,
+      isMilestoneReached: crossedGoalMilestone || crossedStreakMilestone,
+      isAudioMuted,
+    });
+
     setStats(updatedStats);
     setSessionAttempts((prev) => [...prev, attempt]);
+
+    // Keep Quick-Retry queue updated for unresolved questions (enables instant 'R' Quick-Retry shortcut)
+    if (!isCorrect) {
+      setRetryQueueQuestionIds((prev) =>
+        prev.includes(questionId) ? prev : [...prev, questionId]
+      );
+      setRetryQueueExpiresAt(Date.now() + 5 * 60 * 1000);
+      setRetryQueueSecondsLeft(300);
+    } else {
+      setRetryQueueQuestionIds((prev) => prev.filter((id) => id !== questionId));
+    }
 
     // Write user progress update & evaluate answer via the Postgres / Supabase database utility hook
     if (['A', 'B', 'C', 'D'].includes(selectedAnswer)) {

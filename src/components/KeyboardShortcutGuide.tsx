@@ -147,6 +147,20 @@ export const KeyboardShortcutGuidePopover: React.FC<KeyboardShortcutGuidePopover
             </kbd>
           </div>
         </div>
+
+        <div className="p-2 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between gap-2">
+          <div>
+            <div className="font-extrabold text-white">Quick-Retry Unresolved Queue</div>
+            <div className="text-[10px] text-slate-300">
+              Instantly launches Quick-Retry when retry queue is active
+            </div>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <kbd className="px-2 py-0.5 rounded bg-slate-800 border border-slate-600 font-mono text-[10px] font-black text-sky-300">
+              R
+            </kbd>
+          </div>
+        </div>
       </div>
 
       {/* Footer Actions: Quick Adaptive Toggle & Customize Accessibility Settings Sub-Modal */}

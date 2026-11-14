@@ -599,6 +599,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = useState<boolean>(false);
   const [isNavDropdownOpen, setIsNavDropdownOpen] = useState<boolean>(false);
+  const [selectedNavDropdownGroup, setSelectedNavDropdownGroup] = useState<NavGroupName | 'all'>('all');
   const headerRef = React.useRef<HTMLElement>(null);
   const [inspectedPathInMenu, setInspectedPathInMenu] = useState<1 | 2 | 3>(
     selectedPathId === 1 || selectedPathId === 2 || selectedPathId === 3 ? selectedPathId : 2
@@ -615,6 +616,17 @@ export const Header: React.FC<HeaderProps> = ({
     () => NAV_TABS.find((t) => t.id === activeTab) || NAV_TABS[0],
     [activeTab]
   );
+
+  const openCategoryDropdown = (group: NavGroupName | 'all') => {
+    if (isNavDropdownOpen && selectedNavDropdownGroup === group) {
+      setIsNavDropdownOpen(false);
+    } else {
+      setSelectedNavDropdownGroup(group);
+      setIsNavDropdownOpen(true);
+      setIsMobileDetailsOpen(false);
+      setShowCloudStatsPopup(false);
+    }
+  };
 
   // Close dropdown menus cleanly on Escape key or click outside header
   React.useEffect(() => {
@@ -957,11 +969,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Tablet Portrait & Mobile Navigation Dropdown Menu Trigger (Accommodates all 16 Nav Bar Buttons) */}
             <button
               type="button"
-              onClick={() => {
-                setIsNavDropdownOpen((prev) => !prev);
-                setIsMobileDetailsOpen(false);
-                setShowCloudStatsPopup(false);
-              }}
+              onClick={() => openCategoryDropdown('all')}
               className={`flex items-center gap-1 px-2 sm:px-2.5 mobile-landscape:px-2 py-1 sm:py-1.5 mobile-landscape:py-1 rounded-xl text-[11px] sm:text-xs mobile-landscape:text-[10px] font-extrabold transition-all shadow-xs cursor-pointer border shrink-0 min-w-0 ${
                 isNavDropdownOpen
                   ? 'bg-[#005A9E] text-white border-[#004578] ring-2 ring-sky-300/60'
@@ -1135,37 +1143,37 @@ export const Header: React.FC<HeaderProps> = ({
         {/* =====================================================================
             LAPTOP & DESKTOP PERMANENT SLIM NAVIGATION BAR TOP TIER (lg+ screens)
            ===================================================================== */}
-        <div className="hidden lg:flex items-center justify-between py-1.5 gap-2">
-          {/* Left Brand: Logo & Compact Azure Curriculum Title with Hover/Tap Stats Popup */}
+        <div className="hidden lg:flex items-center justify-between py-1 gap-2">
+          {/* Left Brand: Logo & Slightly Larger Azure Curriculum Title in Laptop & Desktop Views */}
           <div className="relative shrink-0 flex items-center">
             <div
-              className="flex items-center gap-2 cursor-pointer group/logo shrink-0"
+              className="flex items-center gap-2.5 cursor-pointer group/logo shrink-0"
               onClick={handleCloudLogoClick}
               onMouseEnter={handleCloudMouseEnter}
               onMouseLeave={handleCloudMouseLeave}
               title="Click or hover to view Student Stats & Daily Encouragement"
             >
-              <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shadow-blue-500/20 group-hover/logo:scale-105 transition-transform shrink-0">
-                <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <div className="relative flex items-center justify-center w-9 h-9 xl:w-10 xl:h-10 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shadow-blue-500/20 group-hover/logo:scale-105 transition-transform shrink-0">
+                <svg className="w-4.5 h-4.5 xl:w-5 xl:h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
                 </svg>
                 <div className="absolute -bottom-1 -right-1">
-                  <MaasaiMedallion size={12} />
+                  <MaasaiMedallion size={13} />
                 </div>
               </div>
 
               <div className="text-left">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-black text-base tracking-tight text-slate-900 leading-none">
+                <div className="flex items-center gap-2">
+                  <span className="font-black text-lg xl:text-xl 2xl:text-[22px] tracking-tight text-slate-900 leading-none">
                     Azure Cloud Explorer
                   </span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-[#0078D4] text-white shadow-2xs">
+                  <span className="px-2 py-0.5 rounded-md text-[11px] xl:text-xs font-black bg-[#0078D4] text-white shadow-2xs leading-none">
                     AZ-900
                   </span>
                 </div>
-                <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/40 shadow-2xs">
-                  <Sparkles className="w-2.5 h-2.5 text-[#0078D4] shrink-0" />
-                  <span className="text-[10.5px] font-extrabold tracking-wider uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent studio-subtitle-standout">
+                <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/40 shadow-2xs">
+                  <Sparkles className="w-3 h-3 text-[#0078D4] shrink-0" />
+                  <span className="text-[11px] xl:text-xs font-extrabold tracking-wider uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent studio-subtitle-standout leading-none">
                     Fundamentals Practice Studio
                   </span>
                 </div>
@@ -1173,8 +1181,8 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Right Controls: Global Search, Compact Path Selector, Tools & Goal Dropdown, Goal Ring & Actions */}
-          <div className="flex items-center justify-end gap-1 xl:gap-1.5 flex-wrap">
+          {/* Right Controls: Compact Single-Row Layout Utilizing Dropdown Menus across Laptop & Desktop */}
+          <div className="flex items-center justify-end gap-1 xl:gap-1.5 flex-nowrap shrink-0">
             {onSearchQueryChange && onSelectQuestion && (
               <GlobalSearchBar
                 questions={questions}
@@ -1185,165 +1193,31 @@ export const Header: React.FC<HeaderProps> = ({
               />
             )}
 
-            {/* Subtle Supabase Real-Time Connection Status Indicator (Desktop) */}
-            <div
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border select-none shrink-0 ${
-                realtimeStatus === 'connected'
-                  ? 'bg-emerald-50/90 text-emerald-800 border-emerald-200/90'
-                  : realtimeStatus === 'syncing'
-                  ? 'bg-amber-50/90 text-amber-800 border-amber-200/90'
-                  : 'bg-rose-50/90 text-rose-800 border-rose-200/90'
-              }`}
-              title={
-                realtimeStatus === 'connected'
-                  ? `Supabase / Postgres Real-Time Status: Connected${
-                      lastSyncedAt
-                        ? ` • Last synced at ${new Date(lastSyncedAt).toLocaleTimeString()}`
-                        : ''
-                    }`
-                  : realtimeStatus === 'syncing'
-                  ? 'Supabase / Postgres Real-Time Status: Syncing progress to relational backend...'
-                  : 'Supabase / Postgres Real-Time Status: Offline (Progress buffered locally)'
-              }
-              aria-label={`Supabase real-time sync status: ${realtimeStatus}`}
-            >
-              {realtimeStatus === 'connected' && (
-                <>
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                  </span>
-                  <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span className="hidden xl:inline">PG Connected</span>
-                </>
-              )}
-              {realtimeStatus === 'syncing' && (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 text-amber-600 animate-spin shrink-0" />
-                  <span className="hidden xl:inline">PG Syncing</span>
-                </>
-              )}
-              {realtimeStatus === 'offline' && (
-                <>
-                  <WifiOff className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                  <span className="hidden xl:inline">PG Offline</span>
-                </>
-              )}
-              {pendingOfflineCount > 0 && (
-                <span
-                  className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black"
-                  title={`${pendingOfflineCount} completed offline quiz session(s) queued to push to Postgres`}
-                >
-                  {pendingOfflineCount} queued
-                </span>
-              )}
-            </div>
-
-            {onSelectPath && (
-              <div className="flex items-center p-0.5 bg-slate-100 rounded-xl border border-slate-200/80 text-xs font-bold shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelectPath('all');
-                    if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
-                  }}
-                  className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
-                    selectedPathId === 'all'
-                      ? 'bg-white text-slate-900 shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="View all 3 learning paths"
-                >
-                  All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelectPath(1);
-                    setInspectedPathInMenu(1);
-                    if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
-                  }}
-                  className={`px-2 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-                    selectedPathId === 1
-                      ? 'bg-[#0078D4] text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-[#0078D4]'
-                  }`}
-                  title="Path 1: Cloud Concepts (25–30%)"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                  <span>P1</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelectPath(2);
-                    setInspectedPathInMenu(2);
-                    if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
-                  }}
-                  className={`px-2 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-                    selectedPathId === 2
-                      ? 'bg-[#0078D4] text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-[#0078D4]'
-                  }`}
-                  title="Path 2: Azure Architecture & Services (35–40%)"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span>P2</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelectPath(3);
-                    setInspectedPathInMenu(3);
-                    if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
-                  }}
-                  className={`px-2 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-                    selectedPathId === 3
-                      ? 'bg-[#0078D4] text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-[#0078D4]'
-                  }`}
-                  title="Path 3: Management & Governance (30–35%)"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                  <span>P3</span>
-                </button>
-              </div>
-            )}
-
-            {/* Desktop Tools & Goal Dropdown Button */}
+            {/* Categorized Studio Tabs Dropdown Trigger (Desktop & Laptop) */}
             <button
               type="button"
-              onClick={() => {
-                setIsMobileDetailsOpen((prev) => !prev);
-                setIsNavDropdownOpen(false);
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
-                isMobileDetailsOpen
-                  ? 'bg-[#0078D4] text-white border-[#0078D4]'
-                  : 'bg-sky-50/80 hover:bg-sky-100 text-[#0078D4] border-sky-200/90'
+              onClick={() => openCategoryDropdown('all')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 whitespace-nowrap ${
+                isNavDropdownOpen
+                  ? 'bg-[#005A9E] text-white border-[#004578] ring-2 ring-sky-300/60'
+                  : 'bg-sky-50/90 hover:bg-sky-100 text-[#005A9E] border-sky-300/80'
               }`}
-              aria-expanded={isMobileDetailsOpen}
-              title="Open compact Tools & Goal menu"
+              aria-expanded={isNavDropdownOpen}
+              aria-haspopup="true"
+              title="Open Categorized Studio Navigation Dropdown Menu (16 Tabs in 4 Groups)"
             >
-              {isMobileDetailsOpen ? (
-                <X className="w-3.5 h-3.5" />
+              {isNavDropdownOpen ? (
+                <X className="w-3.5 h-3.5 shrink-0" />
               ) : (
-                <SlidersHorizontal className="w-3.5 h-3.5 text-[#0078D4]" />
+                <Menu className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
               )}
-              <span>Tools &amp; Goal</span>
+              <span>{activeNavTab.label}</span>
               <ChevronDown
-                className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  isMobileDetailsOpen ? 'rotate-180' : ''
+                className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
+                  isNavDropdownOpen ? 'rotate-180' : ''
                 }`}
               />
             </button>
-
-            <DailyStudyStreak
-              stats={stats}
-              onUpdateStats={onUpdateStats}
-              fireStreakTrigger={fireStreakTrigger}
-              consecutiveCorrect={consecutiveCorrect}
-            />
 
             <DifficultyStreakTracker
               stats={stats}
@@ -1356,17 +1230,69 @@ export const Header: React.FC<HeaderProps> = ({
                   setActiveTab('quiz');
                 }
               }}
-              compact={false}
+              compact={true}
             />
 
-            <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
+            <DailyStudyGoalRing
+              todayAnsweredCount={todayAnsweredCount}
+              dailyGoal={dailyGoal}
+              streakDays={stats.streakDays || 0}
+              onClick={() => setShowEditDailyGoalModal(true)}
+              onOpenCelebration={() => setShowDailyGoalCelebrationModal(true)}
+              compact={true}
+            />
+
+            {/* Celebrate 100% Goal / Fire Streak Trigger Button */}
+            <button
+              type="button"
+              onClick={() => setShowDailyGoalCelebrationModal(true)}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-orange-900 border border-amber-300/90 text-xs font-extrabold transition-all shadow-2xs cursor-pointer shrink-0 whitespace-nowrap"
+              title="Open Interactive 100% Daily Goal Fire-Streak Celebration & Cohort Peer Share Modal"
+              aria-label="Open Daily Goal Celebration Modal"
+            >
+              <Flame className="w-3.5 h-3.5 text-orange-500 fill-amber-400 shrink-0" />
+              <span className="hidden xl:inline">Celebrate</span>
+            </button>
+
+            {/* Desktop Tools, Path, Timer & Goal Dropdown Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileDetailsOpen((prev) => !prev);
+                setIsNavDropdownOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 whitespace-nowrap ${
+                isMobileDetailsOpen
+                  ? 'bg-[#0078D4] text-white border-[#0078D4]'
+                  : 'bg-sky-50/80 hover:bg-sky-100 text-[#0078D4] border-sky-200/90'
+              }`}
+              aria-expanded={isMobileDetailsOpen}
+              title="Open Studio Tools, Learning Path Filter, Focus Timer & Goal Dropdown Menu"
+            >
+              {isMobileDetailsOpen ? (
+                <X className="w-3.5 h-3.5 shrink-0" />
+              ) : (
+                <SlidersHorizontal className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+              )}
+              <span>Tools &amp; Path</span>
+              {missedCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white tabular-nums">
+                  {missedCount}
+                </span>
+              )}
+              <ChevronDown
+                className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
+                  isMobileDetailsOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
 
             {/* Focus Mode Indicator with Hover-Only Platform-Aware Keyboard Shortcut Guide */}
             <div className="relative group/focusguide shrink-0">
               <button
                 type="button"
                 onClick={onToggleFocusMode}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border whitespace-nowrap ${
                   isFocusMode
                     ? 'bg-emerald-600 text-white border-emerald-700 ring-2 ring-emerald-400/40'
                     : 'bg-slate-900 hover:bg-slate-800 text-white border-slate-700'
@@ -1374,7 +1300,7 @@ export const Header: React.FC<HeaderProps> = ({
                 aria-label="Focus Mode indicator — hover to view platform-aware keyboard shortcuts"
               >
                 <Maximize2 className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                <span>Focus Mode</span>
+                <span className="hidden 2xl:inline">Focus</span>
                 <kbd className="px-1 py-0.2 rounded bg-white/15 text-[9.5px] font-mono text-sky-200">
                   {formatShortcutCombo(shortcutConfig.focusMode, detectedPlatform)}
                 </kbd>
@@ -1389,47 +1315,31 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </div>
 
-            <DailyStudyGoalRing
-              todayAnsweredCount={todayAnsweredCount}
-              dailyGoal={dailyGoal}
-              streakDays={stats.streakDays || 0}
-              onClick={() => setShowEditDailyGoalModal(true)}
-              onOpenCelebration={() => setShowDailyGoalCelebrationModal(true)}
-              compact={false}
-            />
+            <button
+              type="button"
+              onClick={toggleMenuBar}
+              className={`group/hidetabs flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-extrabold transition-all duration-200 shadow-2xs cursor-pointer border shrink-0 whitespace-nowrap ${
+                isMenuBarHidden
+                  ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
+                  : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300'
+              }`}
+              title={isMenuBarHidden ? 'Show compact dropdown navigation bar' : 'Hide compact dropdown navigation bar'}
+              aria-expanded={!isMenuBarHidden}
+            >
+              <Layers
+                className={`w-3.5 h-3.5 transition-transform duration-200 group-hover/hidetabs:scale-110 ${
+                  isMenuBarHidden ? 'text-white' : 'text-[#0078D4] group-hover/hidetabs:text-rose-600'
+                }`}
+              />
+              <span className="hidden xl:inline">{isMenuBarHidden ? 'Show Nav' : 'Hide Nav'}</span>
+              {isMenuBarHidden ? (
+                <ChevronDown className="w-3.5 h-3.5 text-white transition-transform duration-200 group-hover/hidetabs:translate-y-0.5" />
+              ) : (
+                <ChevronUp className="w-3.5 h-3.5 text-slate-500 group-hover/hidetabs:text-rose-600 transition-transform duration-200 group-hover/hidetabs:-translate-y-0.5" />
+              )}
+            </button>
 
-            {onOpenReviewSession && (
-              <button
-                type="button"
-                onClick={onOpenReviewSession}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200/80 text-xs font-bold transition-all shadow-2xs cursor-pointer group shrink-0"
-                title="Review Session: quickly review and re-test your last 10 incorrectly answered questions"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-rose-600 group-hover:-rotate-45 transition-transform" />
-                <span>Review</span>
-                {missedCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-2xs">
-                    {missedCount}
-                  </span>
-                )}
-              </button>
-            )}
-
-            {onOpenUserGuide && (
-              <button
-                type="button"
-                onClick={onOpenUserGuide}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-[#0078D4] border border-sky-200/80 text-xs font-bold transition-all shadow-2xs cursor-pointer group shrink-0"
-                title="AZ-900 Studio User Guide, README & Build History: Comprehensive features breakdown and printable PDF"
-              >
-                <BookOpen className="w-3.5 h-3.5 text-[#0078D4] group-hover:scale-110 transition-transform" />
-                <span>Guide</span>
-              </button>
-            )}
-
-            <AccessibilityFontSizeControl variant="header-button" />
             <ThemeToggle />
-            <PWAInstallButton />
 
             {onLogout && (
               <button
@@ -1445,62 +1355,148 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </button>
             )}
-
-            {/* All-Screen Tabs Dropdown Menu Trigger (Available on Desktop, Tablet Portrait & Landscape) */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsNavDropdownOpen((prev) => !prev);
-                setIsMobileDetailsOpen(false);
-                setShowCloudStatsPopup(false);
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
-                isNavDropdownOpen
-                  ? 'bg-[#005A9E] text-white border-[#004578] ring-2 ring-sky-300/60'
-                  : 'bg-sky-50/90 hover:bg-sky-100 text-[#005A9E] border-sky-300/80'
-              }`}
-              aria-expanded={isNavDropdownOpen}
-              aria-haspopup="true"
-              title="Open Navigation Dropdown Menu with all 16 studio tabs"
-            >
-              {isNavDropdownOpen ? <X className="w-3.5 h-3.5" /> : <Menu className="w-3.5 h-3.5 text-[#0078D4]" />}
-              <span>Tabs: {activeNavTab.label}</span>
-              <ChevronDown
-                className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  isNavDropdownOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleMenuBar}
-              className={`group/hidetabs -mt-0.5 flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all duration-200 shadow-2xs cursor-pointer border shrink-0 ${
-                isMenuBarHidden
-                  ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
-                  : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300'
-              }`}
-              title={isMenuBarHidden ? 'Show sliding navigation tabs' : 'Hide sliding navigation tabs'}
-              aria-expanded={!isMenuBarHidden}
-            >
-              <Layers
-                className={`w-3.5 h-3.5 transition-transform duration-200 group-hover/hidetabs:scale-110 ${
-                  isMenuBarHidden ? 'text-white' : 'text-[#0078D4] group-hover/hidetabs:text-rose-600'
-                }`}
-              />
-              <span>{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
-              {isMenuBarHidden ? (
-                <ChevronDown className="w-3.5 h-3.5 text-white transition-transform duration-200 group-hover/hidetabs:translate-y-0.5" />
-              ) : (
-                <ChevronUp className="w-3.5 h-3.5 text-slate-500 group-hover/hidetabs:text-rose-600 transition-transform duration-200 group-hover/hidetabs:-translate-y-0.5" />
-              )}
-            </button>
           </div>
         </div>
 
         {/* =====================================================================
-            RESPONSIVE NAVIGATION DROPDOWN MENU (All Viewable Screen Sizes: Portrait & Landscape)
-            Accommodates all 16 Nav Bar Buttons + Closing Hover Effect & Options
+            COMPACT DROPDOWN-DRIVEN NAVIGATION BAR (All Screen Sizes: Desktop, Laptop, Tablet, Mobile — Portrait & Landscape)
+            Replaces 16 sprawling buttons with 4 Categorized Dropdown Menus + All-Tabs Trigger to minimize Nav Bar size
+           ===================================================================== */}
+        <nav
+          aria-label="Primary Studio Navigation"
+          onMouseEnter={handleNavBarMouseEnter}
+          onMouseLeave={handleNavBarMouseLeave}
+          className={`relative w-full lg:w-fit lg:max-w-full lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-lg lg:mb-0.5 shadow-xs backdrop-blur-md ${
+            isMenuBarHidden
+              ? 'max-h-0 opacity-0 pointer-events-none py-0 border-transparent lg:mb-0'
+              : 'max-h-24 sm:max-h-14 lg:max-h-8 mobile-landscape:max-h-10 opacity-100 py-1 lg:py-0.5 mobile-landscape:py-0.5 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
+          }`}
+        >
+          <WavyAzureFabricMotif className="opacity-50" />
+          <div className="relative z-10 flex flex-nowrap overflow-x-auto no-scrollbar items-center justify-start sm:justify-center gap-1 sm:gap-1.5 px-2 lg:px-2 py-0.5 lg:py-0 max-w-full">
+            {/* Left Kenyan Moran Warrior Shield Motif */}
+            <div
+              className="hidden xl:flex items-center shrink-0 px-0.5 opacity-95 hover:opacity-100 transition-opacity"
+              title="Kenyan Warrior Heritage Motif"
+            >
+              <MoranShieldMotif size={14} animate={true} />
+            </div>
+
+            {/* 4 Space-Saving Categorized Dropdown Menus (Employed at ALL Screen Sizes: Desktop, Laptop, Tablet & Mobile) */}
+            {NAV_TAB_GROUPS.map((groupName) => {
+              const groupItems = NAV_TABS.filter((item) => item.group === groupName);
+              const activeItemInGroup = groupItems.find((item) => item.id === activeTab);
+              const isDropdownOpenForGroup =
+                isNavDropdownOpen &&
+                (selectedNavDropdownGroup === groupName || selectedNavDropdownGroup === 'all');
+
+              return (
+                <button
+                  key={groupName}
+                  type="button"
+                  onClick={() => openCategoryDropdown(groupName)}
+                  onMouseEnter={() => {
+                    if (isNavDropdownOpen) {
+                      setSelectedNavDropdownGroup(groupName);
+                    }
+                  }}
+                  aria-expanded={isDropdownOpenForGroup}
+                  aria-haspopup="true"
+                  title={`${groupName} Dropdown Menu (${groupItems.map((i) => i.label).join(', ')})`}
+                  className={`flex items-center gap-1 px-2 sm:px-2.5 lg:px-2.5 py-1 lg:py-0.5 mobile-landscape:py-0.5 rounded-lg lg:rounded-md text-[10.5px] sm:text-[11px] lg:text-[10.5px] xl:text-[11px] lg:leading-none mobile-landscape:text-[10px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 border ${
+                    activeItemInGroup
+                      ? 'bg-[#005A9E] text-white border-amber-300/90 shadow-2xs'
+                      : isDropdownOpenForGroup
+                      ? 'bg-sky-700 text-white border-sky-300 shadow-2xs'
+                      : 'bg-white/75 dark:bg-slate-900/70 text-slate-900 dark:text-white border-white/60 hover:bg-white dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {activeItemInGroup ? (
+                    activeItemInGroup.renderIcon(true)
+                  ) : (
+                    groupItems[0]?.renderIcon(false)
+                  )}
+                  <span>{groupName}</span>
+                  {activeItemInGroup && (
+                    <span className="hidden sm:inline text-[9.5px] font-black text-amber-200">
+                      · {activeItemInGroup.label}
+                    </span>
+                  )}
+                  <ChevronDown
+                    className={`w-3 h-3 shrink-0 transition-transform duration-200 ${
+                      isDropdownOpenForGroup && selectedNavDropdownGroup === groupName
+                        ? 'rotate-180'
+                        : ''
+                    }`}
+                  />
+                </button>
+              );
+            })}
+
+            {/* All 16 Tabs Overview Dropdown Trigger */}
+            <button
+              type="button"
+              onClick={() => openCategoryDropdown('all')}
+              aria-expanded={isNavDropdownOpen && selectedNavDropdownGroup === 'all'}
+              aria-haspopup="true"
+              title="Open All 16 Studio Tabs Mega-Dropdown Menu"
+              className={`flex items-center gap-1 px-2 py-1 lg:py-0.5 mobile-landscape:py-0.5 rounded-lg lg:rounded-md text-[10px] sm:text-[10.5px] lg:text-[10px] lg:leading-none font-black whitespace-nowrap transition-all cursor-pointer shrink-0 border ${
+                isNavDropdownOpen && selectedNavDropdownGroup === 'all'
+                  ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
+                  : 'bg-white/60 dark:bg-slate-900/60 text-slate-800 dark:text-slate-100 border-white/50 hover:bg-white/90'
+              }`}
+            >
+              <Menu className="w-3 h-3 shrink-0" />
+              <span>All ({NAV_TABS.length})</span>
+              <ChevronDown
+                className={`w-3 h-3 shrink-0 transition-transform duration-200 ${
+                  isNavDropdownOpen && selectedNavDropdownGroup === 'all' ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {/* Right Kenyan Moran Warrior Shield Motif */}
+            <div
+              className="hidden xl:flex items-center shrink-0 px-0.5 opacity-95 hover:opacity-100 transition-opacity"
+              title="Kenyan Warrior Heritage Motif"
+            >
+              <MoranShieldMotif size={14} animate={true} />
+            </div>
+
+            {/* Interactive Closing Hover Effect Control for Tabs Menu Bar + Auto-Hide Option */}
+            <div className="flex items-center gap-1 pl-1 border-l border-white/35 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsNavBarHoverAutoHide((prev) => !prev)}
+                className={`px-1.5 py-0.5 lg:py-0 rounded-md lg:rounded text-[9.5px] lg:text-[9px] lg:leading-tight font-extrabold transition-all cursor-pointer border whitespace-nowrap ${
+                  isNavBarHoverAutoHide
+                    ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
+                    : 'bg-white/50 text-slate-800 border-white/60 hover:bg-white/80'
+                }`}
+                title="Toggle Auto-Close on Hover Leave for the Tabs Menu Bar"
+              >
+                {isNavBarHoverAutoHide ? 'Auto-Hide: ON' : 'Auto-Hide'}
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleMenuBar}
+                className="group/closetabs relative flex items-center justify-center hover:justify-start gap-0 hover:gap-1 px-1.5 hover:px-2 py-0.5 lg:py-0.5 max-w-[24px] hover:max-w-[110px] overflow-hidden rounded-lg lg:rounded-md bg-rose-600/90 hover:bg-rose-600 text-white border border-rose-400/80 text-[10px] lg:leading-none font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
+                title="Hover & click to collapse/hide the navigation tabs menu bar"
+                aria-label="Hide Tabs Menu"
+              >
+                <X className="w-3 h-3 shrink-0 transition-transform duration-300 group-hover/closetabs:rotate-90" />
+                <span className="whitespace-nowrap opacity-0 group-hover/closetabs:opacity-100 max-w-0 group-hover/closetabs:max-w-[85px] transition-all duration-300 ease-in-out font-extrabold">
+                  Hide Tabs
+                </span>
+              </button>
+            </div>
+          </div>
+        </nav>
+
+        {/* =====================================================================
+            SOPHISTICATED CATEGORIZED NAVIGATION DROPDOWN MENU (All Viewable Screen Sizes: Desktop, Laptop, Tablet, Mobile — Portrait & Landscape)
+            Supports inspecting a specific category group (4 items) or All 16 Tabs + Closing Hover Effect
            ===================================================================== */}
         {isNavDropdownOpen && (
           <div
@@ -1508,22 +1504,41 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label="All Studio Navigation Tabs"
             onMouseEnter={handleNavDropdownMouseEnter}
             onMouseLeave={handleNavDropdownMouseLeave}
-            className={`mb-2 p-2.5 sm:p-3 mobile-landscape:p-2 rounded-2xl bg-white/98 border shadow-xl space-y-2.5 mobile-landscape:space-y-1.5 animate-in slide-in-from-top-1 duration-150 max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain transition-all ${
+            className={`mt-1 mb-2 p-2.5 sm:p-3 mobile-landscape:p-2 rounded-2xl bg-white/98 border shadow-xl space-y-2.5 mobile-landscape:space-y-1.5 animate-in slide-in-from-top-1 duration-150 max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain transition-all ${
               isClosingHoverActive
                 ? 'border-rose-300 ring-2 ring-rose-200/70 opacity-90 scale-[0.995]'
                 : 'border-sky-200/90'
             }`}
           >
-            {/* Dropdown Top Strip: Count + Quick Path Switcher + Closing Hover Controls */}
+            {/* Dropdown Top Strip: Category Filter Pills + Quick Path Switcher + Closing Hover Controls */}
             <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mobile-landscape:pb-1.5 border-b border-slate-100">
-              <div className="flex items-center gap-2 min-w-0">
-                <MoranShieldMotif size={16} animate={false} />
-                <span className="text-[11px] sm:text-xs mobile-landscape:text-[10px] font-black uppercase tracking-wider text-slate-800">
-                  Studio Navigation
-                </span>
-                <span className="px-1.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-[#0078D4] text-[10px] mobile-landscape:text-[9px] font-extrabold">
-                  {NAV_TABS.length} Tabs
-                </span>
+              <div className="flex flex-wrap items-center gap-1 min-w-0">
+                <MoranShieldMotif size={15} animate={false} />
+                <button
+                  type="button"
+                  onClick={() => setSelectedNavDropdownGroup('all')}
+                  className={`px-2 py-0.5 rounded-lg text-[10.5px] font-black transition-all cursor-pointer border ${
+                    selectedNavDropdownGroup === 'all'
+                      ? 'bg-[#0078D4] text-white border-[#005A9E] shadow-2xs'
+                      : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                  }`}
+                >
+                  All 16 Tabs
+                </button>
+                {NAV_TAB_GROUPS.map((grp) => (
+                  <button
+                    key={grp}
+                    type="button"
+                    onClick={() => setSelectedNavDropdownGroup(grp)}
+                    className={`px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold transition-all cursor-pointer border ${
+                      selectedNavDropdownGroup === grp
+                        ? 'bg-[#005A9E] text-white border-[#004578] shadow-2xs'
+                        : 'bg-sky-50/80 text-[#005A9E] border-sky-200/80 hover:bg-sky-100'
+                    }`}
+                  >
+                    {grp}
+                  </button>
+                ))}
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
@@ -1592,16 +1607,20 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            {/* Grouped Responsive Grid for All 16 Nav Bar Buttons */}
+            {/* Filtered or Full Grouped Responsive Grid for Nav Bar Dropdown Items */}
             <div className="space-y-2.5 mobile-landscape:space-y-1.5">
-              {NAV_TAB_GROUPS.map((groupName) => {
+              {(selectedNavDropdownGroup === 'all'
+                ? NAV_TAB_GROUPS
+                : [selectedNavDropdownGroup]
+              ).map((groupName) => {
                 const items = NAV_TABS.filter((item) => item.group === groupName);
                 return (
                   <div key={groupName} className="space-y-1">
-                    <div className="text-[9.5px] mobile-landscape:text-[8.5px] font-black uppercase tracking-wider text-slate-500 px-0.5">
-                      {groupName}
+                    <div className="flex items-center justify-between text-[9.5px] mobile-landscape:text-[8.5px] font-black uppercase tracking-wider text-slate-500 px-0.5">
+                      <span>{groupName}</span>
+                      <span>{items.length} Destinations</span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 mobile-landscape:grid-cols-4 gap-1.5 mobile-landscape:gap-1">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 mobile-landscape:grid-cols-4 gap-1.5 mobile-landscape:gap-1">
                       {items.map((item) => {
                         const isActive = activeTab === item.id;
                         return (
@@ -1636,17 +1655,17 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* =====================================================================
-            ULTRA-COMPACT TOOLS & GOAL DROPDOWN (Strictly 3 Concise Lines Max)
+            TOOLS, PATH, FOCUS & GOAL DROPDOWN MENU (All Screen Sizes)
            ===================================================================== */}
         {isMobileDetailsOpen && (() => {
           const activeIntel = PATH_COMPACT_INTEL[inspectedPathInMenu];
           const activeTele = pathTelemetry[inspectedPathInMenu];
 
           return (
-            <div className="mb-2 px-3 py-2 rounded-xl bg-white/98 border border-sky-200/90 shadow-lg space-y-1.5 text-xs animate-in slide-in-from-top-1 duration-150 max-h-[calc(100dvh-4.5rem)] overflow-y-auto overscroll-contain">
-              {/* LINE 1: Path Selector + Accuracy & Missed Retry */}
+            <div className="mt-1 mb-2 px-3 py-2.5 rounded-2xl bg-white/98 border border-sky-200/90 shadow-xl space-y-2 text-xs animate-in slide-in-from-top-1 duration-150 max-h-[calc(100dvh-4.5rem)] overflow-y-auto overscroll-contain">
+              {/* LINE 1: Path Selector + Accuracy, Missed Retry & Live Postgres Sync */}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="font-black text-slate-700 uppercase text-[10px] tracking-wider">Path:</span>
                   <div className="inline-flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200/80 text-[11px] font-bold">
                     {onSelectPath && (
@@ -1684,7 +1703,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-[11px]">
+                <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
                   <span className="font-bold text-slate-600">
                     {activeIntel.code}: {activeTele.attemptedQuestions > 0 ? `${activeTele.accuracy}% Acc` : '0% Acc'} • {activeTele.completedModules}/{activeTele.totalModules} Mods
                   </span>
@@ -1704,7 +1723,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
 
               {/* LINE 2: Single-Line Key Exam Trap & Weakest Module Quick-Drill */}
-              <div className="flex flex-wrap items-center justify-between gap-2 py-1 border-y border-slate-100 text-[11px]">
+              <div className="flex flex-wrap items-center justify-between gap-2 py-1.5 border-y border-slate-100 text-[11px]">
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                   <span className="font-extrabold text-slate-800 shrink-0">Key Exam Trap:</span>
@@ -1725,22 +1744,37 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
               </div>
 
-              {/* LINE 3: Daily Goal & Quick Actions */}
+              {/* LINE 3: Daily Goal, Streaks, Focus Session Timer & Quick Actions */}
               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                <div className="flex items-center gap-2">
-                  <span className="font-extrabold text-slate-700">
-                    Daily Goal: <span className="text-[#0078D4]">{todayAnsweredCount}/{dailyGoal} Qs</span>
-                  </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <DailyStudyStreak
+                    stats={stats}
+                    onUpdateStats={onUpdateStats}
+                    fireStreakTrigger={fireStreakTrigger}
+                    consecutiveCorrect={consecutiveCorrect}
+                  />
+                  <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
                   <button
                     type="button"
                     onClick={() => {
                       setShowEditDailyGoalModal(true);
                       setIsMobileDetailsOpen(false);
                     }}
-                    className="px-2 py-0.5 rounded-md bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 font-bold flex items-center gap-1 cursor-pointer"
+                    className="px-2 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 font-bold flex items-center gap-1 cursor-pointer"
                   >
                     <Target className="w-3 h-3 text-orange-600" />
-                    <span>Edit Goal</span>
+                    <span>Edit Goal ({todayAnsweredCount}/{dailyGoal})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDailyGoalCelebrationModal(true);
+                      setIsMobileDetailsOpen(false);
+                    }}
+                    className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-extrabold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Flame className="w-3 h-3 text-orange-500 fill-amber-400" />
+                    <span>Celebrate 100% Streak</span>
                   </button>
                   {onOpenReviewSession && (
                     <button
@@ -1749,7 +1783,7 @@ export const Header: React.FC<HeaderProps> = ({
                         onOpenReviewSession();
                         setIsMobileDetailsOpen(false);
                       }}
-                      className="px-2 py-0.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 font-bold flex items-center gap-1 cursor-pointer"
+                      className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 font-bold flex items-center gap-1 cursor-pointer"
                     >
                       <RotateCcw className="w-3 h-3 text-rose-600" />
                       <span>Review ({missedCount})</span>
@@ -1762,7 +1796,7 @@ export const Header: React.FC<HeaderProps> = ({
                         onOpenUserGuide();
                         setIsMobileDetailsOpen(false);
                       }}
-                      className="px-2 py-0.5 rounded-md bg-sky-50 hover:bg-sky-100 text-[#0078D4] border border-sky-200 font-bold flex items-center gap-1 cursor-pointer"
+                      className="px-2 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-[#0078D4] border border-sky-200 font-bold flex items-center gap-1 cursor-pointer"
                     >
                       <BookOpen className="w-3 h-3 text-[#0078D4]" />
                       <span>Guide &amp; PDF</span>
@@ -1772,9 +1806,9 @@ export const Header: React.FC<HeaderProps> = ({
 
                 <div className="flex flex-wrap items-center gap-1.5">
                   <AccessibilityFontSizeControl variant="inline-bar" />
+                  <PWAInstallButton />
                   <div className="flex items-center gap-1.5 lg:hidden">
                     <ThemeToggle />
-                    <PWAInstallButton />
                     {onLogout && (
                       <button
                         type="button"
@@ -1795,82 +1829,6 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           );
         })()}
-
-        {/* Permanent Slim Navigation Bar: Visible in ALL screen sizes (Portrait & Landscape) when not hidden */}
-        <nav
-          aria-label="Primary Studio Navigation"
-          onMouseEnter={handleNavBarMouseEnter}
-          onMouseLeave={handleNavBarMouseLeave}
-          className={`relative w-full lg:w-fit lg:max-w-full lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-xl lg:mb-1 shadow-xs backdrop-blur-md ${
-            isMenuBarHidden
-              ? 'max-h-0 opacity-0 pointer-events-none py-0 border-transparent lg:mb-0'
-              : 'max-h-80 sm:max-h-64 mobile-landscape:max-h-14 opacity-100 py-1.5 mobile-landscape:py-1 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
-          }`}
-        >
-          <WavyAzureFabricMotif className="opacity-50" />
-          <div className="relative z-10 flex flex-wrap mobile-landscape:flex-nowrap mobile-landscape:overflow-x-auto mobile-landscape:justify-start mobile-landscape:no-scrollbar items-center justify-center gap-1 sm:gap-1.5 mobile-landscape:gap-1 px-2 py-0.5 mobile-landscape:py-0 max-w-full">
-            {/* Left Kenyan Moran Warrior Shield Motif */}
-            <div className="hidden xl:flex items-center shrink-0 px-1 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
-              <MoranShieldMotif size={18} animate={true} />
-            </div>
-
-            {NAV_TABS.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveTab(item.id)}
-                  title={item.title}
-                  className={`flex items-center gap-1 px-2 sm:px-2.5 mobile-landscape:px-2 py-1 mobile-landscape:py-0.5 rounded-lg text-[11px] mobile-landscape:text-[10px] ${
-                    item.fontWeightClass || 'font-bold'
-                  } whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                    isActive
-                      ? item.activeClass
-                      : 'bg-white/55 dark:bg-slate-900/55 text-slate-900 dark:text-white hover:bg-white/85 dark:hover:bg-white/25'
-                  }`}
-                >
-                  {item.renderIcon(isActive)}
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-
-            {/* Right Kenyan Moran Warrior Shield Motif */}
-            <div className="hidden xl:flex items-center shrink-0 px-1 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
-              <MoranShieldMotif size={18} animate={true} />
-            </div>
-
-            {/* Interactive Closing Hover Effect Control for Tabs Menu Bar + Auto-Hide Option */}
-            <div className="flex items-center gap-1 pl-1 border-l border-white/35 shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsNavBarHoverAutoHide((prev) => !prev)}
-                className={`px-1.5 py-0.5 rounded-md text-[9.5px] font-extrabold transition-all cursor-pointer border ${
-                  isNavBarHoverAutoHide
-                    ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
-                    : 'bg-white/50 text-slate-800 border-white/60 hover:bg-white/80'
-                }`}
-                title="Toggle Auto-Close on Hover Leave for the Tabs Menu Bar"
-              >
-                {isNavBarHoverAutoHide ? 'Auto-Hide: ON' : 'Auto-Hide'}
-              </button>
-
-              <button
-                type="button"
-                onClick={toggleMenuBar}
-                className="group/closetabs relative flex items-center justify-center hover:justify-start gap-0 hover:gap-1.5 px-2 hover:px-2.5 py-1 max-w-[28px] hover:max-w-[120px] overflow-hidden rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white border border-rose-400/80 text-[10.5px] font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
-                title="Hover & click to collapse/hide the navigation tabs menu bar"
-                aria-label="Hide Tabs Menu"
-              >
-                <X className="w-3.5 h-3.5 shrink-0 transition-transform duration-300 group-hover/closetabs:rotate-90" />
-                <span className="whitespace-nowrap opacity-0 group-hover/closetabs:opacity-100 max-w-0 group-hover/closetabs:max-w-[85px] transition-all duration-300 ease-in-out font-extrabold">
-                  Hide Tabs
-                </span>
-              </button>
-            </div>
-          </div>
-        </nav>
 
         {/* Minimalist Floating Expand Handle (Visible across ALL screen sizes — Portrait & Landscape — when menu bar is hidden) */}
         {isMenuBarHidden && (

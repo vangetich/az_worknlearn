@@ -10,8 +10,8 @@ import {
   Zap,
   Copy,
   Check,
-  MessageCircle,
   TrendingUp,
+  Send,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { UserStats } from '../types/quiz';
@@ -115,8 +115,10 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
   onNavigateToCohort,
 }) => {
   const [autoOpen, setAutoOpen] = useState<boolean>(false);
-  const [flameIntensity, setFlameIntensity] = useState<1 | 2 | 3>(1);
+  const [flameIntensity, setFlameIntensity] = useState<1 | 2 | 3>(2);
   const [emberBurstKey, setEmberBurstKey] = useState<number>(0);
+  const [streakBurstCount, setStreakBurstCount] = useState<number>(1);
+  const [customPeerNote, setCustomPeerNote] = useState<string>('');
   const [hasSharedToCohort, setHasSharedToCohort] = useState<boolean>(false);
   const [copiedSummary, setCopiedSummary] = useState<boolean>(false);
   const [cohortShares, setCohortShares] = useState<CohortGoalShareItem[]>(loadCohortShares);
@@ -193,7 +195,7 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
     }
   };
 
-  // Automatically trigger when user reaches 100% of their daily goal during active practice
+  // Automatically trigger when user hits 100% of their daily streak target during active practice
   useEffect(() => {
     const prevCount = prevAnsweredRef.current;
     prevAnsweredRef.current = todayAnsweredCount;
@@ -219,6 +221,7 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
     const nextLevel: 1 | 2 | 3 = flameIntensity === 1 ? 2 : flameIntensity === 2 ? 3 : 1;
     setFlameIntensity(nextLevel);
     setEmberBurstKey((prev) => prev + 1);
+    setStreakBurstCount((prev) => prev + 1);
     fireCelebrationConfetti(nextLevel);
   };
 
@@ -231,11 +234,23 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
   }, [userEmail]);
 
   const shareMessageText = useMemo(() => {
-    const deltaSign = cohortSocialComparison.accuracyDelta >= 0 ? `+${cohortSocialComparison.accuracyDelta}%` : `${cohortSocialComparison.accuracyDelta}%`;
-    return `🏅 [AZ-900 Daily Goal Reached • Top ${cohortSocialComparison.percentile}% of Cohort] Solved ${todayAnsweredCount}/${safeGoal} Qs today on a ${effectiveStreak}-day streak • ${overallAccuracy}% accuracy (${deltaSign} vs. ${cohortSocialComparison.cohortAvgAccuracy}% Harambee Cohort avg) • Badge: ${cohortSocialComparison.badgeTier}! #AZ900 #HarambeeCloud`;
-  }, [todayAnsweredCount, safeGoal, effectiveStreak, overallAccuracy, cohortSocialComparison]);
+    const deltaSign =
+      cohortSocialComparison.accuracyDelta >= 0
+        ? `+${cohortSocialComparison.accuracyDelta}%`
+        : `${cohortSocialComparison.accuracyDelta}%`;
+    const customSuffix = customPeerNote.trim() ? ` — "${customPeerNote.trim()}"` : '';
+    return `🏅 [AZ-900 Daily Goal Reached • Top ${cohortSocialComparison.percentile}% of Cohort] Solved ${Math.max(todayAnsweredCount, safeGoal)}/${safeGoal} Qs today on a ${effectiveStreak}-day fire streak • ${overallAccuracy}% accuracy (${deltaSign} vs. ${cohortSocialComparison.cohortAvgAccuracy}% Harambee Cohort avg) • Badge: ${cohortSocialComparison.badgeTier}!${customSuffix} #AZ900 #HarambeeCloud`;
+  }, [
+    todayAnsweredCount,
+    safeGoal,
+    effectiveStreak,
+    overallAccuracy,
+    cohortSocialComparison,
+    customPeerNote,
+  ]);
 
   const handleShareWithCohortPeers = async () => {
+    const defaultNote = `Unlocked ${cohortSocialComparison.badgeTier} Badge (Top ${cohortSocialComparison.percentile}% of Cohort)! Completed ${Math.max(todayAnsweredCount, safeGoal)}/${safeGoal} Qs on a ${effectiveStreak}-day fire streak! 🔥`;
     const newShare: CohortGoalShareItem = {
       id: `share-${Date.now()}`,
       authorName: learnerDisplayName,
@@ -244,7 +259,7 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
       dailyGoal: safeGoal,
       accuracyPct: overallAccuracy,
       timestamp: Date.now(),
-      message: `Unlocked ${cohortSocialComparison.badgeTier} Badge (Top ${cohortSocialComparison.percentile}% of Cohort)! Completed ${Math.max(todayAnsweredCount, safeGoal)}/${safeGoal} Qs on a ${effectiveStreak}-day streak! 🔥`,
+      message: customPeerNote.trim() ? `${customPeerNote.trim()} (${defaultNote})` : defaultNote,
       reactions: 18,
       isCurrentUser: true,
     };
@@ -252,6 +267,7 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
     const updated = [newShare, ...cohortShares.filter((s) => !s.isCurrentUser)].slice(0, 6);
     setCohortShares(updated);
     setHasSharedToCohort(true);
+    setStreakBurstCount((prev) => prev + 1);
     fireCelebrationConfetti(3);
 
     try {
@@ -289,10 +305,10 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
 
   const flameTitle =
     flameIntensity === 3
-      ? 'Supernova Harambee Blaze (3x Boost)'
+      ? 'Supernova Harambee Blaze (3x Fire-Streak)'
       : flameIntensity === 2
-      ? 'Rift Valley Firestorm (2x Boost)'
-      : 'Savanna Streak Flame (1x Active)';
+      ? 'Rift Valley Firestorm (2x Fire-Streak)'
+      : 'Savanna Streak Flame (1x Fire-Streak)';
 
   return (
     <div
@@ -320,10 +336,10 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 shadow-xs flex items-center gap-1">
               <Flame className="w-3 h-3 fill-slate-950" />
-              <span>Daily Goal Reached • 100% Quota</span>
+              <span>100% Daily Streak Target Reached</span>
             </span>
-            <span className="text-[11px] font-extrabold text-amber-300">
-              {effectiveStreak}-Day Streak 🔥
+            <span className="text-[11px] font-extrabold text-amber-300 tabular-nums">
+              {effectiveStreak}-Day Fire Streak 🔥
             </span>
           </div>
 
@@ -339,22 +355,87 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
 
         {/* Scrollable Celebration Content */}
         <div className="relative z-10 p-4 sm:p-6 overflow-y-auto space-y-4">
-          {/* Interactive Fire-Streaking Centerpiece */}
-          <div className="flex flex-col items-center text-center space-y-2.5">
-            <div className="relative flex items-center justify-center">
+          {/* Interactive Fire-Streaking Centerpiece Stage */}
+          <div className="relative rounded-2xl bg-slate-950/60 border border-amber-400/35 p-4 flex flex-col items-center text-center space-y-3 overflow-hidden">
+            {/* Animated Fire-Streaking Comet Trails Across Stage */}
+            <svg
+              key={`streaks-${emberBurstKey}-${flameIntensity}`}
+              className="pointer-events-none absolute inset-0 w-full h-full opacity-85"
+              viewBox="0 0 400 160"
+              fill="none"
+              preserveAspectRatio="none"
+            >
+              <defs>
+                <linearGradient id="fireStreakGrad1" x1="0%" y1="100%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#EF4444" stopOpacity="0" />
+                  <stop offset="50%" stopColor="#F97316" stopOpacity="0.65" />
+                  <stop offset="100%" stopColor="#FDE047" stopOpacity="0.95" />
+                </linearGradient>
+                <linearGradient id="fireStreakGrad2" x1="100%" y1="100%" x2="0%" y2="0%">
+                  <stop offset="0%" stopColor="#F59E0B" stopOpacity="0" />
+                  <stop offset="55%" stopColor="#FB923C" stopOpacity="0.6" />
+                  <stop offset="100%" stopColor="#FEF08A" stopOpacity="0.9" />
+                </linearGradient>
+              </defs>
+              {/* Left-to-Center & Right-to-Center Dynamic Fire Streak Arcs */}
+              <path
+                d="M 15 145 Q 110 75 195 45"
+                stroke="url(#fireStreakGrad1)"
+                strokeWidth={flameIntensity === 3 ? 4 : 2.5}
+                strokeLinecap="round"
+                strokeDasharray="6 6"
+                className="animate-pulse"
+              />
+              <path
+                d="M 385 145 Q 290 75 205 45"
+                stroke="url(#fireStreakGrad2)"
+                strokeWidth={flameIntensity === 3 ? 4 : 2.5}
+                strokeLinecap="round"
+                strokeDasharray="6 6"
+                className="animate-pulse"
+              />
+              {flameIntensity >= 2 && (
+                <>
+                  <path
+                    d="M 40 155 Q 140 95 190 60"
+                    stroke="url(#fireStreakGrad1)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M 360 155 Q 260 95 210 60"
+                    stroke="url(#fireStreakGrad2)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </>
+              )}
+              {flameIntensity === 3 && (
+                <>
+                  <circle cx="95" cy="95" r="3.5" fill="#FDE047" className="animate-ping" />
+                  <circle cx="305" cy="95" r="3.5" fill="#FB923C" className="animate-ping" />
+                  <circle cx="200" cy="24" r="4" fill="#FEF08A" className="animate-ping" />
+                </>
+              )}
+            </svg>
+
+            <div className="relative flex items-center justify-center pt-1">
               {/* Rising Animated Embers */}
-              <div key={emberBurstKey} className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-300 animate-ember-drift-1 absolute -top-2 left-3" />
-                <span className="w-2 h-2 rounded-full bg-orange-400 animate-ember-drift-2 absolute -top-3 right-3" />
+              <div
+                key={emberBurstKey}
+                className="pointer-events-none absolute inset-0 flex items-center justify-center"
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-300 animate-ember-drift-1 absolute -top-2 left-2" />
+                <span className="w-2 h-2 rounded-full bg-orange-400 animate-ember-drift-2 absolute -top-3 right-2" />
                 <span className="w-3 h-3 rounded-full bg-red-400 animate-ember-drift-3 absolute -top-4 left-1/2" />
-                <span className="w-2 h-2 rounded-full bg-yellow-200 animate-ember-drift-4 absolute -top-1 right-6" />
+                <span className="w-2 h-2 rounded-full bg-yellow-200 animate-ember-drift-4 absolute -top-1 right-5" />
               </div>
 
-              {/* Interactive Fire Ring Button */}
+              {/* Interactive Fire-Streaking Center Button */}
               <button
                 type="button"
                 onClick={handleIgniteFlameBoost}
-                title="Click to launch celebratory confetti and stoke the fire-streaking animation!"
+                title="Click to stoke the interactive fire-streaking animation and launch celebratory confetti!"
                 className={`group relative w-24 h-24 sm:w-28 sm:h-28 rounded-3xl flex flex-col items-center justify-center transition-all duration-300 cursor-pointer border-2 shadow-2xl ${
                   flameIntensity === 3
                     ? 'bg-gradient-to-br from-red-600 via-orange-500 to-amber-400 border-yellow-200 scale-110 shadow-orange-500/50'
@@ -372,55 +453,81 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
                       : 'w-10 h-10 fill-amber-100 group-hover:scale-110'
                   }`}
                 />
-                <span className="text-[11px] font-black text-slate-950 bg-white/90 px-2 py-0.5 rounded-full mt-1 shadow-2xs">
-                  {completionPct}% • {effectiveStreak}d
+                <span className="text-[11px] font-black text-slate-950 bg-white/95 px-2 py-0.5 rounded-full mt-1 shadow-2xs tabular-nums">
+                  { Math.max(100, completionPct) }% • {effectiveStreak}d
                 </span>
                 <Sparkles className="w-4 h-4 text-yellow-200 absolute -top-2 -right-2 animate-sparkle-1" />
                 <Sparkles className="w-3.5 h-3.5 text-amber-200 absolute -bottom-1.5 -left-1.5 animate-sparkle-2" />
               </button>
             </div>
 
-            <div>
+            <div className="relative z-10">
               <h2
                 id="daily-goal-celebration-title"
                 className="text-lg sm:text-xl font-black tracking-tight text-white"
               >
-                Hongera! Daily Goal Reached! 🎉
+                Hongera! 100% Daily Streak Target Hit! 🔥
               </h2>
               <p className="text-xs text-slate-300 max-w-md mx-auto mt-1 leading-relaxed">
-                You completed <strong className="text-amber-300">{todayAnsweredCount}/{safeGoal} questions</strong> today and extended your <strong className="text-orange-300">{effectiveStreak}-day active study streak</strong>.
+                You completed{' '}
+                <strong className="text-amber-300 tabular-nums">
+                  {Math.max(todayAnsweredCount, safeGoal)}/{safeGoal} questions
+                </strong>{' '}
+                today and ignited your{' '}
+                <strong className="text-orange-300 tabular-nums">
+                  {effectiveStreak}-day active study streak
+                </strong>
+                .
               </p>
             </div>
 
-            {/* Interactive Confetti & Flame Boost Controls */}
-            <div className="flex flex-wrap items-center justify-center gap-2">
+            {/* Interactive Fire-Streak Intensity Selector & Stoke Control */}
+            <div className="relative z-10 flex flex-wrap items-center justify-center gap-1.5">
+              {([1, 2, 3] as const).map((lvl) => (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => {
+                    setFlameIntensity(lvl);
+                    setEmberBurstKey((prev) => prev + 1);
+                    setStreakBurstCount((prev) => prev + 1);
+                    fireCelebrationConfetti(lvl);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-extrabold border transition-all cursor-pointer ${
+                    flameIntensity === lvl
+                      ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 border-yellow-200 shadow-sm'
+                      : 'bg-white/10 text-amber-200 border-white/15 hover:bg-white/20'
+                  }`}
+                >
+                  {lvl === 1 ? '1x Savanna Flame' : lvl === 2 ? '2x Rift Firestorm' : '3x Supernova Blaze'}
+                </button>
+              ))}
               <button
                 type="button"
                 onClick={handleIgniteFlameBoost}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-amber-400/50 text-[11px] font-extrabold text-amber-200 transition-all cursor-pointer active:scale-95"
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-orange-500/25 hover:bg-orange-500/40 border border-amber-400/60 text-[10.5px] font-black text-amber-200 transition-all cursor-pointer active:scale-95"
               >
-                <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                <span>{flameTitle} • Launch Confetti Salvo</span>
+                <Zap className="w-3 h-3 text-amber-300 fill-amber-300" />
+                <span>Stoke Fire Streak ({streakBurstCount}x)</span>
               </button>
             </div>
           </div>
 
-          {/* Shareable Progress Badge for Social Comparison */}
+          {/* Shareable Progress Badge & 'Share Progress' Action for Cohort Peers */}
           <div
             aria-label="Shareable Progress Badge for Social Comparison"
             className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-[#0c2d48] to-indigo-950 border-2 border-amber-400/70 shadow-xl space-y-3"
           >
             <div className="flex items-start justify-between gap-2.5">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 flex items-center justify-center text-slate-950 shadow-md shrink-0 border border-yellow-200">
-                  <Award className="w-6 h-6 stroke-[2.5]" />
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 flex items-center justify-center text-slate-950 shadow-md shrink-0 border border-yellow-200">
+                  <Award className="w-5 h-5 stroke-[2.5]" />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="px-2 py-0.5 rounded-md bg-amber-400/20 border border-amber-300/40 text-amber-200 text-[9.5px] font-black uppercase tracking-wider">
-                      Shareable Social Comparison Badge
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 text-[9.5px] font-black">
+                  <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-amber-200 font-bold">
+                    <span>Cohort Social Comparison Badge</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="text-emerald-300 font-black">
                       Top {cohortSocialComparison.percentile}% of Cohort
                     </span>
                   </div>
@@ -436,13 +543,13 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="p-2 rounded-xl bg-slate-950/65 border border-white/10">
                 <span className="text-[9.5px] font-bold uppercase text-slate-400 block">
-                  Daily Quota
+                  Daily Target
                 </span>
-                <span className="text-xs sm:text-sm font-black text-emerald-300 block">
-                  {todayAnsweredCount}/{safeGoal} Qs
+                <span className="text-xs sm:text-sm font-black text-emerald-300 block tabular-nums">
+                  {Math.max(todayAnsweredCount, safeGoal)}/{safeGoal} Qs
                 </span>
                 <span className="text-[9.5px] font-bold text-emerald-400/90">
-                  100% Complete
+                  100% Quota Hit
                 </span>
               </div>
 
@@ -450,11 +557,11 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
                 <span className="text-[9.5px] font-bold uppercase text-slate-400 block">
                   Accuracy vs Peers
                 </span>
-                <span className="text-xs sm:text-sm font-black text-sky-300 block">
+                <span className="text-xs sm:text-sm font-black text-sky-300 block tabular-nums">
                   {overallAccuracy}% vs {cohortSocialComparison.cohortAvgAccuracy}%
                 </span>
                 <span
-                  className={`text-[9.5px] font-bold ${
+                  className={`text-[9.5px] font-bold tabular-nums ${
                     cohortSocialComparison.accuracyDelta >= 0
                       ? 'text-emerald-300'
                       : 'text-amber-300'
@@ -470,7 +577,7 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
                 <span className="text-[9.5px] font-bold uppercase text-slate-400 block">
                   Streak Rank
                 </span>
-                <span className="text-xs sm:text-sm font-black text-amber-300 block">
+                <span className="text-xs sm:text-sm font-black text-amber-300 block tabular-nums">
                   🔥 {effectiveStreak}d vs {cohortSocialComparison.cohortMedianStreak}d
                 </span>
                 <span className="text-[9.5px] font-bold text-amber-200">
@@ -479,22 +586,34 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-200 bg-slate-950/65 p-2.5 rounded-xl border border-white/10 font-medium leading-relaxed">
-              “{shareMessageText}”
-            </p>
+            {/* Optional Custom Message Input for Cohort Peers */}
+            <div className="space-y-1.5">
+              <input
+                type="text"
+                value={customPeerNote}
+                onChange={(e) => setCustomPeerNote(e.target.value)}
+                placeholder="Add a quick encouragement note for your Harambee cohort peers (optional)..."
+                maxLength={120}
+                className="w-full px-3 py-1.5 rounded-xl bg-slate-950/75 border border-white/15 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-amber-400"
+              />
+              <p className="text-[10.5px] text-slate-300 bg-slate-950/65 p-2 rounded-xl border border-white/10 font-medium leading-relaxed">
+                “{shareMessageText}”
+              </p>
+            </div>
 
             {copiedSummary && (
               <div className="text-[10.5px] font-extrabold text-emerald-300 flex items-center gap-1">
                 <Check className="w-3.5 h-3.5" />
-                <span>Social comparison badge copied to clipboard!</span>
+                <span>Progress summary copied &amp; shared with cohort peers!</span>
               </div>
             )}
 
+            {/* Primary 'Share Progress' Button for Cohort Peers */}
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={handleShareWithCohortPeers}
-                className={`flex-1 min-w-[180px] py-2.5 px-4 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
+                className={`flex-1 min-w-[190px] py-2.5 px-4 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
                   hasSharedToCohort
                     ? 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'
                     : 'bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 hover:from-amber-300 hover:to-orange-400 text-slate-950'
@@ -503,12 +622,12 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
                 {hasSharedToCohort ? (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Badge Shared with Cohort Peers!</span>
+                    <span>Progress Shared with Cohort Peers!</span>
                   </>
                 ) : (
                   <>
                     <Share2 className="w-4 h-4" />
-                    <span>Share Progress Badge to Cohort</span>
+                    <span>Share Progress with Cohort Peers</span>
                   </>
                 )}
               </button>
@@ -527,7 +646,11 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
                 className="px-3 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                 title="Copy shareable progress badge text"
               >
-                {copiedSummary ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedSummary ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-300" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
                 <span>Copy Badge</span>
               </button>
             </div>
@@ -570,11 +693,11 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
                       <span className="font-extrabold text-white truncate">
                         {item.authorName}
                       </span>
-                      <span className="px-1.5 py-0.2 rounded bg-orange-500/25 border border-orange-400/40 text-amber-300 text-[10px] font-black">
-                        🔥 {item.streakDays}d Streak
+                      <span className="text-[10px] font-black text-amber-300 tabular-nums">
+                        · 🔥 {item.streakDays}d Streak
                       </span>
-                      <span className="text-[10px] text-emerald-300 font-bold">
-                        {item.questionsSolved}/{item.dailyGoal} Qs ({item.accuracyPct}%)
+                      <span className="text-[10px] text-emerald-300 font-bold tabular-nums">
+                        · {item.questionsSolved}/{item.dailyGoal} Qs ({item.accuracyPct}%)
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-300 mt-0.5 leading-snug">
@@ -585,7 +708,7 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
                   <button
                     type="button"
                     onClick={() => handleReactToPeer(item.id)}
-                    className="px-2 py-1 rounded-lg bg-white/10 hover:bg-amber-500/30 border border-white/15 text-[10px] font-black text-amber-200 flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                    className="px-2 py-1 rounded-lg bg-white/10 hover:bg-amber-500/30 border border-white/15 text-[10px] font-black text-amber-200 flex items-center gap-1 shrink-0 transition-colors cursor-pointer tabular-nums"
                     title="Send fire kudos to cohort peer"
                   >
                     <Flame className="w-3 h-3 fill-amber-400 text-orange-400" />
@@ -600,8 +723,8 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
         {/* Footer */}
         <div className="relative z-10 px-4 sm:px-6 py-3 bg-slate-950/90 border-t border-white/10 flex items-center justify-between gap-2">
           <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
-            <Award className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span>Consistency builds exam speed &amp; long-term Azure mastery</span>
+            <Send className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>Daily consistency builds AZ-900 exam speed &amp; cohort momentum</span>
           </span>
           <button
             type="button"
