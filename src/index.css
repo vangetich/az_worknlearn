@@ -1306,7 +1306,123 @@ html[data-high-contrast="true"] input:focus-visible {
   .animate-goal-celebrate,
   .animate-milestone-badge-pop,
   .animate-milestone-halo,
-  .thread-tag-hover-interactive:hover {
+  .thread-tag-hover-interactive:hover,
+  .animate-bigfive-elephant,
+  .animate-bigfive-trunk,
+  .animate-bigfive-lion,
+  .animate-bigfive-tail,
+  .animate-bigfive-breeze,
+  .animate-bigfive-bird,
+  .animate-slim-progress-shimmer {
     animation: none !important;
   }
 }
+
+/* Sophisticated Light-Azure Kenyan Big Five Wildlife Animations (Kahawa Breather) */
+@keyframes bigFiveElephantStride {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(4px, -1px, 0);
+  }
+}
+
+@keyframes bigFiveTrunkSway {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-6deg);
+  }
+}
+
+@keyframes bigFiveLionBreathe {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scaleY(1);
+  }
+  50% {
+    transform: translate3d(0, -0.8px, 0) scaleY(1.025);
+  }
+}
+
+@keyframes bigFiveTailSway {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(10deg);
+  }
+}
+
+@keyframes bigFiveAzureBreeze {
+  0% {
+    transform: translateX(-12px);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translateX(12px);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(-12px);
+    opacity: 0.25;
+  }
+}
+
+@keyframes bigFiveSavannahBird {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(8px, -3px, 0);
+  }
+}
+
+.animate-bigfive-elephant {
+  animation: bigFiveElephantStride 5.2s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-bigfive-trunk {
+  transform-box: fill-box;
+  transform-origin: top center;
+  animation: bigFiveTrunkSway 4.2s ease-in-out infinite;
+}
+
+.animate-bigfive-lion {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: bigFiveLionBreathe 4.6s ease-in-out infinite;
+}
+
+.animate-bigfive-tail {
+  transform-box: fill-box;
+  transform-origin: top left;
+  animation: bigFiveTailSway 3.4s ease-in-out infinite;
+}
+
+.animate-bigfive-breeze {
+  animation: bigFiveAzureBreeze 7s ease-in-out infinite;
+}
+
+.animate-bigfive-bird {
+  animation: bigFiveSavannahBird 6s ease-in-out infinite;
+}
+
+/* Slim Header Daily Goal Progress Bar Shimmer */
+@keyframes slimProgressShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.animate-slim-progress-shimmer {
+  animation: slimProgressShimmer 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+}
+
+

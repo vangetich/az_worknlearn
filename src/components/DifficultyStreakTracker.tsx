@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Flame,
   Layers,
@@ -173,6 +174,33 @@ export const DifficultyStreakTracker: React.FC<DifficultyStreakTrackerProps> = (
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [popoverCoords, setPopoverCoords] = useState<{ top: number; left: number; width: number }>({
+    top: 64,
+    left: 16,
+    width: 340,
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const updatePosition = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const panelWidth = Math.min(384, vw - 24);
+      const preferredLeft = rect.right - panelWidth;
+      const clampedLeft = Math.max(12, Math.min(preferredLeft, vw - panelWidth - 12));
+      const top = Math.min(rect.bottom + 8, window.innerHeight - 200);
+      setPopoverCoords({ top, left: clampedLeft, width: panelWidth });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen]);
 
   const streakByTier = useMemo(
     () => computeDifficultyStreaks(stats, questions),
@@ -192,7 +220,10 @@ export const DifficultyStreakTracker: React.FC<DifficultyStreakTrackerProps> = (
   useEffect(() => {
     if (!isOpen) return;
     const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insideTrigger = containerRef.current?.contains(target);
+      const insidePopover = popoverRef.current?.contains(target);
+      if (!insideTrigger && !insidePopover) {
         setIsOpen(false);
       }
     };
@@ -299,12 +330,18 @@ export const DifficultyStreakTracker: React.FC<DifficultyStreakTrackerProps> = (
         />
       </button>
 
-      {/* Interactive Difficulty Spectrum Streak Popover */}
-      {isOpen && (
+      {/* Interactive Difficulty Spectrum Streak Popover rendered via Portal */}
+      {isOpen && typeof document !== 'undefined' && createPortal(
         <div
+          ref={popoverRef}
           role="dialog"
           aria-label="Difficulty Spectrum Streak Breakdown"
-          className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white border border-slate-200 shadow-xl p-4 z-50 space-y-3.5 text-left animate-in fade-in slide-in-from-top-1 duration-150"
+          style={{
+            top: `${popoverCoords.top}px`,
+            left: `${popoverCoords.left}px`,
+            width: `${popoverCoords.width}px`,
+          }}
+          className="fixed max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain rounded-2xl bg-white border border-slate-200 shadow-xl p-4 z-[90] space-y-3.5 text-left animate-in fade-in slide-in-from-top-1 duration-150"
         >
           {/* Header */}
           <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-100">
@@ -451,7 +488,8 @@ export const DifficultyStreakTracker: React.FC<DifficultyStreakTrackerProps> = (
               </button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -11,6 +11,7 @@ import {
   Users,
   Download,
   GitBranch,
+  Map,
 } from 'lucide-react';
 import { KenyanFlagMiniEmblem, MaasaiMedallion } from './MotifDecorations';
 import { THREAD_TAG_META, ThreadTagId } from '../data/azureThemesData';
@@ -39,6 +40,7 @@ interface PracticeControlOverflowMenuProps {
   // 4. Maps
   showWorkspacePanels: boolean;
   onToggleWorkspacePanels: () => void;
+  onOpenMapsModal?: () => void;
   // 5. Study Zone
   onOpenStudyZone: () => void;
   // Optional companion actions
@@ -62,6 +64,7 @@ export const PracticeControlOverflowMenu: React.FC<PracticeControlOverflowMenuPr
   onToggleHeatmap,
   showWorkspacePanels,
   onToggleWorkspacePanels,
+  onOpenMapsModal,
   onOpenStudyZone,
   onOpenPeerChallenge,
   onExportNotesMarkdown,
@@ -389,29 +392,34 @@ export const PracticeControlOverflowMenu: React.FC<PracticeControlOverflowMenuPr
               <button
                 type="button"
                 onClick={() => {
-                  onToggleWorkspacePanels();
+                  if (onOpenMapsModal) {
+                    onClose();
+                    onOpenMapsModal();
+                  } else {
+                    onToggleWorkspacePanels();
+                  }
                 }}
                 className={`min-h-[50px] p-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
                   showWorkspacePanels
-                    ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
                     : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
                 }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className={`p-1.5 rounded-lg ${showWorkspacePanels ? 'bg-white/20' : 'bg-amber-100 text-amber-800'}`}>
-                    <Layers className="w-4 h-4" />
+                  <div className={`p-1.5 rounded-lg ${showWorkspacePanels ? 'bg-white/20' : 'bg-emerald-100 text-emerald-800'}`}>
+                    <Map className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-black truncate">Maps &amp; Readiness</div>
-                    <div className={`text-[10px] ${showWorkspacePanels ? 'text-amber-100' : 'text-slate-500'}`}>
-                      {showWorkspacePanels ? 'Active (Visible)' : 'Hidden'}
+                    <div className="text-xs font-black truncate">Maps &amp; Path</div>
+                    <div className={`text-[10px] ${showWorkspacePanels ? 'text-emerald-100' : 'text-slate-500'}`}>
+                      Interactive Curriculum Maps
                     </div>
                   </div>
                 </div>
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
-                  showWorkspacePanels ? 'bg-white text-amber-900' : 'bg-slate-200 text-slate-600'
+                  showWorkspacePanels ? 'bg-white text-emerald-900' : 'bg-slate-200 text-slate-600'
                 }`}>
-                  {showWorkspacePanels ? 'ON' : 'OFF'}
+                  Open
                 </span>
               </button>
 

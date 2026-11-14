@@ -1,4 +1,4 @@
-import { LearningPathInfo, ModuleComplexityLevel } from '../types/quiz';
+import { LearningPathInfo, ModuleComplexityLevel, ModuleInfo } from '../types/quiz';
 
 export const LEARNING_PATHS: LearningPathInfo[] = [
   {
@@ -242,4 +242,6 @@ const MODULE_COMPLEXITY_MAP: Record<number, ModuleComplexityLevel> = LEARNING_PA
 export function getModuleComplexityLevel(moduleId: number): ModuleComplexityLevel {
   return MODULE_COMPLEXITY_MAP[moduleId] || 'Intermediate';
 }
+
+export const CURRICULUM_MODULES: ModuleInfo[] = LEARNING_PATHS.flatMap((path) => path.modules);
 

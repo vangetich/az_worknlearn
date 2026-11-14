@@ -10,9 +10,105 @@ import {
   Clock,
   RefreshCw,
   TrendingUp,
+  Network,
+  Link2,
+  ArrowRight,
+  X,
 } from 'lucide-react';
 import { UserStats } from '../types/quiz';
 import { LEARNING_PATHS } from '../data/curriculum';
+
+interface AzureServiceCluster {
+  id: string;
+  title: string;
+  shortLabel: string;
+  accentHex: string;
+  moduleIds: number[];
+  connectedServices: Array<{
+    service: string;
+    moduleId: number;
+    role: string;
+  }>;
+  masteryInsight: string;
+}
+
+const AZURE_SERVICE_CLUSTERS: AzureServiceCluster[] = [
+  {
+    id: 'resilience',
+    title: 'Global Resilience & High Availability',
+    shortLabel: 'Availability & Redundancy',
+    accentHex: '#0078D4',
+    moduleIds: [2, 4, 6],
+    connectedServices: [
+      { service: 'High Availability & DR', moduleId: 2, role: 'Resiliency goal' },
+      { service: 'Availability Zones', moduleId: 4, role: 'Zone isolation' },
+      { service: 'Region Pairs', moduleId: 4, role: 'Geo disaster recovery' },
+      { service: 'ZRS / GRS / GZRS', moduleId: 6, role: 'Storage replication' },
+    ],
+    masteryInsight:
+      'Study M2, M4, and M6 together: Availability Zones (M4) isolate datacenter failures, ZRS mirrors storage across those zones (M6), and Region Pairs + GRS execute geo-disaster recovery (M2).',
+  },
+  {
+    id: 'identity-governance',
+    title: 'Zero Trust Identity, Access & Guardrails',
+    shortLabel: 'Identity & Governance',
+    accentHex: '#C2410C',
+    moduleIds: [1, 7, 9],
+    connectedServices: [
+      { service: 'Shared Responsibility', moduleId: 1, role: 'Customer owns Identity' },
+      { service: 'Microsoft Entra ID', moduleId: 7, role: 'Authentication (AuthN)' },
+      { service: 'Azure RBAC', moduleId: 7, role: 'User Authorization' },
+      { service: 'Azure Policy & Locks', moduleId: 9, role: 'Resource guardrails' },
+    ],
+    masteryInsight:
+      'Study M1, M7, and M9 together: Customers always own Identity & Data (M1); Entra ID verifies who you are (M7), RBAC grants role permissions (M7), while Policy & Resource Locks override even Owner rights (M9).',
+  },
+  {
+    id: 'hybrid-network',
+    title: 'Hybrid Cloud & Private Connectivity',
+    shortLabel: 'Hybrid & Networking',
+    accentHex: '#0284c7',
+    moduleIds: [1, 5, 10],
+    connectedServices: [
+      { service: 'Hybrid & Multi-Cloud', moduleId: 1, role: 'Deployment topology' },
+      { service: 'VNet & Peering', moduleId: 5, role: 'Private Azure mesh' },
+      { service: 'VPN vs. ExpressRoute', moduleId: 5, role: 'On-prem tunnel / fiber' },
+      { service: 'Azure Arc', moduleId: 10, role: 'Single control plane' },
+    ],
+    masteryInsight:
+      'Study M1, M5, and M10 together: Hybrid deployment boundaries (M1) connect to Azure VNets over public VPN or dedicated ExpressRoute fiber (M5) and unify under Azure Arc governance (M10).',
+  },
+  {
+    id: 'finops-elasticity',
+    title: 'FinOps, Elasticity & Cost Control',
+    shortLabel: 'Pricing & Cost Control',
+    accentHex: '#D97706',
+    moduleIds: [3, 5, 8, 11],
+    connectedServices: [
+      { service: 'CapEx vs. OpEx', moduleId: 3, role: 'Consumption model' },
+      { service: 'VM Scale Sets (VMSS)', moduleId: 5, role: 'Elastic compute' },
+      { service: 'Pricing & TCO Calculators', moduleId: 8, role: 'Cost planning & budgets' },
+      { service: 'Azure Advisor', moduleId: 11, role: 'Right-sizing tips' },
+    ],
+    masteryInsight:
+      'Study M3, M5, M8, and M11 together: OpEx billing (M3) scales dynamically via VMSS (M5), is forecasted/tracked in Cost Management & TCO (M8), and continuously trimmed by Azure Advisor (M11).',
+  },
+  {
+    id: 'observability-ops',
+    title: 'Lifecycle Deployment & Observability',
+    shortLabel: 'Deploy & Monitor',
+    accentHex: '#059669',
+    moduleIds: [4, 9, 10, 11],
+    connectedServices: [
+      { service: 'Resource Groups', moduleId: 4, role: 'Lifecycle container' },
+      { service: 'ARM Templates & Bicep', moduleId: 10, role: 'Declarative IaC' },
+      { service: 'Purview & Initiatives', moduleId: 9, role: 'Compliance audit' },
+      { service: 'Monitor & Service Health', moduleId: 11, role: 'Telemetry & outages' },
+    ],
+    masteryInsight:
+      'Study M4, M9, M10, and M11 together: Declarative Bicep/ARM templates (M10) deploy into Resource Groups (M4) governed by Policy Initiatives (M9) and observed through Azure Monitor & Service Health (M11).',
+  },
+];
 import { KitengeRibbon } from './MotifDecorations';
 import {
   computeBaselinePaceProjection,
@@ -40,10 +136,19 @@ export const LearningPathProgressMap: React.FC<LearningPathProgressMapProps> = (
   defaultExpanded = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState<boolean>(defaultExpanded);
+  const [isServiceFocusOpen, setIsServiceFocusOpen] = useState<boolean>(false);
+  const [selectedClusterId, setSelectedClusterId] = useState<string>(AZURE_SERVICE_CLUSTERS[0].id);
   const [activePathFilter, setActivePathFilter] = useState<1 | 2 | 3 | 'all'>(
     selectedPathId === 1 || selectedPathId === 2 || selectedPathId === 3
       ? selectedPathId
       : 'all'
+  );
+
+  const activeServiceCluster = useMemo(
+    () =>
+      AZURE_SERVICE_CLUSTERS.find((c) => c.id === selectedClusterId) ||
+      AZURE_SERVICE_CLUSTERS[0],
+    [selectedClusterId]
   );
 
   const completedModules = stats.completedModules || [];
@@ -209,6 +314,28 @@ export const LearningPathProgressMap: React.FC<LearningPathProgressMapProps> = (
 
           <button
             type="button"
+            onClick={() => {
+              const nextState = !isServiceFocusOpen;
+              setIsServiceFocusOpen(nextState);
+              if (nextState) {
+                setIsExpanded(true);
+                setActivePathFilter('all');
+              }
+            }}
+            aria-pressed={isServiceFocusOpen}
+            title="Toggle Azure Service Focus overlay to highlight cross-module Azure service connections"
+            className={`px-2.5 py-1 rounded-xl border text-[11px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+              isServiceFocusOpen
+                ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-sm ring-2 ring-amber-300/50'
+                : 'bg-sky-500/25 hover:bg-sky-500/40 text-white border-sky-300/40'
+            }`}
+          >
+            <Network className="w-3.5 h-3.5 shrink-0" />
+            <span>Azure Service Focus</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setIsExpanded((prev) => !prev)}
             className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
           >
@@ -229,7 +356,125 @@ export const LearningPathProgressMap: React.FC<LearningPathProgressMapProps> = (
 
       {/* Step-by-Step Visual Curriculum Map Body */}
       {isExpanded && (
-        <div className="p-3.5 sm:p-5 bg-gradient-to-b from-slate-50/70 to-white dark:from-slate-900 dark:to-slate-950 space-y-5">
+        <div className="relative p-3.5 sm:p-5 bg-gradient-to-b from-slate-50/70 to-white dark:from-slate-900 dark:to-slate-950 space-y-5">
+          {/* 'AZURE SERVICE FOCUS' OVERLAY PANEL */}
+          {isServiceFocusOpen && (
+            <div
+              role="region"
+              aria-label="Azure Service Focus Overlay"
+              className="relative rounded-2xl border-2 border-[#0078D4] bg-gradient-to-br from-slate-950 via-[#00284d] to-[#003c75] text-white p-4 sm:p-5 shadow-xl space-y-4 animate-in fade-in slide-in-from-top-2 duration-200"
+            >
+              {/* Overlay Header */}
+              <div className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-white/15">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Network className="w-4 h-4 text-amber-300 shrink-0" />
+                    <h4 className="text-sm sm:text-base font-black tracking-tight text-white">
+                      Azure Service Focus Overlay
+                    </h4>
+                    <span className="text-[11px] font-bold text-sky-200">
+                      · Cross-Module Service Connections
+                    </span>
+                  </div>
+                  <p className="text-xs text-sky-100/85 leading-relaxed max-w-3xl">
+                    Select an Azure service cluster below to spotlight connected modules directly on the Learning Path Map and study interrelated concepts together.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsServiceFocusOpen(false)}
+                  className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sky-100 hover:text-white border border-white/15 transition-colors cursor-pointer shrink-0"
+                  aria-label="Close Azure Service Focus overlay"
+                  title="Close Azure Service Focus overlay"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Cluster Selector Tabs */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {AZURE_SERVICE_CLUSTERS.map((cluster) => {
+                  const isActive = cluster.id === activeServiceCluster.id;
+                  return (
+                    <button
+                      key={cluster.id}
+                      type="button"
+                      onClick={() => setSelectedClusterId(cluster.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isActive
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-sm'
+                          : 'bg-white/10 hover:bg-white/20 text-sky-100 border-white/15'
+                      }`}
+                    >
+                      <Link2 className="w-3 h-3 shrink-0" />
+                      <span>{cluster.shortLabel}</span>
+                      <span
+                        className={`text-[10px] font-black tabular-nums ${
+                          isActive ? 'text-slate-900' : 'text-sky-300'
+                        }`}
+                      >
+                        ({cluster.moduleIds.map((id) => `M${id}`).join('+')})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Connected Services Chain & Conceptual Rationale */}
+              <div className="rounded-xl bg-slate-900/75 border border-sky-400/30 p-3.5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs sm:text-sm font-black text-amber-300">
+                    {activeServiceCluster.title}
+                  </span>
+                  <span className="text-[11px] font-bold text-sky-200 tabular-nums">
+                    Study Modules Together: {activeServiceCluster.moduleIds.map((m) => `Module ${m}`).join(' → ')}
+                  </span>
+                </div>
+
+                {/* Connected Service Chain Diagram */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeServiceCluster.connectedServices.map((node, index) => {
+                    const modObj = allModules.find((m) => m.id === node.moduleId);
+                    const isModDone = completedModules.includes(node.moduleId);
+                    return (
+                      <React.Fragment key={`${node.service}-${node.moduleId}`}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (modObj) {
+                              onSelectModule(modObj.id, modObj.pathId as 1 | 2 | 3);
+                            }
+                          }}
+                          className="group/node text-left px-3 py-2 rounded-xl bg-white/10 hover:bg-[#0078D4] border border-sky-300/30 hover:border-amber-300 transition-all cursor-pointer"
+                          title={`Jump to Module ${node.moduleId} Quiz: ${modObj?.title || ''}`}
+                        >
+                          <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-300">
+                            <span>M{node.moduleId}</span>
+                            <span aria-hidden="true">·</span>
+                            <span className={isModDone ? 'text-emerald-300' : 'text-sky-200'}>
+                              {isModDone ? 'Completed' : node.role}
+                            </span>
+                          </div>
+                          <div className="text-xs font-extrabold text-white mt-0.5 flex items-center gap-1">
+                            <span>{node.service}</span>
+                            <Play className="w-2.5 h-2.5 opacity-0 group-hover/node:opacity-100 transition-opacity fill-current text-amber-300" />
+                          </div>
+                        </button>
+                        {index < activeServiceCluster.connectedServices.length - 1 && (
+                          <ArrowRight className="w-4 h-4 text-sky-300 shrink-0 hidden sm:inline-block" aria-hidden="true" />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+
+                <p className="text-xs text-slate-200 leading-relaxed">
+                  {activeServiceCluster.masteryInsight}
+                </p>
+              </div>
+            </div>
+          )}
           {/* AI-Driven Pace & Study Hours Remaining Summary Card */}
           <div className="rounded-2xl border border-sky-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3.5 sm:p-4 shadow-2xs space-y-3">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -393,11 +638,28 @@ export const LearningPathProgressMap: React.FC<LearningPathProgressMapProps> = (
                       const qCount = questionCountByModule[mod.id] || 0;
                       const modProj = activeProjection.moduleProjections[mod.id];
                       const estHrs = modProj?.estimatedHoursRemaining ?? 1.2;
+                      const isConnectedInFocus =
+                        isServiceFocusOpen && activeServiceCluster.moduleIds.includes(mod.id);
+                      const isDimmedByFocus = isServiceFocusOpen && !isConnectedInFocus;
+                      const connectedServiceNode = isConnectedInFocus
+                        ? activeServiceCluster.connectedServices.find((s) => s.moduleId === mod.id)
+                        : null;
 
                       return (
                         <div
                           key={mod.id}
-                          onClick={() => onSelectModule(mod.id, path.id)}
+                          onClick={() => {
+                            if (isServiceFocusOpen) {
+                              const matchingCluster = AZURE_SERVICE_CLUSTERS.find((c) =>
+                                c.moduleIds.includes(mod.id)
+                              );
+                              if (matchingCluster && !activeServiceCluster.moduleIds.includes(mod.id)) {
+                                setSelectedClusterId(matchingCluster.id);
+                                return;
+                              }
+                            }
+                            onSelectModule(mod.id, path.id);
+                          }}
                           role="button"
                           tabIndex={0}
                           onKeyDown={(e) => {
@@ -406,15 +668,32 @@ export const LearningPathProgressMap: React.FC<LearningPathProgressMapProps> = (
                               onSelectModule(mod.id, path.id);
                             }
                           }}
-                          title={modProj?.rationale}
+                          title={
+                            connectedServiceNode
+                              ? `Connected Service Focus: ${connectedServiceNode.service} (${connectedServiceNode.role})`
+                              : modProj?.rationale
+                          }
                           className={`group relative rounded-xl border p-3 transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
-                            isCurrentSelected
+                            isConnectedInFocus
+                              ? 'bg-sky-50/95 dark:bg-sky-950/60 border-amber-400 ring-2 ring-amber-400/70 shadow-md scale-[1.01]'
+                              : isCurrentSelected
                               ? 'bg-blue-50/90 dark:bg-sky-950/50 border-[#0078D4] ring-2 ring-[#0078D4]/25 shadow-sm'
                               : isDone
                               ? 'bg-emerald-50/50 dark:bg-emerald-950/25 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-300/90 dark:border-emerald-800 shadow-2xs'
                               : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/70 border-slate-200/90 dark:border-slate-700 hover:border-sky-300 shadow-2xs'
-                          }`}
+                          } ${isDimmedByFocus ? 'opacity-50 hover:opacity-85' : ''}`}
                         >
+                          {isConnectedInFocus && connectedServiceNode && (
+                            <div className="-mt-1 mb-0.5 flex items-center justify-between gap-1 text-[10px] font-black text-[#005A9E] dark:text-amber-300">
+                              <span className="inline-flex items-center gap-1 truncate">
+                                <Link2 className="w-3 h-3 text-amber-600 dark:text-amber-300 shrink-0" />
+                                <span className="truncate">{connectedServiceNode.service}</span>
+                              </span>
+                              <span className="text-[9.5px] text-amber-700 dark:text-amber-200 shrink-0">
+                                Study Together
+                              </span>
+                            </div>
+                          )}
                           {/* Top Node Circle + Step Badge */}
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2">

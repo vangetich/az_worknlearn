@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search,
   X,
@@ -56,7 +57,35 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
   const [inputValue, setInputValue] = useState<string>(searchQuery);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dropdownCoords, setDropdownCoords] = useState<{ top: number; left: number; width: number }>({
+    top: 64,
+    left: 16,
+    width: 380,
+  });
+
+  // Compute clamped viewport coordinates for Portal dropdown
+  useEffect(() => {
+    if (!isOpen) return;
+    const updatePosition = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const panelWidth = Math.min(448, vw - 24);
+      const preferredLeft = rect.right - panelWidth;
+      const clampedLeft = Math.max(12, Math.min(preferredLeft, vw - panelWidth - 12));
+      const top = Math.min(rect.bottom + 8, window.innerHeight - 160);
+      setDropdownCoords({ top, left: clampedLeft, width: panelWidth });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen]);
 
   // Sync local input when external searchQuery changes (e.g. cleared from banner)
   useEffect(() => {
@@ -79,16 +108,20 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside both trigger and portal dropdown
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insideTrigger = containerRef.current?.contains(target);
+      const insideDropdown = dropdownRef.current?.contains(target);
+      if (!insideTrigger && !insideDropdown) {
         setIsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isOpen]);
 
   // Build unified index of key terms & Azure services across all 12 modules
   const allIndexedTerms = useMemo<IndexedTerm[]>(() => {
@@ -193,7 +226,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
   };
 
   return (
-    <div ref={containerRef} className="relative w-36 sm:w-44 md:w-48 lg:w-44 xl:w-56 focus-within:w-60 focus-within:xl:w-64 transition-all duration-200 shrink min-w-0">
+    <div ref={containerRef} className="relative w-36 sm:w-44 lg:w-44 xl:w-52 focus-within:w-52 focus-within:xl:w-60 transition-all duration-200 shrink-0">
       {/* Search Input Box */}
       <div
         className={`flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-xl border transition-all bg-slate-50/90 ${
@@ -231,9 +264,17 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
         )}
       </div>
 
-      {/* Dropdown Search Results & Quick Filter Panel */}
-      {isOpen && (
-        <div className="absolute right-0 sm:right-0 sm:left-auto sm:w-[min(28rem,calc(100vw-1.5rem))] max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain mt-2 bg-white rounded-2xl border border-slate-200/90 shadow-2xl card-elevation z-50 text-left animate-in fade-in slide-in-from-top-2 duration-150">
+      {/* Dropdown Search Results & Quick Filter Panel rendered in Portal so Nav Bar sliding never clips it */}
+      {isOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            top: `${dropdownCoords.top}px`,
+            left: `${dropdownCoords.left}px`,
+            width: `${dropdownCoords.width}px`,
+          }}
+          className="fixed max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain bg-white rounded-2xl border border-slate-200/90 shadow-2xl card-elevation z-[90] text-left animate-in fade-in slide-in-from-top-2 duration-150"
+        >
           {!normalizedQuery ? (
             /* Empty Query State: Popular Azure Services & Key Terms */
             <div className="p-4 space-y-3">
@@ -425,7 +466,8 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
               </div>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

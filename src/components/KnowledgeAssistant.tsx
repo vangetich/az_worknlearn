@@ -15,13 +15,24 @@ import {
   FileText,
   Mic,
   MicOff,
+  Maximize2,
+  Minimize2,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
 } from 'lucide-react';
 import { ChatMessage, Question } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
 
 interface KnowledgeAssistantProps {
   initialQuestionContext?: Question | null;
+  activeQuestionContext?: Question | null;
   onClearContext?: () => void;
+  variant?: 'page' | 'drawer';
+  onOpenFullTab?: () => void;
+  onCloseDrawer?: () => void;
+  isDrawerExpanded?: boolean;
+  onToggleDrawerExpand?: () => void;
 }
 
 interface OfficialAzureDocEntry {
@@ -184,8 +195,15 @@ const QUICK_QUESTIONS = [
 
 export const KnowledgeAssistant: React.FC<KnowledgeAssistantProps> = ({
   initialQuestionContext,
+  activeQuestionContext,
   onClearContext,
+  variant = 'page',
+  onOpenFullTab,
+  onCloseDrawer,
+  isDrawerExpanded = false,
+  onToggleDrawerExpand,
 }) => {
+  const isDrawer = variant === 'drawer';
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -208,6 +226,21 @@ What concept would you like to master today?`,
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isDictating, setIsDictating] = useState<boolean>(false);
+  const [useActiveQuestionContext, setUseActiveQuestionContext] = useState<boolean>(true);
+  const [isContextExpanded, setIsContextExpanded] = useState<boolean>(false);
+  const [isDocsPanelOpen, setIsDocsPanelOpen] = useState<boolean>(!isDrawer);
+
+  // Listen to incoming tutorial requests from the Adaptive Learning Path Dashboard
+  useEffect(() => {
+    const handleTutorialEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ topic?: string; prompt?: string; moduleId?: number }>;
+      if (customEvent.detail?.prompt) {
+        setInputQuery(customEvent.detail.prompt);
+      }
+    };
+    window.addEventListener('az900_open_ai_tutorial', handleTutorialEvent);
+    return () => window.removeEventListener('az900_open_ai_tutorial', handleTutorialEvent);
+  }, []);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -319,9 +352,16 @@ What concept would you like to master today?`,
     const query = (textToSend || inputQuery).trim();
     if (!query || isLoading) return;
 
+    const effectiveQuestion =
+      (useActiveQuestionContext ? activeQuestionContext : null) || initialQuestionContext || null;
+
     const matchedGroundedDocs = groundedDocContext
       ? [groundedDocContext]
-      : findGroundedDocsForQuery(query);
+      : findGroundedDocsForQuery(
+          effectiveQuestion
+            ? `${query} ${effectiveQuestion.scenario} ${effectiveQuestion.question} ${effectiveQuestion.moduleTitle}`
+            : query
+        );
 
     const groundingContextText = matchedGroundedDocs
       .map(
@@ -329,6 +369,10 @@ What concept would you like to master today?`,
           `[Official Microsoft Docs Reference: "${d.title}" (${d.url}) — Summary: ${d.groundedSummary} | Exam Rule: ${d.examRule}]`
       )
       .join('\n');
+
+    const questionContextBlock = effectiveQuestion
+      ? `\n\n[Active Quiz Question Context — Module ${effectiveQuestion.moduleId} (${effectiveQuestion.moduleTitle}) | Difficulty: ${effectiveQuestion.difficulty}]\nScenario: ${effectiveQuestion.scenario}\nQuestion: ${effectiveQuestion.question}\nOptions: ${(effectiveQuestion.options || []).map((opt) => `${opt.letter}. ${opt.text}`).join(' | ')}\nCorrect Answer: ${effectiveQuestion.correctAnswer}`
+      : '';
 
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -353,9 +397,9 @@ What concept would you like to master today?`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `${query}\n\nPlease cross-reference and cite this official Microsoft Azure documentation context:\n${groundingContextText}`,
+          query: `${query}${questionContextBlock}\n\nPlease cross-reference and cite this official Microsoft Azure documentation context:\n${groundingContextText}`,
           history: history.slice(-6),
-          currentContext: initialQuestionContext?.moduleTitle || groundedDocContext?.title,
+          currentContext: effectiveQuestion?.moduleTitle || groundedDocContext?.title,
         }),
       });
 
@@ -448,31 +492,214 @@ ${citationsList}`;
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 card-elevation flex flex-col min-h-[780px] overflow-hidden">
+    <div
+      className={
+        isDrawer
+          ? 'bg-white dark:bg-slate-900 flex flex-col h-full min-h-0 overflow-hidden'
+          : 'bg-white rounded-xl border border-slate-200 card-elevation flex flex-col min-h-[780px] overflow-hidden'
+      }
+    >
       {/* Header */}
-      <div className="relative px-6 py-4 bg-gradient-to-r from-[#C2410C] via-[#D97706] to-[#0078D4] text-white flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-white/20 backdrop-blur-xs">
-            <Bot className="w-6 h-6 text-yellow-200" />
+      <div
+        className={`relative ${
+          isDrawer ? 'px-4 py-3' : 'px-6 py-4'
+        } bg-gradient-to-r from-[#C2410C] via-[#D97706] to-[#0078D4] text-white flex items-center justify-between gap-2 shrink-0`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="p-2 rounded-xl bg-white/20 backdrop-blur-xs shrink-0">
+            <Bot className={isDrawer ? 'w-5 h-5 text-yellow-200' : 'w-6 h-6 text-yellow-200'} />
           </div>
-          <div>
-            <h3 className="font-extrabold text-base sm:text-lg flex items-center gap-2 flex-wrap">
-              <span>AZ-900 Knowledge Assistant</span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/20 font-semibold">
-                Grounded in Microsoft Learn Docs
-              </span>
+          <div className="min-w-0">
+            <h3
+              className={`font-extrabold ${
+                isDrawer ? 'text-sm sm:text-base' : 'text-base sm:text-lg'
+              } flex items-center gap-2 flex-wrap leading-tight`}
+            >
+              <span className="truncate">AZ-900 Knowledge Assistant</span>
+              {!isDrawer && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/20 font-semibold">
+                  Grounded in Microsoft Learn Docs
+                </span>
+              )}
             </h3>
-            <p className="text-amber-100 text-xs">
-              Cross-reference official Microsoft Azure documentation, analogies &amp; exam shortcuts
+            <p className="text-amber-100 text-[11px] sm:text-xs truncate">
+              {isDrawer
+                ? 'Grounded in Microsoft Learn · Active Question Context'
+                : 'Cross-reference official Microsoft Azure documentation, analogies & exam shortcuts'}
             </p>
           </div>
         </div>
 
-        <MaasaiMedallion size={34} className="opacity-90" />
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isDrawer && onToggleDrawerExpand && (
+            <button
+              type="button"
+              onClick={onToggleDrawerExpand}
+              className="hidden lg:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/25 transition-colors cursor-pointer"
+              title={isDrawerExpanded ? 'Collapse drawer width' : 'Expand drawer width'}
+              aria-label={isDrawerExpanded ? 'Collapse AI Tutor drawer width' : 'Expand AI Tutor drawer width'}
+            >
+              {isDrawerExpanded ? (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5" />
+                  <span>Compact</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Expand</span>
+                </>
+              )}
+            </button>
+          )}
+          {isDrawer && onOpenFullTab && (
+            <button
+              type="button"
+              onClick={onOpenFullTab}
+              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[11px] font-bold border border-white/25 transition-colors cursor-pointer"
+              title="Open full Knowledge Assistant tab"
+              aria-label="Open full Knowledge Assistant view"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Full View</span>
+            </button>
+          )}
+          {!isDrawer && <MaasaiMedallion size={34} className="opacity-90" />}
+          {isDrawer && onCloseDrawer && (
+            <button
+              type="button"
+              onClick={onCloseDrawer}
+              className="p-1.5 rounded-lg bg-white/15 hover:bg-white/30 text-white border border-white/25 transition-colors cursor-pointer"
+              title="Close AI Tutor (Esc)"
+              aria-label="Close Ask AI Tutor sidebar"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
+      {/* CURRENT QUIZ QUESTION CONTEXT PANEL (Shown in Drawer Mode when active quiz question exists) */}
+      {isDrawer && activeQuestionContext && (
+        <div className="bg-sky-50/90 dark:bg-slate-800/90 border-b border-sky-200 dark:border-slate-700 px-4 py-2.5 shrink-0 space-y-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 min-w-0 text-[11px] font-bold text-[#005A9E] dark:text-sky-300">
+              <HelpCircle className="w-3.5 h-3.5 shrink-0 text-[#0078D4]" />
+              <span className="truncate">
+                Context · Module {activeQuestionContext.moduleId}: {activeQuestionContext.moduleTitle}
+              </span>
+              <span aria-hidden="true" className="text-slate-400">·</span>
+              <span className="text-slate-600 dark:text-slate-300 shrink-0">
+                {activeQuestionContext.difficulty}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setUseActiveQuestionContext((prev) => !prev)}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border transition-colors cursor-pointer ${
+                  useActiveQuestionContext
+                    ? 'bg-[#0078D4] text-white border-[#005A9E]'
+                    : 'bg-white text-slate-600 border-slate-300'
+                }`}
+                title="Attach or detach current quiz question context from your questions"
+              >
+                {useActiveQuestionContext ? 'Context Linked' : 'Context Off'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsContextExpanded((prev) => !prev)}
+                className="p-1 rounded-md text-slate-500 hover:text-slate-800 hover:bg-sky-100 cursor-pointer"
+                aria-label={isContextExpanded ? 'Collapse question preview' : 'Expand question preview'}
+                title={isContextExpanded ? 'Collapse question text' : 'Read full question & options'}
+              >
+                {isContextExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          <p
+            className={`text-xs text-slate-700 dark:text-slate-200 leading-snug ${
+              isContextExpanded ? '' : 'line-clamp-2'
+            }`}
+          >
+            <span className="font-bold text-slate-900 dark:text-white">Q: </span>
+            {activeQuestionContext.question}
+          </p>
+
+          {isContextExpanded && (
+            <div className="space-y-1.5 pt-1 text-[11px] text-slate-600 dark:text-slate-300 border-t border-sky-200/70 dark:border-slate-700">
+              <p className="italic text-slate-500 dark:text-slate-400">
+                Scenario: {activeQuestionContext.scenario}
+              </p>
+              <div className="grid grid-cols-1 gap-1">
+                {(activeQuestionContext.options || []).map((opt) => (
+                  <div
+                    key={opt.letter}
+                    className="px-2 py-1 rounded bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700 text-slate-700 dark:text-slate-200"
+                  >
+                    <strong className="text-[#005A9E] dark:text-sky-300">{opt.letter}.</strong> {opt.text}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 1-Tap Question Context Prompts */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() =>
+                handleSendMessage(
+                  `Explain this AZ-900 question from Module ${activeQuestionContext.moduleId} step-by-step and tell me what core Azure concept is being tested.`
+                )
+              }
+              className="px-2.5 py-1 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-[11px] font-bold transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1"
+            >
+              <Sparkles className="w-3 h-3 text-amber-300" />
+              <span>Explain This Question</span>
+            </button>
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() =>
+                handleSendMessage(
+                  `Why is option ${activeQuestionContext.correctAnswer} the right answer here, and why are the other options exam distractors?`
+                )
+              }
+              className="px-2.5 py-1 rounded-lg bg-white hover:bg-amber-50 text-slate-800 border border-slate-300 text-[11px] font-bold transition-colors disabled:opacity-40 cursor-pointer"
+            >
+              Why Option {activeQuestionContext.correctAnswer}?
+            </button>
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() =>
+                handleSendMessage(
+                  `Give me a quick memory hook or analogy so I never miss this Module ${activeQuestionContext.moduleId} pattern on the AZ-900 exam.`
+                )
+              }
+              className="px-2.5 py-1 rounded-lg bg-white hover:bg-sky-50 text-[#005A9E] border border-sky-200 text-[11px] font-bold transition-colors disabled:opacity-40 cursor-pointer"
+            >
+              Memory Trick
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsDocsPanelOpen((prev) => !prev)}
+              className="ml-auto px-2 py-1 rounded-lg text-[10.5px] font-bold text-slate-600 hover:text-[#005A9E] hover:bg-white border border-transparent hover:border-slate-200 transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <BookOpen className="w-3 h-3" />
+              <span>{isDocsPanelOpen ? 'Hide MS Docs' : 'MS Docs Search'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* DEDICATED OFFICIAL MICROSOFT AZURE DOCUMENTATION SEARCH BAR */}
-      <div className="bg-gradient-to-b from-slate-900 to-slate-800 text-white px-4 sm:px-6 py-3.5 border-b border-slate-700 space-y-3">
+      {(!isDrawer || isDocsPanelOpen) && (
+      <div className="bg-gradient-to-b from-slate-900 to-slate-800 text-white px-4 sm:px-6 py-3.5 border-b border-slate-700 space-y-3 shrink-0">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -619,9 +846,10 @@ ${citationsList}`;
           </div>
         )}
       </div>
+      )}
 
       {/* Quick Prompts Carousel */}
-      <div className="bg-slate-50 border-b border-slate-200/80 px-4 py-2.5 overflow-x-auto scrollbar-none flex items-center gap-2 shrink-0">
+      <div className="bg-slate-50 border-b border-slate-200/80 px-4 py-2 overflow-x-auto scrollbar-none flex items-center gap-2 shrink-0">
         <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0">
           Quick Prompts:
         </span>
@@ -638,7 +866,13 @@ ${citationsList}`;
       </div>
 
       {/* Message Chat Feed */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 max-h-[450px]">
+      <div
+        className={
+          isDrawer
+            ? 'flex-1 min-h-0 overflow-y-auto p-4 space-y-3.5 overscroll-contain'
+            : 'flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 max-h-[450px]'
+        }
+      >
         {messages.map((msg) => {
           const isBot = msg.role === 'assistant';
           return (

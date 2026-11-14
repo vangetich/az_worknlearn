@@ -13,15 +13,15 @@ export type ModalMaxWidthSize =
   | '6xl';
 
 const MAX_WIDTH_VW_MAP: Record<ModalMaxWidthSize, string> = {
-  sm: 'max-w-[min(28rem,95vw)]',
-  md: 'max-w-[min(32rem,95vw)]',
-  lg: 'max-w-[min(36rem,95vw)]',
-  xl: 'max-w-[min(42rem,95vw)]',
-  '2xl': 'max-w-[min(48rem,95vw)]',
-  '3xl': 'max-w-[min(56rem,95vw)]',
-  '4xl': 'max-w-[min(64rem,95vw)]',
-  '5xl': 'max-w-[min(68rem,96vw)]',
-  '6xl': 'max-w-[min(72rem,96vw)]',
+  sm: 'max-w-[min(28rem,calc(100vw-1.5rem))]',
+  md: 'max-w-[min(32rem,calc(100vw-1.5rem))]',
+  lg: 'max-w-[min(36rem,calc(100vw-1.5rem))]',
+  xl: 'max-w-[min(42rem,calc(100vw-1.5rem))]',
+  '2xl': 'max-w-[min(48rem,calc(100vw-1.5rem))]',
+  '3xl': 'max-w-[min(56rem,calc(100vw-1.5rem))]',
+  '4xl': 'max-w-[min(64rem,calc(100vw-1.5rem))]',
+  '5xl': 'max-w-[min(68rem,calc(100vw-1.5rem))]',
+  '6xl': 'max-w-[min(72rem,calc(100vw-1.5rem))]',
 };
 
 export interface ResponsiveModalContainerProps {
@@ -39,9 +39,8 @@ export interface ResponsiveModalContainerProps {
 
 /**
  * Unified Responsive Container Wrapper for all pop-up modals.
- * Uses CSS viewport units (vh, vw, dvh, dvw) and flexbox constraints (flex-col, min-h-0, overflow-hidden)
- * rendered via createPortal(document.body) so modals automatically scale and fit within the user's active device screen.
- * When Focus Mode is active (`data-focus-mode="true"`), modals and review windows are presented at the top part of the view.
+ * Uses strict CSS viewport constraints (dvh, vh, calc(100vh-2rem)) and flexbox (flex-col, min-h-0, overflow-hidden)
+ * rendered via createPortal(document.body) so all modals scale and fit strictly within the viewable responsive window space.
  */
 export const ResponsiveModalContainer: React.FC<
   ResponsiveModalContainerProps
@@ -81,17 +80,17 @@ export const ResponsiveModalContainer: React.FC<
       aria-modal="true"
       aria-label={ariaLabel}
       onClick={closeOnBackdropClick && onClose ? onClose : undefined}
-      className={`unified-modal-viewport-overlay fixed inset-0 ${zIndexClass} w-[100vw] h-[100vh] max-w-[100vw] max-h-[100vh] flex ${
+      className={`unified-modal-viewport-overlay fixed inset-0 ${zIndexClass} w-screen h-screen max-w-full max-h-full flex ${
         isFocusModeActive
-          ? 'items-start justify-center pt-3 sm:pt-4 px-[2.5vw]'
-          : 'items-center justify-center p-[1.5vh_2.5vw] sm:p-[2.5vh_3vw]'
+          ? 'items-start justify-center pt-2 sm:pt-4 px-2 sm:px-4'
+          : 'items-center justify-center p-2 sm:p-4 md:p-6'
       } overflow-y-auto overscroll-contain animate-in fade-in duration-150 ${overlayClassName}`}
     >
       <div
         onClick={closeOnBackdropClick ? (e) => e.stopPropagation() : undefined}
-        className={`unified-modal-flex-container w-full ${widthClass} max-h-[94vh] sm:max-h-[90vh] ${
+        className={`unified-modal-flex-container w-full ${widthClass} max-h-[min(90vh,90dvh,calc(100vh-2rem))] ${
           isFocusModeActive ? 'mt-0 mb-auto' : 'my-auto'
-        } flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 ${containerClassName}`}
+        } flex flex-col overflow-hidden rounded-2xl animate-in zoom-in-95 duration-200 ${containerClassName}`}
       >
         {children}
       </div>

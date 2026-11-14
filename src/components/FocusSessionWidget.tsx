@@ -65,6 +65,32 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
   const [showBreakAlert, setShowBreakAlert] = useState<boolean>(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerButtonRef = useRef<HTMLButtonElement>(null);
+  const [popoverCoords, setPopoverCoords] = useState<{ top: number; left: number; width: number }>({
+    top: 64,
+    left: 16,
+    width: 288,
+  });
+
+  useEffect(() => {
+    if (!showSettingsPopover) return;
+    const updatePosition = () => {
+      if (!triggerButtonRef.current) return;
+      const rect = triggerButtonRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const panelWidth = Math.min(288, vw - 24);
+      const preferredLeft = rect.right - panelWidth;
+      const clampedLeft = Math.max(12, Math.min(preferredLeft, vw - panelWidth - 12));
+      const top = Math.min(rect.bottom + 8, window.innerHeight - 220);
+      setPopoverCoords({ top, left: clampedLeft, width: panelWidth });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [showSettingsPopover]);
 
   // Close popover on click outside (excluding trigger button so toggle click works cleanly)
   useEffect(() => {
@@ -191,27 +217,34 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
         ref={triggerButtonRef}
         type="button"
         onClick={() => setShowSettingsPopover((prev) => !prev)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-50 to-blue-50/80 hover:from-sky-100 hover:to-blue-100 text-slate-800 border border-sky-200/90 text-xs font-bold transition-all shadow-2xs cursor-pointer group shrink-0"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-50 to-blue-50/80 hover:from-sky-100 hover:to-blue-100 text-slate-800 border border-sky-200/90 text-xs font-bold transition-all shadow-2xs cursor-pointer group shrink-0 whitespace-nowrap"
         title="Focus Session & Daily Study Timer (Click to customize Pomodoro & view daily stats)"
       >
-        <Clock className="w-3.5 h-3.5 text-[#0078D4] group-hover:rotate-45 transition-transform" />
-        <span className="font-mono font-black text-[#0078D4]">
+        <Clock className="w-3.5 h-3.5 text-[#0078D4] group-hover:rotate-45 transition-transform shrink-0" />
+        <span className="font-mono font-black text-[#0078D4] whitespace-nowrap">
           {formatMinSec(sessionSeconds)}
         </span>
-        <span className="text-[10px] text-slate-500 font-semibold hidden md:inline">
+        <span className="text-[10px] text-slate-500 font-semibold hidden md:inline whitespace-nowrap">
           / {pomodoroMins}m
         </span>
-        <span className="hidden xl:inline px-1.5 py-0.2 rounded-md bg-white border border-sky-200 text-[10px] font-bold text-slate-600">
+        <span className="hidden xl:inline px-1.5 py-0.2 rounded-md bg-white border border-sky-200 text-[10px] font-bold text-slate-600 whitespace-nowrap">
           Today: {formatDailyTime(totalDailySeconds)}
         </span>
       </button>
 
-      {/* Settings / Controls Popover */}
-      {showSettingsPopover && (
-        <div
-          ref={popoverRef}
-          className="absolute right-0 mt-2 w-[min(18rem,calc(100vw-1.5rem))] max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain rounded-2xl bg-white border border-slate-200 shadow-xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150 text-left space-y-3.5"
-        >
+      {/* Settings / Controls Popover rendered via Portal so horizontal scroll never clips it */}
+      {showSettingsPopover &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            style={{
+              top: `${popoverCoords.top}px`,
+              left: `${popoverCoords.left}px`,
+              width: `${popoverCoords.width}px`,
+            }}
+            className="fixed max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain rounded-2xl bg-white border border-slate-200 shadow-2xl p-4 z-[95] animate-in fade-in zoom-in-95 duration-150 text-left space-y-3.5"
+          >
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <div className="flex items-center gap-2">
               <span className="p-1.5 rounded-lg bg-blue-50 text-[#0078D4]">
@@ -359,8 +392,9 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
               })}
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
 
       {/* 25-Minute (or configured) Pomodoro Break Notification Alert Modal */}
       {showBreakAlert &&

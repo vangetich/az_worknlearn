@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   Target,
@@ -12,7 +12,10 @@ import {
   Lightbulb,
   ShieldCheck,
   TrendingUp,
-  Activity,
+  Timer,
+  Pause,
+  Play,
+  AlertTriangle,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Question } from '../types/quiz';
@@ -284,15 +287,58 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
+  const [timedOut, setTimedOut] = useState<boolean>(false);
   const [score, setScore] = useState<number>(0);
   const [isFinished, setIsFinished] = useState<boolean>(false);
 
+  // Quick-Drill Countdown Timer Overlay State (high-pressure exam simulation)
+  const [secondsPerQuestion, setSecondsPerQuestion] = useState<30 | 45 | 60>(45);
+  const [timeLeft, setTimeLeft] = useState<number>(45);
+  const [isTimerPaused, setIsTimerPaused] = useState<boolean>(false);
+  const [isTimerOverlayVisible, setIsTimerOverlayVisible] = useState<boolean>(true);
+  const [totalElapsedSeconds, setTotalElapsedSeconds] = useState<number>(0);
+
   const currentQ = drillQuestions[currentIndex];
+
+  // Live 1-second exam countdown & total elapsed timer
+  useEffect(() => {
+    if (isFinished || !currentQ || isTimerPaused || !isTimerOverlayVisible) return;
+
+    const timerId = setInterval(() => {
+      setTotalElapsedSeconds((prev) => prev + 1);
+      if (!hasSubmitted) {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
+    }, 1000);
+
+    return () => clearInterval(timerId);
+  }, [isFinished, currentQ, isTimerPaused, isTimerOverlayVisible, hasSubmitted]);
+
+  // Handle high-pressure timer expiration (0s reached before answer submitted)
+  useEffect(() => {
+    if (
+      timeLeft === 0 &&
+      !hasSubmitted &&
+      !isFinished &&
+      isTimerOverlayVisible &&
+      currentQ
+    ) {
+      setTimedOut(true);
+      setHasSubmitted(true);
+      onAnswer(currentQ.id, '', false);
+    }
+  }, [timeLeft, hasSubmitted, isFinished, isTimerOverlayVisible, currentQ, onAnswer]);
 
   const handleSelect = (letter: string) => {
     if (hasSubmitted || !currentQ) return;
     setSelectedAnswer(letter);
     setHasSubmitted(true);
+    setTimedOut(false);
     const isCorrect = letter === currentQ.correctAnswer;
     if (isCorrect) {
       setScore((s) => s + 1);
@@ -305,6 +351,8 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
       setCurrentIndex((prev) => prev + 1);
       setSelectedAnswer(null);
       setHasSubmitted(false);
+      setTimedOut(false);
+      setTimeLeft(secondsPerQuestion);
     } else {
       setIsFinished(true);
       if (onCompleteDrill) {
@@ -322,9 +370,30 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
     setCurrentIndex(0);
     setSelectedAnswer(null);
     setHasSubmitted(false);
+    setTimedOut(false);
     setScore(0);
     setIsFinished(false);
+    setTimeLeft(secondsPerQuestion);
+    setTotalElapsedSeconds(0);
+    setIsTimerPaused(false);
   };
+
+  const handleChangePreset = (preset: 30 | 45 | 60) => {
+    setSecondsPerQuestion(preset);
+    if (!hasSubmitted) {
+      setTimeLeft(preset);
+    }
+  };
+
+  const formatSeconds = (sec: number) => {
+    const mins = Math.floor(sec / 60);
+    const rem = sec % 60;
+    return `${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+  };
+
+  const timerPct = Math.max(0, Math.min(100, (timeLeft / secondsPerQuestion) * 100));
+  const isCriticalTime = timeLeft <= 10 && !hasSubmitted;
+  const isWarningTime = timeLeft <= 20 && timeLeft > 10 && !hasSubmitted;
 
   const isSelectedCorrect = selectedAnswer === currentQ?.correctAnswer;
   const accuracyPercent =
@@ -380,15 +449,123 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
-            aria-label="Close drill modal"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!isFinished && (
+              <button
+                type="button"
+                onClick={() => setIsTimerOverlayVisible((v) => !v)}
+                className={`px-2 py-1 rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer border ${
+                  isTimerOverlayVisible
+                    ? 'bg-slate-900/75 text-amber-300 border-white/30'
+                    : 'bg-white/15 hover:bg-white/25 text-white border-white/20'
+                }`}
+                title="Toggle Quick-Drill Exam Countdown Timer Overlay"
+              >
+                <Timer className="w-3.5 h-3.5" />
+                <span className="font-mono tabular-nums">
+                  {isTimerOverlayVisible ? formatSeconds(timeLeft) : 'Timer Off'}
+                </span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+              aria-label="Close drill modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
+
+        {/* High-Pressure Quick-Drill Timer Overlay HUD */}
+        {!isFinished && currentQ && isTimerOverlayVisible && (
+          <div
+            role="timer"
+            aria-live="polite"
+            aria-label={`Quick-Drill countdown: ${timeLeft} seconds remaining`}
+            className={`shrink-0 px-4 sm:px-6 py-2 border-b transition-colors duration-300 relative overflow-hidden ${
+              timedOut
+                ? 'bg-rose-950 text-white border-rose-700'
+                : isCriticalTime
+                ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-700 text-rose-950 dark:text-rose-100'
+                : isWarningTime
+                ? 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-950 dark:text-amber-100'
+                : 'bg-slate-900 text-white border-slate-800'
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 relative z-10 text-xs">
+              <div className="flex items-center gap-2">
+                <div
+                  className={`flex items-center gap-1.5 font-mono font-black text-sm tabular-nums ${
+                    isCriticalTime ? 'text-rose-600 dark:text-rose-300 animate-pulse' : isWarningTime ? 'text-amber-700 dark:text-amber-300' : 'text-sky-300'
+                  }`}
+                >
+                  <Timer className="w-4 h-4 shrink-0" />
+                  <span>{formatSeconds(timeLeft)}</span>
+                </div>
+                <span className="text-[11px] font-bold opacity-85">
+                  {timedOut
+                    ? 'Time Expired — Review explanation below'
+                    : isCriticalTime
+                    ? 'Quick-Drill Alert · Final Seconds!'
+                    : isWarningTime
+                    ? 'Quick-Drill Pace · Pick Best Option'
+                    : 'Quick-Drill Exam Pressure Mode'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {/* Speed Preset Switcher */}
+                <div className="inline-flex items-center p-0.5 rounded-lg bg-black/15 dark:bg-white/10 text-[10px] font-bold">
+                  {([30, 45, 60] as const).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handleChangePreset(preset)}
+                      className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                        secondsPerQuestion === preset
+                          ? 'bg-[#0078D4] text-white font-black shadow-2xs'
+                          : 'opacity-75 hover:opacity-100'
+                      }`}
+                      title={`Set ${preset} seconds per Quick-Drill question`}
+                    >
+                      {preset}s
+                    </button>
+                  ))}
+                </div>
+
+                {/* Pause / Resume Countdown */}
+                {!hasSubmitted && (
+                  <button
+                    type="button"
+                    onClick={() => setIsTimerPaused((p) => !p)}
+                    className="p-1 rounded-lg bg-black/15 hover:bg-black/25 dark:bg-white/10 dark:hover:bg-white/20 transition-colors cursor-pointer"
+                    title={isTimerPaused ? 'Resume Quick-Drill countdown' : 'Pause Quick-Drill countdown'}
+                    aria-label={isTimerPaused ? 'Resume countdown' : 'Pause countdown'}
+                  >
+                    {isTimerPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Depleting Countdown Progress Track */}
+            <div className="w-full h-1.5 rounded-full bg-black/15 dark:bg-white/10 overflow-hidden mt-1.5">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ease-linear ${
+                  timedOut || isCriticalTime
+                    ? 'bg-rose-500'
+                    : isWarningTime
+                    ? 'bg-amber-500'
+                    : 'bg-gradient-to-r from-sky-400 to-emerald-400'
+                }`}
+                style={{ width: `${timerPct}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Scrollable Body that adapts to any viewport height */}
         {!isFinished && currentQ ? (
@@ -491,12 +668,16 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
                 <div className="flex items-center gap-1.5 font-bold">
                   {isSelectedCorrect ? (
                     <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : timedOut ? (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                   ) : (
                     <XCircle className="w-4 h-4 text-amber-600 shrink-0" />
                   )}
                   <span>
                     {isSelectedCorrect
                       ? 'Correct! Weakness domain confidence reinforced.'
+                      : timedOut
+                      ? `Time Expired — Correct Answer is ${currentQ.correctAnswer}`
                       : `Correct Answer is ${currentQ.correctAnswer}`}
                   </span>
                 </div>
@@ -568,6 +749,9 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
               <h3 className="text-xl sm:text-2xl font-black text-slate-900 mt-2">
                 You Scored {score} of {drillQuestions.length} Correct ({accuracyPercent}%)
               </h3>
+              <p className="text-xs font-mono font-bold text-[#0078D4]">
+                Quick-Drill Time: {formatSeconds(totalElapsedSeconds)} ({secondsPerQuestion}s/Q pace)
+              </p>
               <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto">
                 {earnedAccuracyBadge
                   ? `Outstanding accuracy on Module ${targetModuleId} (${targetModuleName})! Your weakness tracker and domain confidence have been updated.`

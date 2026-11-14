@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   BookOpen,
   Award,
@@ -12,6 +12,8 @@ import {
   Target,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   RotateCcw,
   Menu,
   X,
@@ -102,13 +104,13 @@ const DailyStudyGoalRing: React.FC<{
   const strokeDashoffset = circumference - effectiveRatio * circumference;
 
   return (
-    <div className="inline-flex items-center gap-1 shrink-0">
+    <div className="inline-block align-middle whitespace-nowrap">
       <button
         type="button"
         onClick={isGoalReached && onOpenCelebration ? onOpenCelebration : onClick}
-        className={`group relative flex items-center gap-1.5 ${
+        className={`group relative inline-flex items-center gap-1.5 ${
           compact ? 'px-2 py-1' : 'px-2.5 py-1'
-        } rounded-xl border text-xs font-extrabold transition-all duration-300 shadow-2xs cursor-pointer shrink-0 overflow-visible ${
+        } rounded-xl border text-xs font-extrabold transition-all duration-300 shadow-2xs cursor-pointer overflow-visible whitespace-nowrap ${
           isGoalReached
             ? 'bg-gradient-to-r from-emerald-50 via-amber-50 to-orange-50 hover:from-emerald-100 hover:to-amber-100 text-emerald-950 border-amber-400 ring-1 ring-amber-400/60 animate-goal-celebrate'
             : 'bg-orange-50/90 hover:bg-orange-100 text-orange-900 border-orange-200/90'
@@ -217,6 +219,189 @@ const DailyStudyGoalRing: React.FC<{
   );
 };
 
+/**
+ * Single-File Intuitive Horizontal Scroller (Left-to-Right & Right-to-Left)
+ * Uses pure Tailwind CSS block/inline-block utilities (zero flexbox) to keep all
+ * header controls strictly aligned in a single horizontal line across every viewport:
+ * - Touch / trackpad swipe & mouse drag-to-scroll (left <-> right)
+ * - Mouse-wheel vertical-to-horizontal glide
+ * - Left & right chevron nudge buttons when overflowing
+ * - Subtle 2px Azure scroll position track along the bottom
+ */
+const SingleFileHorizontalScroller: React.FC<{
+  children: React.ReactNode;
+  ariaLabel?: string;
+}> = ({ children, ariaLabel = 'Horizontal controls scroll track' }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const dragStateRef = useRef<{ isDown: boolean; startX: number; scrollLeft: number; dragged: boolean }>({
+    isDown: false,
+    startX: 0,
+    scrollLeft: 0,
+    dragged: false,
+  });
+
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [scrollRatio, setScrollRatio] = useState(0);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  const updateScrollState = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+    const hasOverflow = maxScroll > 4;
+    setIsOverflowing(hasOverflow);
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft < maxScroll - 4);
+    setScrollRatio(maxScroll > 0 ? Math.min(1, Math.max(0, el.scrollLeft / maxScroll)) : 0);
+  }, []);
+
+  useEffect(() => {
+    updateScrollState();
+    const el = scrollRef.current;
+    const innerEl = innerRef.current;
+    if (!el) return;
+
+    const ro = new ResizeObserver(() => {
+      updateScrollState();
+    });
+    ro.observe(el);
+    if (innerEl) ro.observe(innerEl);
+
+    window.addEventListener('resize', updateScrollState);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateScrollState);
+    };
+  }, [updateScrollState]);
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if (maxScroll <= 2) return;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && e.deltaY !== 0) {
+      el.scrollLeft += e.deltaY * 0.9;
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, select')) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    dragStateRef.current = {
+      isDown: true,
+      startX: e.pageX - el.offsetLeft,
+      scrollLeft: el.scrollLeft,
+      dragged: false,
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const state = dragStateRef.current;
+    if (!state.isDown) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const x = e.pageX - el.offsetLeft;
+    const walk = x - state.startX;
+    if (Math.abs(walk) > 5) {
+      state.dragged = true;
+      e.preventDefault();
+      el.scrollLeft = state.scrollLeft - walk;
+    }
+  };
+
+  const handleMouseUpOrLeave = () => {
+    dragStateRef.current.isDown = false;
+  };
+
+  const handleClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (dragStateRef.current.dragged) {
+      e.preventDefault();
+      e.stopPropagation();
+      dragStateRef.current.dragged = false;
+    }
+  };
+
+  const slideBy = (direction: -1 | 1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const step = Math.min(280, Math.max(160, el.clientWidth * 0.65));
+    el.scrollBy({ left: direction * step, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="relative block w-full min-w-0 group/rail">
+      {/* Left-to-Right Intuitive Nudge Control */}
+      {canScrollLeft && (
+        <button
+          type="button"
+          onClick={() => slideBy(-1)}
+          aria-label="Scroll controls left"
+          title="Scroll left (Right-to-Left)"
+          className="absolute left-0.5 top-1/2 -translate-y-1/2 z-20 w-6 h-6 rounded-full bg-white/95 dark:bg-slate-800/95 hover:bg-[#0078D4] text-[#005A9E] dark:text-sky-300 hover:text-white border border-sky-300/90 dark:border-sky-600 shadow-md text-center leading-[22px] transition-all duration-150 cursor-pointer hover:scale-110 active:scale-95"
+        >
+          <ChevronLeft className="w-3.5 h-3.5 inline-block align-middle" />
+        </button>
+      )}
+
+      {/* Single-File Horizontal Scroll Track */}
+      <div
+        ref={scrollRef}
+        role="region"
+        aria-label={ariaLabel}
+        onScroll={updateScrollState}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUpOrLeave}
+        onMouseLeave={handleMouseUpOrLeave}
+        onClickCapture={handleClickCapture}
+        className={`block w-full overflow-x-auto no-scrollbar overscroll-x-contain whitespace-nowrap py-0.5 ${
+          isOverflowing ? 'px-5 cursor-grab active:cursor-grabbing' : ''
+        }`}
+      >
+        <div
+          ref={innerRef}
+          className="inline-block align-middle whitespace-nowrap text-left lg:text-right min-w-full [&>*]:inline-block [&>*]:align-middle [&>*]:mx-0.5"
+        >
+          {children}
+        </div>
+      </div>
+
+      {/* Right-to-Left Intuitive Nudge Control */}
+      {canScrollRight && (
+        <button
+          type="button"
+          onClick={() => slideBy(1)}
+          aria-label="Scroll controls right"
+          title="Scroll right (Left-to-Right)"
+          className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 w-6 h-6 rounded-full bg-white/95 dark:bg-slate-800/95 hover:bg-[#0078D4] text-[#005A9E] dark:text-sky-300 hover:text-white border border-sky-300/90 dark:border-sky-600 shadow-md text-center leading-[22px] transition-all duration-150 cursor-pointer hover:scale-110 active:scale-95"
+        >
+          <ChevronRight className="w-3.5 h-3.5 inline-block align-middle" />
+        </button>
+      )}
+
+      {/* Subtle Scroll Track Indicator when Overflowing */}
+      {isOverflowing && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none block w-full h-[2px] rounded-full bg-sky-100/80 dark:bg-slate-800/80 overflow-hidden mt-0.5 opacity-80 group-hover/rail:opacity-100 transition-opacity"
+        >
+          <div
+            className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#0078D4] via-sky-400 to-[#005A9E] transition-transform duration-150 ease-out"
+            style={{
+              transform: `translateX(${scrollRatio * 200}%)`,
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
 export type AppTab =
   | 'quiz'
   | 'adaptive'
@@ -275,6 +460,13 @@ interface HeaderProps {
   onSelectDifficultyForPractice?: (
     difficulty: 'Fundamental' | 'Intermediate' | 'Advanced'
   ) => void;
+  isAiTutorDrawerOpen?: boolean;
+  onToggleAiTutorDrawer?: () => void;
+  currentQuestion?: Question | null;
+  isQuickStudyMode?: boolean;
+  onToggleQuickStudyMode?: () => void;
+  quickStudySecondsLeft?: number;
+  quickStudyQuestionCount?: number;
 }
 
 const PATH_COMPACT_INTEL: Record<
@@ -586,6 +778,13 @@ export const Header: React.FC<HeaderProps> = ({
   unresolvedMistakesCount,
   pendingOfflineCount = 0,
   onSelectDifficultyForPractice,
+  isAiTutorDrawerOpen = false,
+  onToggleAiTutorDrawer,
+  currentQuestion = null,
+  isQuickStudyMode = false,
+  onToggleQuickStudyMode,
+  quickStudySecondsLeft = 300,
+  quickStudyQuestionCount = 10,
 }) => {
   const [showEditDailyGoalModal, setShowEditDailyGoalModal] = useState<boolean>(false);
   const [showGoalAlertsModal, setShowGoalAlertsModal] = useState<boolean>(false);
@@ -781,6 +980,11 @@ export const Header: React.FC<HeaderProps> = ({
   }, [stats.attempts]);
 
   const dailyGoal = stats.dailyGoal || 10;
+  const dailyGoalProgressPct = Math.min(
+    100,
+    Math.round((todayAnsweredCount / Math.max(1, dailyGoal)) * 100)
+  );
+  const isDailyGoalReached = todayAnsweredCount >= dailyGoal && dailyGoal > 0;
 
   // Keep inspectedPathInMenu synced when user changes selectedPathId to a specific path
   React.useEffect(() => {
@@ -924,45 +1128,43 @@ export const Header: React.FC<HeaderProps> = ({
         <WavyAzureFabricMotif />
       </div>
 
-      <div className="max-w-[1560px] 2xl:max-w-[1680px] w-full mx-auto px-3 sm:px-5 lg:px-6 xl:px-8 relative z-10 min-w-0">
+      <div className="max-w-[1680px] w-full mx-auto px-2 sm:px-4 lg:px-6 xl:px-8 relative z-10 min-w-0">
         {/* =====================================================================
-            MOBILE & TABLET COMPACT TOP BAR (< lg screens)
-            - Always displays Azure Cloud Explorer • AZ-900 • Fundamentals Practice Studio
-            - Compact 2-row stack on narrow portrait phones (< sm)
-            - Slim 1-row bar with slightly smaller text on mobile landscape
-            - Clean 1-row tablet portrait bar with dedicated All-Tabs Dropdown Menu
+            RESPONSIVE TAILWIND GRID & INLINE-BLOCK HEADER BAR (NO FLEXBOX)
+            - Transparent branding area with pure black title & zero flexbox
+            - Fluid grid & inline-block alignment across laptop and mobile sizes
            ===================================================================== */}
-        <div className="flex lg:hidden flex-wrap sm:flex-nowrap mobile-landscape:flex-nowrap items-center justify-between py-1.5 sm:py-2 mobile-landscape:py-1 gap-1.5 sm:gap-2 mobile-landscape:gap-1 min-w-0 w-full">
-          {/* Brand Logo + Always-Viewable App Title + Hover/Tap Student Stats Pop-up */}
-          <div className="relative flex items-center min-w-0 basis-full sm:basis-auto sm:flex-1 mobile-landscape:basis-auto mobile-landscape:flex-1">
+        <div className="relative grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)] items-center gap-2 sm:gap-3 lg:gap-4 w-full pt-1.5 sm:pt-2 pb-1 mobile-landscape:py-1 min-w-0">
+          {/* BRANDING TITLE (Pure black title color, transparent surface, non-flex Tailwind, +11% scale) */}
+          <div className="block">
             <div
-              className="flex items-center gap-1.5 sm:gap-2 mobile-landscape:gap-1.5 cursor-pointer group/logo min-w-0 max-w-full"
+              className="inline-block align-middle cursor-pointer group/logo"
               onClick={handleCloudLogoClick}
               onMouseEnter={handleCloudMouseEnter}
               onMouseLeave={handleCloudMouseLeave}
               title="Click or hover to view Student Stats & Daily Encouragement"
             >
-              <div className="relative flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 mobile-landscape:w-7 mobile-landscape:h-7 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shrink-0 group-hover/logo:scale-105 transition-transform">
-                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mobile-landscape:w-3.5 mobile-landscape:h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <div className="relative inline-block align-middle w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shadow-blue-500/20 group-hover/logo:scale-105 transition-transform mr-2 sm:mr-2.5 text-center leading-8 sm:leading-9 lg:leading-10">
+                <svg className="w-4 h-4 sm:w-[18px] sm:h-[18px] lg:w-5 lg:h-5 text-white inline-block align-middle" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
                 </svg>
-                <div className="absolute -bottom-1 -right-1">
-                  <MaasaiMedallion size={10} />
+                <div className="absolute -bottom-1 -right-1 leading-none">
+                  <MaasaiMedallion size={12} />
                 </div>
               </div>
 
-              <div className="block min-w-0 flex-1 text-left">
-                <div className="flex items-center gap-1 min-w-0">
-                  <span className="font-black text-xs xs:text-[13px] sm:text-sm mobile-landscape:text-[11px] tracking-tight text-slate-900 leading-tight truncate">
+              <div className="inline-block align-middle text-left">
+                <div className="block leading-none">
+                  <span className="inline-block align-middle font-black text-[13.5px] xs:text-[14.5px] sm:text-[15.5px] lg:text-[20px] xl:text-[22.5px] tracking-tight text-black leading-none whitespace-nowrap mr-1.5 sm:mr-2">
                     Azure Cloud Explorer
                   </span>
-                  <span className="px-1 xs:px-1.5 py-0.2 rounded text-[8.5px] xs:text-[9.5px] sm:text-[10px] mobile-landscape:text-[8.5px] font-black bg-[#0078D4] text-white shrink-0 shadow-2xs">
+                  <span className="inline-block align-middle px-1.5 py-0.5 rounded text-[9.5px] sm:text-[11px] lg:text-[12px] font-black bg-[#0078D4] text-white shadow-2xs leading-none">
                     AZ-900
                   </span>
                 </div>
-                <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/35 shadow-2xs max-w-full">
-                  <Sparkles className="w-2.5 h-2.5 mobile-landscape:w-2 mobile-landscape:h-2 text-[#0078D4] shrink-0" />
-                  <span className="text-[8.5px] xs:text-[9.5px] sm:text-[10.5px] mobile-landscape:text-[8px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent truncate studio-subtitle-standout">
+                <div className="mt-0.5 block leading-none">
+                  <Sparkles className="w-3 h-3 text-[#0078D4] inline-block align-middle mr-1" />
+                  <span className="inline-block align-middle text-[9px] xs:text-[10px] sm:text-[11px] lg:text-[12.25px] font-extrabold tracking-wide uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 dark:from-sky-300 dark:via-sky-200 dark:to-amber-300 bg-clip-text text-transparent studio-subtitle-standout leading-none whitespace-nowrap">
                     Fundamentals Practice Studio
                   </span>
                 </div>
@@ -970,112 +1172,183 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Right Controls on Mobile & Tablet */}
-          <div className="flex items-center justify-between sm:justify-end mobile-landscape:justify-end gap-1 sm:gap-1.5 mobile-landscape:gap-1 w-full sm:w-auto mobile-landscape:w-auto shrink-0 min-w-0">
-            {/* Tablet Portrait & Mobile Navigation Dropdown Menu Trigger (Accommodates all 16 Nav Bar Buttons) */}
-            <button
-              type="button"
-              onClick={() => openCategoryDropdown('all')}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 mobile-landscape:px-2 py-1 sm:py-1.5 mobile-landscape:py-1 rounded-xl text-[11px] sm:text-xs mobile-landscape:text-[10px] font-extrabold transition-all shadow-xs cursor-pointer border shrink-0 min-w-0 ${
-                isNavDropdownOpen
-                  ? 'bg-[#005A9E] text-white border-[#004578] ring-2 ring-sky-300/60'
-                  : 'bg-sky-50/90 hover:bg-sky-100 text-[#005A9E] border-sky-300/80'
-              }`}
-              aria-expanded={isNavDropdownOpen}
-              aria-haspopup="true"
-              aria-label="Open Navigation Tabs Dropdown Menu"
-              title="Open Navigation Dropdown Menu with all 16 studio tabs"
-            >
-              {isNavDropdownOpen ? (
-                <X className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 shrink-0" />
-              ) : (
-                <Menu className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 text-[#0078D4] shrink-0" />
+          {/* SINGLE-FILE INTUITIVE HORIZONTAL SCROLL CONTROLS (LEFT <-> RIGHT, NO FLEXBOX) */}
+          <SingleFileHorizontalScroller ariaLabel="Single-file Studio Header Controls">
+              {/* Search Bar */}
+              {onSearchQueryChange && onSelectQuestion && (
+                <GlobalSearchBar
+                  questions={questions}
+                  searchQuery={searchQuery}
+                  onSearchQueryChange={onSearchQueryChange}
+                  onSelectQuestion={onSelectQuestion}
+                  onSelectModule={onSelectModule}
+                />
               )}
-              <span className="truncate max-w-[115px] xs:max-w-[140px] sm:max-w-[135px] mobile-landscape:max-w-[95px]">
-                {activeNavTab.label}
-              </span>
-              <ChevronDown
-                className={`w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 shrink-0 transition-transform duration-200 ${
-                  isNavDropdownOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
 
-            <div className="flex items-center gap-1 sm:gap-1.5 mobile-landscape:gap-1 shrink-0">
-              {/* Subtle Supabase Real-Time Connection Status Indicator (Mobile/Tablet) */}
-              <div
-                className={`flex items-center gap-1 px-1.5 sm:px-2 mobile-landscape:px-1.5 py-1 sm:py-1.5 mobile-landscape:py-1 rounded-xl text-[11px] mobile-landscape:text-[10px] font-bold border select-none ${
-                  realtimeStatus === 'connected'
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200/90'
-                    : realtimeStatus === 'syncing'
-                    ? 'bg-amber-50 text-amber-800 border-amber-200/90'
-                    : 'bg-rose-50 text-rose-800 border-rose-200/90'
-                }`}
-                title={
-                  realtimeStatus === 'connected'
-                    ? `Supabase / Postgres Connected${
-                        lastSyncedAt
-                          ? ` • Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
-                          : ''
-                      }`
-                    : realtimeStatus === 'syncing'
-                    ? 'Syncing progress to Supabase / Postgres backend...'
-                    : 'Supabase / Postgres Offline — Progress queued locally'
-                }
-                aria-label={`Supabase real-time sync status: ${realtimeStatus}`}
-              >
-                {realtimeStatus === 'connected' && (
-                  <>
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                    </span>
-                    <Database className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 text-emerald-600" />
-                  </>
-                )}
-                {realtimeStatus === 'syncing' && (
-                  <RefreshCw className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 text-amber-600 animate-spin" />
-                )}
-                {realtimeStatus === 'offline' && (
-                  <WifiOff className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 text-rose-600" />
-                )}
-                {pendingOfflineCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9.5px] font-black">
-                    {pendingOfflineCount}
-                  </span>
-                )}
-              </div>
-
-              <div className="hidden md:block mobile-landscape:hidden">
-                <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
-              </div>
-
-              {/* Show/Hide Tabs toggle — Visible in ALL viewable screen sizes (Portrait & Landscape) */}
+              {/* Categorized Studio Tabs Dropdown Trigger */}
               <button
                 type="button"
-                onClick={toggleMenuBar}
-                className={`group/hidetabs flex items-center gap-1 px-2 sm:px-2.5 mobile-landscape:px-2 py-1 sm:py-1.5 mobile-landscape:py-1 rounded-xl text-[10px] sm:text-[11px] mobile-landscape:text-[10px] font-extrabold transition-all duration-200 shadow-2xs cursor-pointer border shrink-0 ${
-                  isMenuBarHidden
-                    ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
-                    : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300'
+                onClick={() => openCategoryDropdown('all')}
+                className={`inline-block align-middle px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border whitespace-nowrap ${
+                  isNavDropdownOpen
+                    ? 'bg-[#005A9E] text-white border-[#004578] ring-2 ring-sky-300/60'
+                    : 'bg-sky-50/90 hover:bg-sky-100 text-[#005A9E] border-sky-300/80'
                 }`}
-                title={isMenuBarHidden ? 'Show navigation tabs bar' : 'Hide navigation tabs bar'}
-                aria-expanded={!isMenuBarHidden}
-                aria-label={isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}
+                aria-expanded={isNavDropdownOpen}
+                aria-haspopup="true"
+                aria-label="Open Navigation Tabs Dropdown Menu"
+                title="Open Categorized Studio Navigation Dropdown Menu (16 Tabs in 4 Groups)"
               >
-                <Layers
-                  className={`w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform duration-200 group-hover/hidetabs:scale-110 ${
-                    isMenuBarHidden ? 'text-white' : 'text-[#0078D4] group-hover/hidetabs:text-rose-600'
+                {isNavDropdownOpen ? (
+                  <X className="w-3.5 h-3.5 inline-block align-middle mr-1.5" />
+                ) : (
+                  <Menu className="w-3.5 h-3.5 text-[#0078D4] inline-block align-middle mr-1.5" />
+                )}
+                <span className="inline-block align-middle">{activeNavTab.label}</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 inline-block align-middle ml-1.5 transition-transform duration-200 ${
+                    isNavDropdownOpen ? 'rotate-180' : ''
                   }`}
                 />
-                <span>{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
-                {isMenuBarHidden ? (
-                  <ChevronDown className="w-3 h-3 text-white transition-transform duration-200 group-hover/hidetabs:translate-y-0.5" />
-                ) : (
-                  <ChevronUp className="w-3 h-3 text-slate-500 group-hover/hidetabs:text-rose-600 transition-transform duration-200 group-hover/hidetabs:-translate-y-0.5" />
-                )}
               </button>
 
+              {/* Dedicated 'Ask AI Tutor' Slide-Over / Expandable Drawer Button */}
+              {onToggleAiTutorDrawer && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleAiTutorDrawer();
+                    setIsNavDropdownOpen(false);
+                    setIsMobileDetailsOpen(false);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  aria-expanded={isAiTutorDrawerOpen}
+                  aria-controls="ai-tutor-drawer"
+                  title={
+                    currentQuestion
+                      ? `Ask AI Tutor about current question (Module ${currentQuestion.moduleId}: ${currentQuestion.moduleTitle})`
+                      : 'Open Ask AI Tutor sidebar'
+                  }
+                  className={`inline-block align-middle px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border whitespace-nowrap ${
+                    isAiTutorDrawerOpen
+                      ? 'bg-gradient-to-r from-[#C2410C] via-[#D97706] to-[#0078D4] text-white border-amber-300 ring-2 ring-amber-300/60'
+                      : 'bg-gradient-to-r from-amber-50 to-sky-50 hover:from-amber-100 hover:to-sky-100 text-[#005A9E] border-amber-300/80'
+                  }`}
+                >
+                  <Bot
+                    className={`w-3.5 h-3.5 inline-block align-middle mr-1.5 ${
+                      isAiTutorDrawerOpen ? 'text-yellow-200' : 'text-[#C2410C]'
+                    }`}
+                  />
+                  <span className="inline-block align-middle">Ask AI Tutor</span>
+                  {currentQuestion && (
+                    <span
+                      className={`inline-block align-middle ml-1.5 w-1.5 h-1.5 rounded-full ${
+                        isAiTutorDrawerOpen ? 'bg-emerald-300' : 'bg-[#0078D4]'
+                      }`}
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
+              )}
+
+              {/* Quick Study Mode Toggle: 5-Minute Sprint Timer & 10 High-Frequency Curated Questions */}
+              {onToggleQuickStudyMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleQuickStudyMode();
+                    setIsNavDropdownOpen(false);
+                    setIsMobileDetailsOpen(false);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  aria-pressed={isQuickStudyMode}
+                  title={
+                    isQuickStudyMode
+                      ? `Quick Study Sprint Active (${Math.floor(Math.max(0, quickStudySecondsLeft) / 60)
+                          .toString()
+                          .padStart(2, '0')}:${(Math.max(0, quickStudySecondsLeft) % 60)
+                          .toString()
+                          .padStart(2, '0')} remaining • ${quickStudyQuestionCount} high-frequency questions). Click to exit Quick Study.`
+                      : 'Start Quick Study Mode: triggers a 5-minute countdown timer and loads 10 curated high-frequency AZ-900 exam questions'
+                  }
+                  className={`inline-block align-middle px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border whitespace-nowrap ${
+                    isQuickStudyMode
+                      ? quickStudySecondsLeft <= 60 && quickStudySecondsLeft > 0
+                        ? 'bg-gradient-to-r from-rose-600 to-amber-600 text-white border-rose-300 ring-2 ring-rose-300/60'
+                        : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-[#0078D4] text-white border-emerald-300 ring-2 ring-emerald-300/60'
+                      : 'bg-gradient-to-r from-emerald-50 to-sky-50 hover:from-emerald-100 hover:to-sky-100 text-emerald-900 border-emerald-300/80'
+                  }`}
+                >
+                  <Zap
+                    className={`w-3.5 h-3.5 inline-block align-middle mr-1.5 ${
+                      isQuickStudyMode
+                        ? 'text-yellow-200 fill-yellow-300 animate-pulse'
+                        : 'text-emerald-600 fill-emerald-200'
+                    }`}
+                  />
+                  <span className="inline-block align-middle">Quick Study</span>
+                  <span
+                    className={`inline-block align-middle ml-1.5 text-[10px] font-black tabular-nums ${
+                      isQuickStudyMode ? 'text-yellow-100' : 'text-emerald-700'
+                    }`}
+                  >
+                    {isQuickStudyMode
+                      ? `${Math.floor(Math.max(0, quickStudySecondsLeft) / 60)
+                          .toString()
+                          .padStart(2, '0')}:${(Math.max(0, quickStudySecondsLeft) % 60)
+                          .toString()
+                          .padStart(2, '0')} · ${quickStudyQuestionCount}Q`
+                      : `5m · ${quickStudyQuestionCount}Q`}
+                  </span>
+                </button>
+              )}
+
+              {/* Daily Study Goal Progress Ring */}
+              <DailyStudyGoalRing
+                todayAnsweredCount={todayAnsweredCount}
+                dailyGoal={dailyGoal}
+                streakDays={stats.streakDays || 0}
+                onClick={() => setShowEditDailyGoalModal(true)}
+                onOpenCelebration={() => setShowDailyGoalCelebrationModal(true)}
+                compact={true}
+              />
+
+              {/* Tools, Path, Timer & Goal Dropdown Trigger */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileDetailsOpen((prev) => !prev);
+                  setIsNavDropdownOpen(false);
+                  setIsMoreMenuOpen(false);
+                }}
+                className={`inline-block align-middle px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border whitespace-nowrap ${
+                  isMobileDetailsOpen
+                    ? 'bg-[#0078D4] text-white border-[#0078D4]'
+                    : 'bg-sky-50/80 hover:bg-sky-100 text-[#0078D4] border-sky-200/90'
+                }`}
+                aria-expanded={isMobileDetailsOpen}
+                title="Open Studio Tools, Learning Path Filter, Focus Timer & Goal Dropdown Menu"
+              >
+                {isMobileDetailsOpen ? (
+                  <X className="w-3.5 h-3.5 inline-block align-middle mr-1.5" />
+                ) : (
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-[#0078D4] inline-block align-middle mr-1.5" />
+                )}
+                <span className="inline-block align-middle">Tools &amp; Path</span>
+                {missedCount > 0 && (
+                  <span className="inline-block align-middle ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white tabular-nums">
+                    {missedCount}
+                  </span>
+                )}
+                <ChevronDown
+                  className={`w-3.5 h-3.5 inline-block align-middle ml-1.5 transition-transform duration-200 ${
+                    isMobileDetailsOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {/* Difficulty Spectrum Streak Tracker */}
               <DifficultyStreakTracker
                 stats={stats}
                 questions={questions}
@@ -1090,271 +1363,131 @@ export const Header: React.FC<HeaderProps> = ({
                 compact={true}
               />
 
-              <DailyStudyGoalRing
-                todayAnsweredCount={todayAnsweredCount}
-                dailyGoal={dailyGoal}
-                streakDays={stats.streakDays || 0}
-                onClick={() => setShowEditDailyGoalModal(true)}
-                onOpenCelebration={() => setShowDailyGoalCelebrationModal(true)}
-                compact={true}
-              />
+              {/* Harambee Streak Milestone Indicator (7, 14, 30+ days) */}
+              {(() => {
+                const streak = stats.streakDays || 0;
+                const isMilestone = streak === 7 || streak === 14 || streak === 30 || streak >= 50;
+                if (!isMilestone) return null;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setShowDailyGoalCelebrationModal(true)}
+                    className="inline-block align-middle px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white text-xs font-black shadow-md animate-goal-celebrate cursor-pointer border border-amber-300 whitespace-nowrap"
+                    title={`Harambee Milestone Reached: ${streak}-Day Continuous Study Streak! Click to celebrate & share.`}
+                    aria-label={`Harambee Streak Milestone: ${streak} days`}
+                  >
+                    <Flame className="w-3.5 h-3.5 text-amber-200 fill-amber-300 animate-bounce inline-block align-middle mr-1" />
+                    <span className="inline-block align-middle">🔥 {streak}d Milestone</span>
+                  </button>
+                );
+              })()}
 
+              {/* Celebrate 100% Goal / Fire Streak Trigger Button */}
               <button
                 type="button"
-                onClick={() => {
-                  setIsMobileDetailsOpen((prev) => !prev);
-                  setIsNavDropdownOpen(false);
-                }}
-                className={`flex items-center gap-1 px-2 sm:px-2.5 mobile-landscape:px-2 py-1 sm:py-1.5 mobile-landscape:py-1 rounded-xl text-[11px] sm:text-xs mobile-landscape:text-[10px] font-extrabold transition-all shadow-xs cursor-pointer border ${
-                  isMobileDetailsOpen
-                    ? 'bg-[#0078D4] text-white border-[#0078D4]'
-                    : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200/90'
-                }`}
-                aria-expanded={isMobileDetailsOpen}
-                aria-label="Toggle Tools and Goal dropdown"
+                onClick={() => setShowDailyGoalCelebrationModal(true)}
+                className="inline-block align-middle px-2 py-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-orange-900 border border-amber-300/90 text-xs font-extrabold transition-all shadow-2xs cursor-pointer whitespace-nowrap"
+                title="Open Interactive 100% Daily Goal Fire-Streak Celebration & Cohort Peer Share Modal"
+                aria-label="Open Daily Goal Celebration Modal"
               >
-                {isMobileDetailsOpen ? (
-                  <X className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3" />
-                ) : (
-                  <SlidersHorizontal className="w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 text-[#0078D4]" />
-                )}
-                <span className="hidden sm:inline mobile-landscape:hidden">Tools &amp; Goal</span>
-                <span className="sm:hidden mobile-landscape:inline">Tools</span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 mobile-landscape:w-3 mobile-landscape:h-3 transition-transform duration-200 ${
-                    isMobileDetailsOpen ? 'rotate-180' : ''
-                  }`}
-                />
+                <Flame className="w-3.5 h-3.5 text-orange-500 fill-amber-400 inline-block align-middle mr-1" />
+                <span className="inline-block align-middle">Celebrate</span>
               </button>
 
-              {/* Mobile & Tablet Compact Red Sign Out Button with Smooth Width Expansion on Hover */}
+              {/* Show / Hide Secondary Tabs Bar */}
+              <button
+                type="button"
+                onClick={toggleMenuBar}
+                className={`group/hidetabs inline-block align-middle px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all duration-200 shadow-2xs cursor-pointer border whitespace-nowrap ${
+                  isMenuBarHidden
+                    ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
+                    : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300'
+                }`}
+                title={isMenuBarHidden ? 'Show navigation tabs bar' : 'Hide navigation tabs bar'}
+                aria-expanded={!isMenuBarHidden}
+              >
+                <Layers
+                  className={`w-3.5 h-3.5 inline-block align-middle mr-1 transition-transform duration-200 group-hover/hidetabs:scale-110 ${
+                    isMenuBarHidden ? 'text-white' : 'text-[#0078D4] group-hover/hidetabs:text-rose-600'
+                  }`}
+                />
+                <span className="inline-block align-middle">{isMenuBarHidden ? 'Show Nav' : 'Hide Nav'}</span>
+                {isMenuBarHidden ? (
+                  <ChevronDown className="w-3.5 h-3.5 inline-block align-middle ml-1 text-white transition-transform duration-200 group-hover/hidetabs:translate-y-0.5" />
+                ) : (
+                  <ChevronUp className="w-3.5 h-3.5 inline-block align-middle ml-1 text-slate-500 group-hover/hidetabs:text-rose-600 transition-transform duration-200 group-hover/hidetabs:-translate-y-0.5" />
+                )}
+              </button>
+
+              {/* Midnight Theme Toggle */}
+              <ThemeToggle />
+
+              {/* Real-Time Database Sync Indicator */}
+              <div
+                className={`inline-block align-middle px-2 py-1.5 rounded-xl text-[11px] font-bold border select-none whitespace-nowrap ${
+                  realtimeStatus === 'connected'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200/90'
+                    : realtimeStatus === 'syncing'
+                    ? 'bg-amber-50 text-amber-800 border-amber-200/90'
+                    : 'bg-rose-50 text-rose-800 border-rose-200/90'
+                }`}
+                title={
+                  realtimeStatus === 'connected'
+                    ? `Cloud Connected${
+                        lastSyncedAt
+                          ? ` • Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
+                          : ''
+                      }`
+                    : realtimeStatus === 'syncing'
+                    ? 'Syncing progress to cloud backend...'
+                    : 'Offline — Progress queued locally'
+                }
+                aria-label={`Real-time sync status: ${realtimeStatus}`}
+              >
+                {realtimeStatus === 'connected' && (
+                  <>
+                    <span className="relative inline-block align-middle h-2 w-2 mr-1">
+                      <span className="animate-ping absolute inline-block h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-block rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    <Database className="w-3.5 h-3.5 text-emerald-600 inline-block align-middle" />
+                  </>
+                )}
+                {realtimeStatus === 'syncing' && (
+                  <RefreshCw className="w-3.5 h-3.5 text-amber-600 animate-spin inline-block align-middle" />
+                )}
+                {realtimeStatus === 'offline' && (
+                  <WifiOff className="w-3.5 h-3.5 text-rose-600 inline-block align-middle" />
+                )}
+                {pendingOfflineCount > 0 && (
+                  <span className="inline-block align-middle ml-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9.5px] font-black">
+                    {pendingOfflineCount}
+                  </span>
+                )}
+              </div>
+
+              {/* Focus Session Widget */}
+              <div className="inline-block align-middle">
+                <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
+              </div>
+
+              {/* Compact Red Sign Out Button */}
               {onLogout && (
                 <button
                   type="button"
                   onClick={onLogout}
-                  className="group relative flex items-center justify-center hover:justify-start gap-0 hover:gap-2 px-2 hover:px-3 py-1 sm:py-1.5 mobile-landscape:py-1 max-w-[34px] sm:max-w-[38px] hover:max-w-[128px] overflow-hidden rounded-xl bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs mobile-landscape:text-[10px] font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
+                  className="group relative inline-block align-middle text-center hover:text-left px-2.5 hover:px-3.5 py-1.5 max-w-[38px] hover:max-w-[136px] overflow-hidden rounded-xl bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer whitespace-nowrap"
                   title={userEmail ? `Signed in as ${userEmail} • Click to open 17s Secure Exit & WhatsApp Study Report` : 'Sign out & Save Progress'}
                   aria-label="Sign out"
                 >
-                  <ArrowLeftOnRectangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 mobile-landscape:w-3.5 mobile-landscape:h-3.5 shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
-                  <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 max-w-0 group-hover:max-w-[80px] transition-all duration-300 ease-in-out font-extrabold tracking-tight">
+                  <ArrowLeftOnRectangle className="w-4 h-4 inline-block align-middle transition-transform duration-300 group-hover:-translate-x-0.5" />
+                  <span className="inline-block align-middle whitespace-nowrap opacity-0 group-hover:opacity-100 max-w-0 group-hover:max-w-[85px] group-hover:ml-2 transition-all duration-300 ease-in-out font-extrabold tracking-wide overflow-hidden">
                     Sign out
                   </span>
                 </button>
               )}
-            </div>
-          </div>
-        </div>
 
-        {/* =====================================================================
-            LAPTOP & DESKTOP PERMANENT SLIM NAVIGATION BAR TOP TIER (lg+ screens)
-           ===================================================================== */}
-        <div className="hidden lg:flex items-center justify-between py-2 gap-4 xl:gap-6 w-full">
-          {/* Left Brand: Logo & Slightly Larger Azure Curriculum Title in Laptop & Desktop Views */}
-          <div className="relative shrink-0 flex items-center">
-            <div
-              className="flex items-center gap-2.5 cursor-pointer group/logo shrink-0"
-              onClick={handleCloudLogoClick}
-              onMouseEnter={handleCloudMouseEnter}
-              onMouseLeave={handleCloudMouseLeave}
-              title="Click or hover to view Student Stats & Daily Encouragement"
-            >
-              <div className="relative flex items-center justify-center w-9 h-9 xl:w-10 xl:h-10 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#005A9E] shadow-xs shadow-blue-500/20 group-hover/logo:scale-105 transition-transform shrink-0">
-                <svg className="w-4.5 h-4.5 xl:w-5 xl:h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
-                </svg>
-                <div className="absolute -bottom-1 -right-1">
-                  <MaasaiMedallion size={13} />
-                </div>
-              </div>
-
-              <div className="text-left">
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-lg xl:text-xl 2xl:text-[22px] tracking-tight text-slate-900 leading-none">
-                    Azure Cloud Explorer
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md text-[11px] xl:text-xs font-black bg-[#0078D4] text-white shadow-2xs leading-none">
-                    AZ-900
-                  </span>
-                </div>
-                <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-gradient-to-r from-[#0078D4]/15 via-sky-500/20 to-amber-500/20 border border-[#0078D4]/40 shadow-2xs">
-                  <Sparkles className="w-3 h-3 text-[#0078D4] shrink-0" />
-                  <span className="text-[11px] xl:text-xs font-extrabold tracking-wider uppercase bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-amber-700 bg-clip-text text-transparent studio-subtitle-standout leading-none">
-                    Fundamentals Practice Studio
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Controls: Compact Single-Row Layout Utilizing Dropdown Menus across Laptop & Desktop */}
-          <div className="flex items-center justify-end gap-1 xl:gap-1.5 flex-nowrap shrink-0">
-            {onSearchQueryChange && onSelectQuestion && (
-              <GlobalSearchBar
-                questions={questions}
-                searchQuery={searchQuery}
-                onSearchQueryChange={onSearchQueryChange}
-                onSelectQuestion={onSelectQuestion}
-                onSelectModule={onSelectModule}
-              />
-            )}
-
-            {/* Categorized Studio Tabs Dropdown Trigger (Desktop & Laptop) */}
-            <button
-              type="button"
-              onClick={() => openCategoryDropdown('all')}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 whitespace-nowrap ${
-                isNavDropdownOpen
-                  ? 'bg-[#005A9E] text-white border-[#004578] ring-2 ring-sky-300/60'
-                  : 'bg-sky-50/90 hover:bg-sky-100 text-[#005A9E] border-sky-300/80'
-              }`}
-              aria-expanded={isNavDropdownOpen}
-              aria-haspopup="true"
-              title="Open Categorized Studio Navigation Dropdown Menu (16 Tabs in 4 Groups)"
-            >
-              {isNavDropdownOpen ? (
-                <X className="w-3.5 h-3.5 shrink-0" />
-              ) : (
-                <Menu className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
-              )}
-              <span>{activeNavTab.label}</span>
-              <ChevronDown
-                className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
-                  isNavDropdownOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
-
-            <DifficultyStreakTracker
-              stats={stats}
-              questions={questions}
-              activeDifficulty={effectiveDynamicDifficulty}
-              onSelectDifficultyForPractice={(diff) => {
-                if (onSelectDifficultyForPractice) {
-                  onSelectDifficultyForPractice(diff);
-                } else {
-                  setActiveTab('quiz');
-                }
-              }}
-              compact={true}
-            />
-
-            {/* Harambee Streak Milestone Indicator (Triggers celebration on 7, 14, 30 day continuous study streaks) */}
-            {(() => {
-              const streak = stats.streakDays || 0;
-              const isMilestone = streak === 7 || streak === 14 || streak === 30 || streak >= 50;
-              if (!isMilestone) return null;
-              return (
-                <button
-                  type="button"
-                  onClick={() => setShowDailyGoalCelebrationModal(true)}
-                  className="hidden xl:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white text-xs font-black shadow-md animate-goal-celebrate cursor-pointer border border-amber-300 shrink-0"
-                  title={`Harambee Milestone Reached: ${streak}-Day Continuous Study Streak! Click to celebrate & share.`}
-                  aria-label={`Harambee Streak Milestone: ${streak} days`}
-                >
-                  <Flame className="w-3.5 h-3.5 text-amber-200 fill-amber-300 animate-bounce" />
-                  <span>🔥 {streak}d Milestone</span>
-                </button>
-              );
-            })()}
-
-            <DailyStudyGoalRing
-              todayAnsweredCount={todayAnsweredCount}
-              dailyGoal={dailyGoal}
-              streakDays={stats.streakDays || 0}
-              onClick={() => setShowEditDailyGoalModal(true)}
-              onOpenCelebration={() => setShowDailyGoalCelebrationModal(true)}
-              compact={true}
-            />
-
-            {/* Celebrate 100% Goal / Fire Streak Trigger Button */}
-            <button
-              type="button"
-              onClick={() => setShowDailyGoalCelebrationModal(true)}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-orange-900 border border-amber-300/90 text-xs font-extrabold transition-all shadow-2xs cursor-pointer shrink-0 whitespace-nowrap"
-              title="Open Interactive 100% Daily Goal Fire-Streak Celebration & Cohort Peer Share Modal"
-              aria-label="Open Daily Goal Celebration Modal"
-            >
-              <Flame className="w-3.5 h-3.5 text-orange-500 fill-amber-400 shrink-0" />
-              <span className="hidden xl:inline">Celebrate</span>
-            </button>
-
-            {/* Desktop Tools, Path, Timer & Goal Dropdown Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsMobileDetailsOpen((prev) => !prev);
-                setIsNavDropdownOpen(false);
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 whitespace-nowrap ${
-                isMobileDetailsOpen
-                  ? 'bg-[#0078D4] text-white border-[#0078D4]'
-                  : 'bg-sky-50/80 hover:bg-sky-100 text-[#0078D4] border-sky-200/90'
-              }`}
-              aria-expanded={isMobileDetailsOpen}
-              title="Open Studio Tools, Learning Path Filter, Focus Timer & Goal Dropdown Menu"
-            >
-              {isMobileDetailsOpen ? (
-                <X className="w-3.5 h-3.5 shrink-0" />
-              ) : (
-                <SlidersHorizontal className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
-              )}
-              <span>Tools &amp; Path</span>
-              {missedCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white tabular-nums">
-                  {missedCount}
-                </span>
-              )}
-              <ChevronDown
-                className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
-                  isMobileDetailsOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleMenuBar}
-              className={`group/hidetabs flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-extrabold transition-all duration-200 shadow-2xs cursor-pointer border shrink-0 whitespace-nowrap ${
-                isMenuBarHidden
-                  ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
-                  : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300'
-              }`}
-              title={isMenuBarHidden ? 'Show compact dropdown navigation bar' : 'Hide compact dropdown navigation bar'}
-              aria-expanded={!isMenuBarHidden}
-            >
-              <Layers
-                className={`w-3.5 h-3.5 transition-transform duration-200 group-hover/hidetabs:scale-110 ${
-                  isMenuBarHidden ? 'text-white' : 'text-[#0078D4] group-hover/hidetabs:text-rose-600'
-                }`}
-              />
-              <span className="hidden xl:inline">{isMenuBarHidden ? 'Show Nav' : 'Hide Nav'}</span>
-              {isMenuBarHidden ? (
-                <ChevronDown className="w-3.5 h-3.5 text-white transition-transform duration-200 group-hover/hidetabs:translate-y-0.5" />
-              ) : (
-                <ChevronUp className="w-3.5 h-3.5 text-slate-500 group-hover/hidetabs:text-rose-600 transition-transform duration-200 group-hover/hidetabs:-translate-y-0.5" />
-              )}
-            </button>
-
-            <ThemeToggle />
-
-            {onLogout && (
-              <button
-                type="button"
-                onClick={onLogout}
-                className="group relative flex items-center justify-center hover:justify-start gap-0 hover:gap-2 px-2.5 hover:px-3.5 py-1.5 max-w-[38px] hover:max-w-[136px] overflow-hidden rounded-xl bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
-                title={userEmail ? `Signed in as ${userEmail} • Click to open 17s Secure Exit & WhatsApp Study Report` : 'Sign out & Save Progress'}
-                aria-label="Sign out"
-              >
-                <ArrowLeftOnRectangle className="w-4 h-4 shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
-                <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 max-w-0 group-hover:max-w-[85px] transition-all duration-300 ease-in-out font-extrabold tracking-wide">
-                  Sign out
-                </span>
-              </button>
-            )}
-
-            {/* Small Dropdown Menu on the Far Right of Screen: Houses all studio controls & any missed/condensed buttons on laptop view */}
-            <div className="relative shrink-0">
+              {/* More Studio Controls Overflow Trigger */}
               <button
                 type="button"
                 onClick={() => {
@@ -1362,7 +1495,7 @@ export const Header: React.FC<HeaderProps> = ({
                   setIsNavDropdownOpen(false);
                   setIsMobileDetailsOpen(false);
                 }}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-black transition-all shadow-2xs cursor-pointer border shrink-0 whitespace-nowrap ${
+                className={`inline-block align-middle px-2.5 py-1.5 rounded-xl text-xs font-black transition-all shadow-2xs cursor-pointer border whitespace-nowrap ${
                   isMoreMenuOpen
                     ? 'bg-[#0078D4] text-white border-[#0078D4] ring-2 ring-sky-300/60'
                     : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border-slate-200 dark:border-slate-700'
@@ -1371,419 +1504,419 @@ export const Header: React.FC<HeaderProps> = ({
                 aria-haspopup="true"
                 title="Studio Controls Overflow Menu: Celebrate, Show/Hide Nav, Goal Settings, Shortcuts, User Guide & Sign Out"
               >
-                <SlidersHorizontal className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-300 shrink-0" />
-                <span className="text-[11px] font-extrabold">More</span>
+                <MoreHorizontal className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-300 inline-block align-middle mr-1.5" />
+                <span className="text-[11px] font-extrabold inline-block align-middle">More</span>
                 <ChevronDown
-                  className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
+                  className={`w-3.5 h-3.5 inline-block align-middle ml-1.5 transition-transform duration-200 ${
                     isMoreMenuOpen ? 'rotate-180' : ''
                   }`}
                 />
               </button>
+          </SingleFileHorizontalScroller>
 
-              {/* Far-Right Dropdown Panel */}
-              {isMoreMenuOpen && (
-                <div
-                  className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-150 text-xs"
-                  role="menu"
+          {/* More Menu Dropdown rendered outside the horizontal scroll container so it is NEVER clipped vertically */}
+          {isMoreMenuOpen && (
+            <div
+              className="absolute right-0 top-full mt-1.5 w-72 sm:w-80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-150 text-xs"
+              role="menu"
+            >
+              <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <span className="font-black text-slate-900 dark:text-white uppercase tracking-wider text-[10px]">
+                  Studio Controls &amp; Quick Actions
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 dark:bg-sky-950 text-[#0078D4] dark:text-sky-300">
+                  Studio Hub
+                </span>
+              </div>
+
+              <div className="space-y-0.5 max-h-[75vh] overflow-y-auto p-0.5">
+                {/* Celebrate Daily Goal */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDailyGoalCelebrationModal(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
                 >
-                  <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <span className="font-black text-slate-900 dark:text-white uppercase tracking-wider text-[10px]">
-                      Studio Controls &amp; Quick Actions
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 dark:bg-sky-950 text-[#0078D4] dark:text-sky-300">
-                      Laptop Hub
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-orange-600 flex items-center justify-center shrink-0">
+                      <Flame className="w-4 h-4 fill-amber-400" />
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                        Celebrate Daily Goal
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        {todayAnsweredCount}/{dailyGoal} Qs answered today
+                      </div>
+                    </div>
                   </div>
+                  <span className="text-[10px] font-black text-amber-700 bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.5 rounded shrink-0">
+                    {todayAnsweredCount >= dailyGoal ? 'Goal Met! 🎉' : `${Math.round((todayAnsweredCount / dailyGoal) * 100)}%`}
+                  </span>
+                </button>
 
-                  <div className="space-y-0.5 max-h-[75vh] overflow-y-auto p-0.5">
-                    {/* Celebrate Daily Goal */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowDailyGoalCelebrationModal(true);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-orange-600 flex items-center justify-center shrink-0">
-                          <Flame className="w-4 h-4 fill-amber-400" />
-                        </div>
-                        <div>
-                          <div className="font-extrabold text-slate-900 dark:text-white text-xs">
-                            Celebrate Daily Goal
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            {todayAnsweredCount}/{dailyGoal} Qs answered today
-                          </div>
-                        </div>
+                {/* Show/Hide Navigation Tabs Bar */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleMenuBar();
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-sky-50 dark:hover:bg-sky-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-[#0078D4] flex items-center justify-center shrink-0">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                        {isMenuBarHidden ? 'Show Navigation Tabs Bar' : 'Hide Navigation Tabs Bar'}
                       </div>
-                      <span className="text-[10px] font-black text-amber-700 bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.5 rounded shrink-0">
-                        {todayAnsweredCount >= dailyGoal ? 'Goal Met! 🎉' : `${Math.round((todayAnsweredCount / dailyGoal) * 100)}%`}
-                      </span>
-                    </button>
-
-                    {/* Show/Hide Navigation Tabs Bar */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        toggleMenuBar();
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-sky-50 dark:hover:bg-sky-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-[#0078D4] flex items-center justify-center shrink-0">
-                          <Layers className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="font-extrabold text-slate-900 dark:text-white text-xs">
-                            {isMenuBarHidden ? 'Show Navigation Tabs Bar' : 'Hide Navigation Tabs Bar'}
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            {isMenuBarHidden ? 'Reveal 4 categorized dropdown tabs' : 'Maximize quiz vertical space'}
-                          </div>
-                        </div>
+                      <div className="text-[10px] text-slate-500">
+                        {isMenuBarHidden ? 'Reveal 4 categorized dropdown tabs' : 'Maximize quiz vertical space'}
                       </div>
-                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
-                        {isMenuBarHidden ? 'Hidden' : 'Visible'}
-                      </span>
-                    </button>
-
-                    {/* Edit Daily Goal Target */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowEditDailyGoalModal(true);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center shrink-0">
-                          <Target className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="font-extrabold text-slate-900 dark:text-white text-xs">
-                            Edit Daily Study Goal
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            Current target: {dailyGoal} questions / day
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded shrink-0">
-                        Target: {dailyGoal}Q
-                      </span>
-                    </button>
-
-                    {/* Tools, Path & Timer Menu */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileDetailsOpen(true);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
-                          <SlidersHorizontal className="w-4 h-4 text-[#0078D4]" />
-                        </div>
-                        <div>
-                          <div className="font-extrabold text-slate-900 dark:text-white text-xs">
-                            Tools &amp; Learning Paths
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            Focus paths, audio pacing &amp; study decks
-                          </div>
-                        </div>
-                      </div>
-                      {missedCount > 0 && (
-                        <span className="text-[10px] font-black text-rose-600 bg-rose-100 dark:bg-rose-950 px-1.5 py-0.5 rounded-full shrink-0">
-                          {missedCount} Missed
-                        </span>
-                      )}
-                    </button>
-
-                    {/* Interactive User Guide */}
-                    {onOpenUserGuide && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onOpenUserGuide();
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 flex items-center justify-center shrink-0">
-                            <BookOpen className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="font-extrabold text-slate-900 dark:text-white text-xs">
-                              Interactive User Guide
-                            </div>
-                            <div className="text-[10px] text-slate-500">
-                              Tips, architecture pinpoints &amp; AZ-900 rules
-                            </div>
-                          </div>
-                        </div>
-                        <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform shrink-0" />
-                      </button>
-                    )}
-
-                    {/* Study Break */}
-                    {onOpenStudyBreak && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onOpenStudyBreak();
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-teal-100 dark:bg-teal-900/40 text-teal-600 flex items-center justify-center shrink-0">
-                            <Zap className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="font-extrabold text-slate-900 dark:text-white text-xs">
-                              Take a Study Break
-                            </div>
-                            <div className="text-[10px] text-slate-500">
-                              Mindful pacing, trivia &amp; eye rest
-                            </div>
-                          </div>
-                        </div>
-                        <span className="text-[10px] font-bold text-teal-700 bg-teal-100 dark:bg-teal-900/60 px-1.5 py-0.5 rounded shrink-0">
-                          5 min
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Accessibility & Shortcuts */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        openAccessibilityModal();
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 flex items-center justify-center shrink-0">
-                          <SlidersHorizontal className="w-4 h-4 text-purple-600" />
-                        </div>
-                        <div>
-                          <div className="font-extrabold text-slate-900 dark:text-white text-xs">
-                            Accessibility &amp; Shortcuts
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            Font size, high contrast &amp; key combos
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-mono text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
-                        ⌘ / Ctrl
-                      </span>
-                    </button>
-
-                    {/* Backend Database Status */}
-                    {onOpenCloudBackend && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onOpenCloudBackend();
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center shrink-0">
-                            <Database className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="font-extrabold text-slate-900 dark:text-white text-xs">
-                              Supabase Cloud Backend
-                            </div>
-                            <div className="text-[10px] text-slate-500">
-                              Postgres connection, sync &amp; audit
-                            </div>
-                          </div>
-                        </div>
-                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded shrink-0">
-                          {realtimeStatus}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Sign Out (in dropdown as guaranteed fallback) */}
-                    {onLogout && (
-                      <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onLogout();
-                            setIsMoreMenuOpen(false);
-                          }}
-                          className="w-full text-left px-2.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 flex items-center justify-between gap-2 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2">
-                            <ArrowLeftOnRectangle className="w-4 h-4 text-red-600" />
-                            <div>
-                              <div className="font-black text-xs">Sign Out</div>
-                              <div className="text-[10px] text-red-500 dark:text-red-400">
-                                {userEmail || 'Save session & exit'}
-                              </div>
-                            </div>
-                          </div>
-                          <span className="text-[10px] font-black uppercase text-red-600 shrink-0">
-                            Exit
-                          </span>
-                        </button>
-                      </div>
-                    )}
+                    </div>
                   </div>
-                </div>
-              )}
+                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                    {isMenuBarHidden ? 'Hidden' : 'Visible'}
+                  </span>
+                </button>
+
+                {/* Edit Daily Goal Target */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditDailyGoalModal(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center shrink-0">
+                      <Target className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                        Edit Daily Study Goal
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        Current target: {dailyGoal} questions / day
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded shrink-0">
+                    Target: {dailyGoal}Q
+                  </span>
+                </button>
+
+                {/* Tools, Path & Timer Menu */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileDetailsOpen(true);
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
+                      <SlidersHorizontal className="w-4 h-4 text-[#0078D4]" />
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                        Tools &amp; Learning Paths
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        Focus paths, audio pacing &amp; study decks
+                      </div>
+                    </div>
+                  </div>
+                  {missedCount > 0 && (
+                    <span className="text-[10px] font-black text-rose-600 bg-rose-100 dark:bg-rose-950 px-1.5 py-0.5 rounded-full shrink-0">
+                      {missedCount} Missed
+                    </span>
+                  )}
+                </button>
+
+                {/* Interactive User Guide */}
+                {onOpenUserGuide && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenUserGuide();
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                          Interactive User Guide
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          Tips, architecture pinpoints &amp; AZ-900 rules
+                        </div>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                  </button>
+                )}
+
+                {/* Study Break */}
+                {onOpenStudyBreak && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenStudyBreak();
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-teal-100 dark:bg-teal-900/40 text-teal-600 flex items-center justify-center shrink-0">
+                        <Zap className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                          Take a Kahawa Breather
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          Mindful pacing, Kenya Big Five &amp; eye rest
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-teal-700 bg-teal-100 dark:bg-teal-900/60 px-1.5 py-0.5 rounded shrink-0">
+                      60s
+                    </span>
+                  </button>
+                )}
+
+                {/* Accessibility & Shortcuts */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    openAccessibilityModal();
+                    setIsMoreMenuOpen(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 flex items-center justify-center shrink-0">
+                      <SlidersHorizontal className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                        Accessibility &amp; Shortcuts
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        Font size, high contrast &amp; key combos
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                    ⌘ / Ctrl
+                  </span>
+                </button>
+
+                {/* Backend Database Status */}
+                {onOpenCloudBackend && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenCloudBackend();
+                      setIsMoreMenuOpen(false);
+                    }}
+                    className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center shrink-0">
+                        <Database className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                          Cloud Backend Status
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          Database connection, sync &amp; audit
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded shrink-0">
+                      {realtimeStatus}
+                    </span>
+                  </button>
+                )}
+
+                {/* Sign Out */}
+                {onLogout && (
+                  <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onLogout();
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="w-full text-left px-2.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <ArrowLeftOnRectangle className="w-4 h-4 text-red-600" />
+                        <div>
+                          <div className="font-black text-xs">Sign Out</div>
+                          <div className="text-[10px] text-red-500 dark:text-red-400">
+                            {userEmail || 'Save session & exit'}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black uppercase text-red-600 shrink-0">
+                        Exit
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* =====================================================================
-            COMPACT DROPDOWN-DRIVEN NAVIGATION BAR (All Screen Sizes: Desktop, Laptop, Tablet, Mobile — Portrait & Landscape)
-            Replaces 16 sprawling buttons with 4 Categorized Dropdown Menus + All-Tabs Trigger to minimize Nav Bar size
+            RESPONSIVE TAILWIND CSS NAVIGATION TABS BAR (NO FLEXBOX, PRESERVES SKY GRADIENT BACKGROUND)
            ===================================================================== */}
         <nav
           aria-label="Primary Studio Navigation"
           onMouseEnter={handleNavBarMouseEnter}
           onMouseLeave={handleNavBarMouseLeave}
-          className={`relative w-full lg:w-fit lg:max-w-full lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-lg lg:mb-0.5 shadow-xs backdrop-blur-md ${
+          className={`relative w-full max-w-full lg:max-w-5xl lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-lg shadow-xs backdrop-blur-md ${
             isMenuBarHidden
-              ? 'max-h-0 opacity-0 pointer-events-none py-0 border-transparent lg:mb-0'
-              : 'max-h-24 sm:max-h-14 lg:max-h-8 mobile-landscape:max-h-10 opacity-100 py-1 lg:py-0.5 mobile-landscape:py-0.5 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
+              ? 'max-h-0 opacity-0 pointer-events-none py-0 border-transparent my-0'
+              : 'max-h-36 sm:max-h-24 lg:max-h-16 mobile-landscape:max-h-14 opacity-100 py-1 lg:py-0.5 mobile-landscape:py-0.5 mt-0.5 mb-1 mobile-landscape:my-0.5 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
           }`}
         >
           <WavyAzureFabricMotif className="opacity-50" />
-          <div className="relative z-10 flex flex-nowrap overflow-x-auto no-scrollbar items-center justify-start sm:justify-center gap-1 sm:gap-1.5 px-2 lg:px-2 py-0.5 lg:py-0 max-w-full">
-            {/* Left Kenyan Moran Warrior Shield Motif */}
-            <div
-              className="hidden xl:flex items-center shrink-0 px-0.5 opacity-95 hover:opacity-100 transition-opacity"
-              title="Kenyan Warrior Heritage Motif"
-            >
-              <MoranShieldMotif size={14} animate={true} />
-            </div>
+          <div className="relative z-10 block text-center px-2 py-0.5 lg:py-0 w-full [&>*]:inline-block [&>*]:align-middle [&>*]:m-0.5">
+              {/* Left Kenyan Moran Warrior Shield Motif */}
+              <div
+                className="hidden xl:inline-block align-middle px-0.5 opacity-95 hover:opacity-100 transition-opacity"
+                title="Kenyan Warrior Heritage Motif"
+              >
+                <MoranShieldMotif size={14} animate={true} />
+              </div>
 
-            {/* 4 Space-Saving Categorized Dropdown Menus (Employed at ALL Screen Sizes: Desktop, Laptop, Tablet & Mobile) */}
-            {NAV_TAB_GROUPS.map((groupName) => {
-              const groupItems = NAV_TABS.filter((item) => item.group === groupName);
-              const activeItemInGroup = groupItems.find((item) => item.id === activeTab);
-              const isDropdownOpenForGroup =
-                isNavDropdownOpen &&
-                (selectedNavDropdownGroup === groupName || selectedNavDropdownGroup === 'all');
+              {/* 4 Categorized Dropdown Triggers */}
+              {NAV_TAB_GROUPS.map((groupName) => {
+                const groupItems = NAV_TABS.filter((item) => item.group === groupName);
+                const activeItemInGroup = groupItems.find((item) => item.id === activeTab);
+                const isDropdownOpenForGroup =
+                  isNavDropdownOpen &&
+                  (selectedNavDropdownGroup === groupName || selectedNavDropdownGroup === 'all');
 
-              return (
-                <button
-                  key={groupName}
-                  type="button"
-                  onClick={() => openCategoryDropdown(groupName)}
-                  onMouseEnter={() => {
-                    if (isNavDropdownOpen) {
-                      setSelectedNavDropdownGroup(groupName);
-                    }
-                  }}
-                  aria-expanded={isDropdownOpenForGroup}
-                  aria-haspopup="true"
-                  title={`${groupName} Dropdown Menu (${groupItems.map((i) => i.label).join(', ')})`}
-                  className={`flex items-center gap-1 px-2 sm:px-2.5 lg:px-2.5 py-1 lg:py-0.5 mobile-landscape:py-0.5 rounded-lg lg:rounded-md text-[10.5px] sm:text-[11px] lg:text-[10.5px] xl:text-[11px] lg:leading-none mobile-landscape:text-[10px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 border ${
-                    activeItemInGroup
-                      ? 'bg-[#005A9E] text-white border-amber-300/90 shadow-2xs'
-                      : isDropdownOpenForGroup
-                      ? 'bg-sky-700 text-white border-sky-300 shadow-2xs'
-                      : 'bg-white/75 dark:bg-slate-900/70 text-slate-900 dark:text-white border-white/60 hover:bg-white dark:hover:bg-slate-800'
-                  }`}
-                >
-                  {activeItemInGroup ? (
-                    activeItemInGroup.renderIcon(true)
-                  ) : (
-                    groupItems[0]?.renderIcon(false)
-                  )}
-                  <span>{groupName}</span>
-                  {activeItemInGroup && (
-                    <span className="hidden sm:inline text-[9.5px] font-black text-amber-200">
-                      · {activeItemInGroup.label}
-                    </span>
-                  )}
-                  <ChevronDown
-                    className={`w-3 h-3 shrink-0 transition-transform duration-200 ${
-                      isDropdownOpenForGroup && selectedNavDropdownGroup === groupName
-                        ? 'rotate-180'
-                        : ''
+                return (
+                  <button
+                    key={groupName}
+                    type="button"
+                    onClick={() => openCategoryDropdown(groupName)}
+                    onMouseEnter={() => {
+                      if (isNavDropdownOpen) {
+                        setSelectedNavDropdownGroup(groupName);
+                      }
+                    }}
+                    aria-expanded={isDropdownOpenForGroup}
+                    aria-haspopup="true"
+                    title={`${groupName} Dropdown Menu (${groupItems.map((i) => i.label).join(', ')})`}
+                    className={`inline-block align-middle px-2 sm:px-2.5 lg:px-2.5 py-1 lg:py-0.5 mobile-landscape:py-0.5 rounded-lg lg:rounded-md text-[10.5px] sm:text-[11px] lg:text-[10.5px] xl:text-[11px] lg:leading-none mobile-landscape:text-[10px] font-extrabold whitespace-nowrap transition-all cursor-pointer border ${
+                      activeItemInGroup
+                        ? 'bg-[#005A9E] text-white border-amber-300/90 shadow-2xs'
+                        : isDropdownOpenForGroup
+                        ? 'bg-sky-700 text-white border-sky-300 shadow-2xs'
+                        : 'bg-white/75 dark:bg-slate-900/70 text-slate-900 dark:text-white border-white/60 hover:bg-white dark:hover:bg-slate-800'
                     }`}
-                  />
-                </button>
-              );
-            })}
+                  >
+                    <span className="inline-block align-middle mr-1">
+                      {activeItemInGroup ? (
+                        activeItemInGroup.renderIcon(true)
+                      ) : (
+                        groupItems[0]?.renderIcon(false)
+                      )}
+                    </span>
+                    <span className="inline-block align-middle">{groupName}</span>
+                    {activeItemInGroup && (
+                      <span className="hidden sm:inline-block align-middle ml-1 text-[9.5px] font-black text-amber-200">
+                        · {activeItemInGroup.label}
+                      </span>
+                    )}
+                    <ChevronDown
+                      className={`w-3 h-3 inline-block align-middle ml-1 transition-transform duration-200 ${
+                        isDropdownOpenForGroup && selectedNavDropdownGroup === groupName
+                          ? 'rotate-180'
+                          : ''
+                      }`}
+                    />
+                  </button>
+                );
+              })}
 
-            {/* All 16 Tabs Overview Dropdown Trigger */}
-            <button
-              type="button"
-              onClick={() => openCategoryDropdown('all')}
-              aria-expanded={isNavDropdownOpen && selectedNavDropdownGroup === 'all'}
-              aria-haspopup="true"
-              title="Open All 16 Studio Tabs Mega-Dropdown Menu"
-              className={`flex items-center gap-1 px-2 py-1 lg:py-0.5 mobile-landscape:py-0.5 rounded-lg lg:rounded-md text-[10px] sm:text-[10.5px] lg:text-[10px] lg:leading-none font-black whitespace-nowrap transition-all cursor-pointer shrink-0 border ${
-                isNavDropdownOpen && selectedNavDropdownGroup === 'all'
-                  ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
-                  : 'bg-white/60 dark:bg-slate-900/60 text-slate-800 dark:text-slate-100 border-white/50 hover:bg-white/90'
-              }`}
-            >
-              <Menu className="w-3 h-3 shrink-0" />
-              <span>All ({NAV_TABS.length})</span>
-              <ChevronDown
-                className={`w-3 h-3 shrink-0 transition-transform duration-200 ${
-                  isNavDropdownOpen && selectedNavDropdownGroup === 'all' ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
-
-            {/* Right Kenyan Moran Warrior Shield Motif */}
-            <div
-              className="hidden xl:flex items-center shrink-0 px-0.5 opacity-95 hover:opacity-100 transition-opacity"
-              title="Kenyan Warrior Heritage Motif"
-            >
-              <MoranShieldMotif size={14} animate={true} />
-            </div>
-
-            {/* Interactive Closing Hover Effect Control for Tabs Menu Bar + Auto-Hide Option */}
-            <div className="flex items-center gap-1 pl-1 border-l border-white/35 shrink-0">
+              {/* All 16 Tabs Overview Dropdown Trigger */}
               <button
                 type="button"
-                onClick={() => setIsNavBarHoverAutoHide((prev) => !prev)}
-                className={`px-1.5 py-0.5 lg:py-0 rounded-md lg:rounded text-[9.5px] lg:text-[9px] lg:leading-tight font-extrabold transition-all cursor-pointer border whitespace-nowrap ${
-                  isNavBarHoverAutoHide
+                onClick={() => openCategoryDropdown('all')}
+                aria-expanded={isNavDropdownOpen && selectedNavDropdownGroup === 'all'}
+                aria-haspopup="true"
+                title="Open All 16 Studio Tabs Mega-Dropdown Menu"
+                className={`inline-block align-middle px-2 py-1 lg:py-0.5 mobile-landscape:py-0.5 rounded-lg lg:rounded-md text-[10px] sm:text-[10.5px] lg:text-[10px] lg:leading-none font-black whitespace-nowrap transition-all cursor-pointer border ${
+                  isNavDropdownOpen && selectedNavDropdownGroup === 'all'
                     ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
-                    : 'bg-white/50 text-slate-800 border-white/60 hover:bg-white/80'
+                    : 'bg-white/60 dark:bg-slate-900/60 text-slate-800 dark:text-slate-100 border-white/50 hover:bg-white/90'
                 }`}
-                title="Toggle Auto-Close on Hover Leave for the Tabs Menu Bar"
               >
-                {isNavBarHoverAutoHide ? 'Auto-Hide: ON' : 'Auto-Hide'}
+                <Menu className="w-3 h-3 inline-block align-middle mr-1" />
+                <span className="inline-block align-middle">All ({NAV_TABS.length})</span>
+                <ChevronDown
+                  className={`w-3 h-3 inline-block align-middle ml-1 transition-transform duration-200 ${
+                    isNavDropdownOpen && selectedNavDropdownGroup === 'all' ? 'rotate-180' : ''
+                  }`}
+                />
               </button>
 
-              <button
-                type="button"
-                onClick={toggleMenuBar}
-                className="group/closetabs relative flex items-center justify-center hover:justify-start gap-0 hover:gap-1 px-1.5 hover:px-2 py-0.5 lg:py-0.5 max-w-[24px] hover:max-w-[110px] overflow-hidden rounded-lg lg:rounded-md bg-rose-600/90 hover:bg-rose-600 text-white border border-rose-400/80 text-[10px] lg:leading-none font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
-                title="Hover & click to collapse/hide the navigation tabs menu bar"
-                aria-label="Hide Tabs Menu"
+              {/* Right Kenyan Moran Warrior Shield Motif */}
+              <div
+                className="hidden xl:inline-block align-middle px-0.5 opacity-95 hover:opacity-100 transition-opacity"
+                title="Kenyan Warrior Heritage Motif"
               >
-                <X className="w-3 h-3 shrink-0 transition-transform duration-300 group-hover/closetabs:rotate-90" />
-                <span className="whitespace-nowrap opacity-0 group-hover/closetabs:opacity-100 max-w-0 group-hover/closetabs:max-w-[85px] transition-all duration-300 ease-in-out font-extrabold">
-                  Hide Tabs
-                </span>
-              </button>
-            </div>
+                <MoranShieldMotif size={14} animate={true} />
+              </div>
+
+              {/* Interactive Auto-Hide + Hide Tabs Controls */}
+              <div className="inline-block align-middle pl-1 border-l border-white/35 space-x-1">
+                <button
+                  type="button"
+                  onClick={() => setIsNavBarHoverAutoHide((prev) => !prev)}
+                  className={`inline-block align-middle px-1.5 py-0.5 lg:py-0 rounded-md lg:rounded text-[9.5px] lg:text-[9px] lg:leading-tight font-extrabold transition-all cursor-pointer border whitespace-nowrap ${
+                    isNavBarHoverAutoHide
+                      ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
+                      : 'bg-white/50 text-slate-800 border-white/60 hover:bg-white/80'
+                  }`}
+                  title="Toggle Auto-Close on Hover Leave for the Tabs Menu Bar"
+                >
+                  {isNavBarHoverAutoHide ? 'Auto-Hide: ON' : 'Auto-Hide'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={toggleMenuBar}
+                  className="group/closetabs relative inline-block align-middle text-center hover:text-left px-1.5 hover:px-2 py-0.5 lg:py-0.5 max-w-[24px] hover:max-w-[110px] overflow-hidden rounded-lg lg:rounded-md bg-rose-600/90 hover:bg-rose-600 text-white border border-rose-400/80 text-[10px] lg:leading-none font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer whitespace-nowrap"
+                  title="Hover & click to collapse/hide the navigation tabs menu bar"
+                  aria-label="Hide Tabs Menu"
+                >
+                  <X className="w-3 h-3 inline-block align-middle transition-transform duration-300 group-hover/closetabs:rotate-90" />
+                  <span className="inline-block align-middle whitespace-nowrap opacity-0 group-hover/closetabs:opacity-100 max-w-0 group-hover/closetabs:max-w-[85px] group-hover/closetabs:ml-1 transition-all duration-300 ease-in-out font-extrabold overflow-hidden">
+                    Hide Tabs
+                  </span>
+                </button>
+              </div>
           </div>
         </nav>
 
@@ -2123,19 +2256,49 @@ export const Header: React.FC<HeaderProps> = ({
           );
         })()}
 
-        {/* Minimalist Floating Expand Handle (Visible across ALL screen sizes — Portrait & Landscape — when menu bar is hidden) */}
-        {isMenuBarHidden && (
-          <div className="flex justify-center -mt-0.5 mb-1.5 py-1 mobile-landscape:py-0.5 relative z-20">
-            <button
-              type="button"
-              onClick={toggleMenuBar}
-              className="inline-flex items-center gap-1.5 px-4 py-1 mobile-landscape:px-3 mobile-landscape:py-0.5 rounded-full bg-gradient-to-r from-[#003865] to-[#005a9e] hover:from-[#004578] hover:to-[#0078d4] text-white text-[11px] mobile-landscape:text-[10px] font-extrabold shadow-md border border-sky-400/50 cursor-pointer transition-all hover:scale-105"
-              title="Expand navigation menu tabs"
-            >
-              <MoranShieldMotif size={14} animate={false} />
-              <span>Show Tabs ({activeTab.toUpperCase()})</span>
-              <ChevronDown className="w-3.5 h-3.5 text-sky-200" />
-            </button>
+        {/* Centered 'Show Tabs' Handle + Right-Aligned 'Review Now' Action Band Above Daily Questions Goal (Non-Flex Tailwind Grid) */}
+        {(isMenuBarHidden || (onOpenReviewSession && effectiveUnresolvedCount > 5)) && (
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-1.5 pt-1.5 pb-0.5 mobile-landscape:py-0.5 relative z-20">
+            <div className="hidden sm:block" aria-hidden="true" />
+
+            <div className="text-center">
+              {isMenuBarHidden && (
+                <button
+                  type="button"
+                  onClick={toggleMenuBar}
+                  className="inline-block align-middle translate-y-[3px] px-4 py-1 mobile-landscape:px-3 mobile-landscape:py-0.5 rounded-full bg-gradient-to-r from-[#003865] to-[#005a9e] hover:from-[#004578] hover:to-[#0078d4] text-white text-[11px] mobile-landscape:text-[10px] font-extrabold shadow-md border border-sky-400/50 cursor-pointer transition-all hover:scale-105 whitespace-nowrap"
+                  title="Expand navigation menu tabs"
+                >
+                  <span className="inline-block align-middle mr-1.5">
+                    <MoranShieldMotif size={14} animate={false} />
+                  </span>
+                  <span className="inline-block align-middle">Show Tabs ({activeTab.toUpperCase()})</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-sky-200 inline-block align-middle ml-1.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="text-center sm:text-right">
+              {onOpenReviewSession && effectiveUnresolvedCount > 5 && (
+                <button
+                  type="button"
+                  onClick={onOpenReviewSession}
+                  className="inline-block align-middle px-3 py-1 rounded-full bg-gradient-to-r from-rose-600 via-red-600 to-orange-600 hover:from-rose-700 hover:via-red-700 hover:to-orange-700 text-white text-[11px] font-black shadow-md hover:shadow-lg border border-white/90 transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap"
+                  title={`You have ${effectiveUnresolvedCount} unresolved missed questions — click to open Review Session`}
+                  aria-label={`Review Now: ${effectiveUnresolvedCount} unresolved mistakes`}
+                >
+                  <span className="relative inline-block align-middle h-2 w-2 mr-1.5">
+                    <span className="animate-ping absolute inset-0 rounded-full bg-amber-300 opacity-90" />
+                    <span className="relative block rounded-full h-2 w-2 bg-amber-200" />
+                  </span>
+                  <RotateCcw className="w-3 h-3 text-amber-200 inline-block align-middle mr-1" />
+                  <span className="inline-block align-middle">Review Now</span>
+                  <span className="inline-block align-middle ml-1.5 px-1.5 py-0.2 rounded-full bg-black/25 text-[10px] font-black tabular-nums border border-white/25">
+                    {effectiveUnresolvedCount}
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -2193,28 +2356,84 @@ export const Header: React.FC<HeaderProps> = ({
         />
       )}
 
-      {/* Floating 'Review Now' Pill Button (Appears when unresolvedMistakesCount > 5) */}
-      {onOpenReviewSession && effectiveUnresolvedCount > 5 && (
-        <div className="pointer-events-none absolute right-3 sm:right-6 -bottom-4 z-40">
+      {/* Daily Questions Goal Bar directly follows without overlapping Review Now */}
+
+      {/* Slim, Animated Daily 'Questions to Answer' Goal Progress Bar */}
+      <div className="relative z-20 w-full group/goalbar">
+        <div className="max-w-[1680px] mx-auto px-2 sm:px-4 lg:px-6 xl:px-8 grid grid-cols-[1fr_auto] items-center gap-2 text-[10px] leading-none py-0.5 text-slate-600 dark:text-slate-300">
           <button
             type="button"
-            onClick={onOpenReviewSession}
-            className="pointer-events-auto inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-rose-600 via-red-600 to-orange-600 hover:from-rose-700 hover:via-red-700 hover:to-orange-700 text-white text-xs font-black shadow-lg hover:shadow-xl border-2 border-white/90 transition-all hover:scale-105 active:scale-95 cursor-pointer animate-in fade-in slide-in-from-top-2 duration-200"
-            title={`You have ${effectiveUnresolvedCount} unresolved missed questions — click to open Review Session`}
-            aria-label={`Review Now: ${effectiveUnresolvedCount} unresolved mistakes`}
+            onClick={() =>
+              isDailyGoalReached
+                ? setShowDailyGoalCelebrationModal(true)
+                : setShowEditDailyGoalModal(true)
+            }
+            className="inline-block align-middle text-left font-bold hover:text-[#0078D4] transition-colors cursor-pointer"
+            title="Click to adjust daily questions goal or view goal celebration"
           >
-            <span className="relative flex h-2 w-2 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-90" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-200" />
-            </span>
-            <RotateCcw className="w-3.5 h-3.5 text-amber-200 shrink-0" />
-            <span>Review Now</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-black/25 text-[10px] font-black tabular-nums border border-white/25">
-              {effectiveUnresolvedCount}
+            <Target
+              className={`w-3 h-3 inline-block align-middle mr-1.5 ${
+                isDailyGoalReached ? 'text-emerald-600' : 'text-[#0078D4]'
+              }`}
+            />
+            <span className="inline-block align-middle">Daily Questions Goal</span>
+            <span aria-hidden="true" className="text-slate-400 inline-block align-middle mx-1">·</span>
+            <span className="tabular-nums font-extrabold text-slate-800 dark:text-white inline-block align-middle">
+              {todayAnsweredCount} / {dailyGoal}
             </span>
           </button>
+          <span
+            className={`tabular-nums font-extrabold text-right ${
+              isDailyGoalReached
+                ? 'text-emerald-700 dark:text-emerald-300'
+                : 'text-[#005A9E] dark:text-sky-300'
+            }`}
+          >
+            {isDailyGoalReached
+              ? `Goal Complete (${dailyGoalProgressPct}%)`
+              : `${dailyGoalProgressPct}% · ${Math.max(0, dailyGoal - todayAnsweredCount)} left`}
+          </span>
         </div>
-      )}
+
+        <div
+          role="progressbar"
+          aria-label="Daily questions to answer goal progress"
+          aria-valuenow={todayAnsweredCount}
+          aria-valuemin={0}
+          aria-valuemax={dailyGoal}
+          onClick={() =>
+            isDailyGoalReached
+              ? setShowDailyGoalCelebrationModal(true)
+              : setShowEditDailyGoalModal(true)
+          }
+          title={`Daily Goal Progress: ${todayAnsweredCount}/${dailyGoal} questions solved today (${dailyGoalProgressPct}%)`}
+          className="relative w-full h-[5px] bg-sky-100/90 dark:bg-slate-800/90 overflow-hidden cursor-pointer"
+        >
+          {/* Subtle 25%, 50%, 75% Quarter Milestone Ticks */}
+          <span aria-hidden="true" className="absolute top-0 bottom-0 left-1/4 w-px bg-white/70 dark:bg-slate-900/50 z-10 pointer-events-none" />
+          <span aria-hidden="true" className="absolute top-0 bottom-0 left-1/2 w-px bg-white/70 dark:bg-slate-900/50 z-10 pointer-events-none" />
+          <span aria-hidden="true" className="absolute top-0 bottom-0 left-3/4 w-px bg-white/70 dark:bg-slate-900/50 z-10 pointer-events-none" />
+
+          {/* Animated Fill Bar */}
+          <div
+            className={`relative h-full transition-[width] duration-700 ease-out overflow-hidden ${
+              isDailyGoalReached
+                ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400'
+                : dailyGoalProgressPct >= 50
+                ? 'bg-gradient-to-r from-[#0078D4] via-cyan-500 to-emerald-500'
+                : 'bg-gradient-to-r from-[#005A9E] via-[#0078D4] to-sky-400'
+            }`}
+            style={{ width: `${dailyGoalProgressPct}%` }}
+          >
+            {dailyGoalProgressPct > 0 && (
+              <div
+                aria-hidden="true"
+                className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/55 to-transparent animate-slim-progress-shimmer"
+              />
+            )}
+          </div>
+        </div>
+      </div>
     </header>
   );
 };

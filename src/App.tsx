@@ -35,6 +35,10 @@ import {
   StickyNote,
   Eye,
   EyeOff,
+  Map as MapIcon,
+  Pause,
+  Play,
+  X,
 } from 'lucide-react';
 import * as d3 from 'd3';
 import { Header, AppTab } from './components/Header';
@@ -43,6 +47,7 @@ import { QuizCard } from './components/QuizCard';
 import { ModuleBrowser } from './components/ModuleBrowser';
 import { AiScenarioGenerator } from './components/AiScenarioGenerator';
 import { KnowledgeAssistant } from './components/KnowledgeAssistant';
+import { AiTutorDrawer } from './components/AiTutorDrawer';
 import {
   MockExamModal,
   MockExamModeType,
@@ -100,6 +105,7 @@ import { PeerChallengeModal } from './components/PeerChallengeModal';
 import { PracticeControlOverflowMenu } from './components/PracticeControlOverflowMenu';
 import { ThreadMultiSelectDropdown } from './components/ThreadMultiSelectDropdown';
 import { ThreadTagId, getThreadTagsForQuestion } from './data/azureThemesData';
+import { selectCuratedQuickStudyQuestions } from './utils/quickStudySelector';
 import {
   useQuizFocusTimer,
   QuizFocusTimerPill,
@@ -148,8 +154,9 @@ import {
   saveQuestionNote,
 } from './utils/storage';
 import { HoverInfoFeedback } from './components/HoverInfoFeedback';
-import { generateDomainConfidencePdf } from './utils/pdfGenerator';
-import { fireModuleCompletionConfetti } from './utils/confetti';
+import { fireModuleCompletionConfetti, fireDailyGoalCompletionConfetti } from './utils/confetti';
+import { AdaptiveLearningPathDashboard } from './components/AdaptiveLearningPathDashboard';
+import { ResponsiveModalContainer } from './components/ResponsiveModalContainer';
 import { ThemeToggle } from './components/ThemeToggle';
 import { getStoredTheme, applyTheme } from './utils/theme';
 import { getStoredFontScalePercent, applyFontScalePercent } from './utils/fontSize';
@@ -726,6 +733,7 @@ export default function App() {
 
   // Trigger to open the centered Study Zone accordion modal from the Practice toolbar
   const [externalStudyZoneOpenTrigger, setExternalStudyZoneOpenTrigger] = useState<number>(0);
+  const [showMapsModal, setShowMapsModal] = useState<boolean>(false);
 
   // Compact single-line setting for Quick-Sort & Study Tools toolbar (default true so Sort, Diff, Heatmap, Maps, Study Zone stay on a single line)
   const [isQuickSortCompact, setIsQuickSortCompact] = useState<boolean>(() => {
@@ -779,6 +787,54 @@ export default function App() {
 
   // Context for passing a question to Knowledge Assistant
   const [tutorQuestionContext, setTutorQuestionContext] = useState<Question | null>(null);
+  const [isAiTutorDrawerOpen, setIsAiTutorDrawerOpen] = useState<boolean>(false);
+
+  // Quick Study Mode: 5-minute countdown timer + 10 curated high-frequency AZ-900 questions
+  const QUICK_STUDY_DURATION_SECONDS = 300;
+  const QUICK_STUDY_QUESTION_LIMIT = 10;
+  const [isQuickStudyMode, setIsQuickStudyMode] = useState<boolean>(false);
+  const [quickStudyQuestionIds, setQuickStudyQuestionIds] = useState<string[]>([]);
+  const [quickStudySecondsLeft, setQuickStudySecondsLeft] = useState<number>(
+    QUICK_STUDY_DURATION_SECONDS
+  );
+  const [isQuickStudyPaused, setIsQuickStudyPaused] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isQuickStudyMode || isQuickStudyPaused || quickStudySecondsLeft <= 0) return;
+    const timer = window.setInterval(() => {
+      setQuickStudySecondsLeft((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isQuickStudyMode, isQuickStudyPaused, quickStudySecondsLeft]);
+
+  const startQuickStudySprint = useCallback(() => {
+    const curated = selectCuratedQuickStudyQuestions(
+      questions,
+      stats,
+      QUICK_STUDY_QUESTION_LIMIT
+    );
+    setQuickStudyQuestionIds(curated.map((q) => q.id));
+    setQuickStudySecondsLeft(QUICK_STUDY_DURATION_SECONDS);
+    setIsQuickStudyPaused(false);
+    setIsQuickStudyMode(true);
+    setCurrentQuestionIndex(0);
+    setShowPostSessionReview(false);
+    setActiveTab('quiz');
+  }, [questions, stats]);
+
+  const handleToggleQuickStudyMode = useCallback(() => {
+    if (isQuickStudyMode) {
+      setIsQuickStudyMode(false);
+      setIsQuickStudyPaused(false);
+      setCurrentQuestionIndex(0);
+      return;
+    }
+    startQuickStudySprint();
+  }, [isQuickStudyMode, startQuickStudySprint]);
+
+  const handleRestartQuickStudy = useCallback(() => {
+    startQuickStudySprint();
+  }, [startQuickStudySprint]);
 
   // Mock exam modal state
   const [showMockExam, setShowMockExam] = useState<boolean>(false);
@@ -1334,8 +1390,18 @@ export default function App() {
     setActiveTab('quiz');
   };
 
-  // Filtered question set with multi-state difficulty filter, dynamic difficulty lock, 5m retry queue, and global search
+  // Filtered question set with Quick Study override, multi-state difficulty filter, dynamic difficulty lock, 5m retry queue, and global search
   const filteredQuestions = useMemo(() => {
+    if (isQuickStudyMode && quickStudyQuestionIds.length > 0) {
+      const byId = new Map(questions.map((q) => [q.id, q]));
+      const curatedList = quickStudyQuestionIds
+        .map((id) => byId.get(id))
+        .filter((q): q is Question => Boolean(q));
+      if (curatedList.length > 0) {
+        return curatedList;
+      }
+    }
+
     const normalizedSearch = searchQuery.trim().toLowerCase();
     const unresolvedMap = getUnresolvedMistakesMap(stats);
 
@@ -1504,6 +1570,8 @@ export default function App() {
     effectiveDynamicDifficulty,
     lockedDifficulty,
     questionSortOrder,
+    isQuickStudyMode,
+    quickStudyQuestionIds,
   ]);
 
   const threadQuestionCounts = useMemo(() => {
@@ -1657,6 +1725,14 @@ export default function App() {
     const crossedStreakMilestone =
       isCorrect && nextConsecutiveCorrect > 0 && nextConsecutiveCorrect % 5 === 0;
 
+    // Trigger canvas-based confetti celebration when user hits their 100% daily goal target
+    if (prevTodayCount < goalTarget && nextTodayCount >= goalTarget) {
+      fireDailyGoalCompletionConfetti(goalTarget);
+      setAllTimeHighToast(
+        `🎉 Hongera! 100% Daily Study Goal Achieved (${nextTodayCount}/${goalTarget} questions today)! Active study streak ignited 🔥`
+      );
+    }
+
     // Trigger subtle audio effect ('ping' for correct, 'woosh' for incorrect, 'chime' for goal/streak milestones)
     audioManager.handleQuestionFeedback({
       isCorrect,
@@ -1789,6 +1865,9 @@ export default function App() {
     const isCurrentlyComplete = stats.completedModules?.includes(moduleId);
     if (!isCurrentlyComplete) {
       fireModuleCompletionConfetti(`Module ${moduleId}`);
+      setAllTimeHighToast(
+        `🎉 Module ${moduleId} Completed! Hongera on mastering this AZ-900 curriculum milestone.`
+      );
     }
     const updated = toggleModuleCompletion(stats, moduleId);
     setStats(updated);
@@ -2303,6 +2382,13 @@ export default function App() {
               setShowPostSessionReview(false);
               setActiveTab('quiz');
             }}
+            isAiTutorDrawerOpen={isAiTutorDrawerOpen}
+            onToggleAiTutorDrawer={() => setIsAiTutorDrawerOpen((prev) => !prev)}
+            currentQuestion={currentQ}
+            isQuickStudyMode={isQuickStudyMode}
+            onToggleQuickStudyMode={handleToggleQuickStudyMode}
+            quickStudySecondsLeft={quickStudySecondsLeft}
+            quickStudyQuestionCount={quickStudyQuestionIds.length || QUICK_STUDY_QUESTION_LIMIT}
           />
         )}
 
@@ -2388,7 +2474,7 @@ export default function App() {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-[1560px] 2xl:max-w-[1680px] w-full min-w-0 overflow-x-hidden mx-auto px-3 sm:px-5 lg:px-6 xl:px-8 py-4 sm:py-6 portrait:max-md:pb-24 relative z-10">
+      <main className="flex-1 max-w-[1560px] 2xl:max-w-[1680px] w-full min-w-0 overflow-x-hidden mx-auto px-3 sm:px-5 lg:px-6 xl:px-8 pt-2.5 sm:pt-3.5 pb-4 sm:pb-6 portrait:max-md:pb-24 relative z-10">
         {/* TAB 1: PRACTICE MODULES */}
         {activeTab === 'quiz' && (
           <div className="space-y-4 sm:space-y-5 w-full min-w-0">
@@ -2756,15 +2842,19 @@ export default function App() {
                       {/* 4. Maps */}
                       <button
                         type="button"
-                        onClick={() => setShowWorkspacePanels((prev) => !prev)}
+                        onClick={() => setShowMapsModal(true)}
                         className={`px-2 py-1 rounded-lg border text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-                          showWorkspacePanels
-                            ? 'bg-amber-50/95 text-amber-900 border-amber-300 shadow-2xs'
-                            : 'bg-white/95 hover:bg-slate-50 text-slate-700 border-slate-300 shadow-2xs'
+                          showMapsModal || showWorkspacePanels
+                            ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                            : 'bg-white/95 hover:bg-emerald-50 text-slate-800 hover:text-emerald-700 border-slate-300 shadow-2xs'
                         }`}
-                        title="Toggle Maps & Readiness workspace panels"
+                        title="Open Interactive Azure Learning Path Maps & Adaptive Curriculum Dashboard"
                       >
-                        <Layers className="w-3 h-3 text-[#006600]" />
+                        <MapIcon
+                          className={`w-3 h-3 ${
+                            showMapsModal || showWorkspacePanels ? 'text-amber-300' : 'text-emerald-600'
+                          }`}
+                        />
                         <span>Maps</span>
                       </button>
 
@@ -3047,14 +3137,15 @@ export default function App() {
                       {/* Maps & Readiness Toggle */}
                       <button
                         type="button"
-                        onClick={() => setShowWorkspacePanels((prev) => !prev)}
+                        onClick={() => setShowMapsModal(true)}
                         className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs ${
-                          showWorkspacePanels
-                            ? 'bg-amber-50/95 text-amber-900 border-amber-300 shadow-2xs'
-                            : 'bg-white/90 hover:bg-slate-50 text-slate-700 border-slate-200/90 shadow-2xs'
+                          showMapsModal || showWorkspacePanels
+                            ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                            : 'bg-white/90 hover:bg-emerald-50 text-slate-700 border-slate-200/90 shadow-2xs'
                         }`}
+                        title="Open Interactive Azure Learning Path Maps & Adaptive Curriculum Dashboard"
                       >
-                        <Layers className="w-3.5 h-3.5 text-[#006600]" />
+                        <MapIcon className={`w-3.5 h-3.5 ${showMapsModal || showWorkspacePanels ? 'text-amber-300' : 'text-emerald-600'}`} />
                         <span>Maps</span>
                       </button>
 
@@ -3199,8 +3290,33 @@ export default function App() {
                   currentQuestionIndex={currentQuestionIndex}
                 />
 
+                {/* Adaptive Learning Path Summary Dashboard (Maps module accuracy to AI Tutor tutorials & what to study next) */}
+                <AdaptiveLearningPathDashboard
+                  stats={stats}
+                  questions={questions}
+                  onSelectModuleForPractice={(modId) => {
+                    setSelectedModuleId(modId);
+                    setCurrentQuestionIndex(0);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  onNavigateToTab={(tab) => {
+                    setActiveTab(tab);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  onLaunchAiTutorial={(topic, promptText, modId) => {
+                    setActiveTab('assistant');
+                    window.dispatchEvent(
+                      new CustomEvent('az900_open_ai_tutorial', {
+                        detail: { topic, prompt: promptText, moduleId: modId },
+                      })
+                    );
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                />
+
                 {/* Step-by-Step Visual Learning Path Progress Map */}
-                <LearningPathProgressMap
+                <div id="learning-path-progress-map-section">
+                  <LearningPathProgressMap
                   stats={stats}
                   selectedPathId={selectedPathId}
                   selectedModuleId={selectedModuleId}
@@ -3217,6 +3333,7 @@ export default function App() {
                   questionCountByModule={questionCountByModule}
                   defaultExpanded={false}
                 />
+                </div>
 
                 {/* Weekly Exam Readiness & Daily 'Azure Fact of the Day' Notification Component */}
                 <WeeklyExamReadiness
@@ -4073,6 +4190,113 @@ export default function App() {
                     isFocusMode={isFocusMode}
                   />
                 </div>
+
+                {isQuickStudyMode && (
+                  <div
+                    role="region"
+                    aria-label="Quick Study 5-Minute Sprint HUD"
+                    className={`mb-4 rounded-2xl border p-3.5 shadow-sm transition-colors ${
+                      quickStudySecondsLeft === 0
+                        ? 'bg-gradient-to-r from-amber-50 via-rose-50 to-orange-50 border-rose-300 text-rose-950'
+                        : quickStudySecondsLeft <= 60
+                        ? 'bg-gradient-to-r from-rose-50 via-amber-50 to-white border-rose-300 text-slate-900'
+                        : 'bg-gradient-to-r from-emerald-50 via-teal-50/70 to-sky-50 border-emerald-300 text-slate-900'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${
+                            quickStudySecondsLeft === 0
+                              ? 'bg-rose-600 text-white'
+                              : quickStudySecondsLeft <= 60
+                              ? 'bg-rose-600 text-white animate-pulse'
+                              : 'bg-emerald-600 text-white'
+                          }`}
+                        >
+                          <Zap className="w-4.5 h-4.5 fill-current" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs sm:text-sm font-black tracking-tight text-slate-900">
+                              Quick Study Mode · 5-Min High-Frequency Drill
+                            </span>
+                            <span className="text-[11px] font-bold text-emerald-800">
+                              Q {Math.min(currentQuestionIndex + 1, Math.max(1, filteredQuestions.length))} /{' '}
+                              {filteredQuestions.length} · Curated from missed &amp; top AZ-900 concepts
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+                            {quickStudySecondsLeft === 0
+                              ? '5-minute sprint clock complete! Review remaining questions, reshuffle a fresh 10Q set, or exit Quick Study.'
+                              : isQuickStudyPaused
+                              ? 'Sprint timer paused — click Resume when ready to continue.'
+                              : 'Manual filters are bypassed automatically so you drill 10 high-yield questions right away.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                        <div
+                          className={`px-3 py-1.5 rounded-xl border font-mono text-sm font-black tabular-nums flex items-center gap-1.5 ${
+                            quickStudySecondsLeft === 0
+                              ? 'bg-rose-600 text-white border-rose-700'
+                              : quickStudySecondsLeft <= 60
+                              ? 'bg-rose-100 text-rose-800 border-rose-300'
+                              : 'bg-white text-emerald-800 border-emerald-300 shadow-2xs'
+                          }`}
+                        >
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>
+                            {Math.floor(quickStudySecondsLeft / 60)
+                              .toString()
+                              .padStart(2, '0')}
+                            :{(quickStudySecondsLeft % 60).toString().padStart(2, '0')}
+                          </span>
+                        </div>
+
+                        {quickStudySecondsLeft > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setIsQuickStudyPaused((prev) => !prev)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-2xs cursor-pointer transition-colors"
+                          >
+                            {isQuickStudyPaused ? (
+                              <>
+                                <Play className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
+                                <span>Resume</span>
+                              </>
+                            ) : (
+                              <>
+                                <Pause className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Pause</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={handleRestartQuickStudy}
+                          title="Reset 5-minute timer and load a fresh 10-question curated sprint"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-[#0078D4] hover:bg-[#005A9E] text-white shadow-2xs cursor-pointer transition-colors"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>New 10Q · 5m</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleToggleQuickStudyMode}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-white hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-300 hover:border-rose-300 cursor-pointer transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Exit</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div
                   key={`filtered-results-${searchQuery}-${currentQ?.id || currentQuestionIndex}`}
@@ -4958,6 +5182,7 @@ export default function App() {
         onToggleHeatmap={() => setShowPracticeHeatmap((prev) => !prev)}
         showWorkspacePanels={showWorkspacePanels}
         onToggleWorkspacePanels={() => setShowWorkspacePanels((prev) => !prev)}
+        onOpenMapsModal={() => setShowMapsModal(true)}
         onOpenStudyZone={() => setExternalStudyZoneOpenTrigger((prev) => prev + 1)}
         onOpenPeerChallenge={() => {
           setPeerChallengeModuleId(selectedModuleId);
@@ -4979,6 +5204,125 @@ export default function App() {
           onClose={() => setShowExportModal(false)}
           onOpenUserGuide={() => setShowUserGuideModal(true)}
         />
+      )}
+
+      {/* Interactive Azure Learning Path Maps & Adaptive Curriculum Dashboard Modal */}
+      {showMapsModal && (
+        <ResponsiveModalContainer
+          isOpen={showMapsModal}
+          onClose={() => setShowMapsModal(false)}
+          maxWidth="5xl"
+          zIndexClass="z-[125]"
+          ariaLabel="Azure Learning Path Maps and Adaptive Dashboard"
+        >
+          <div className="flex flex-col h-full max-h-[min(90vh,90dvh)] overflow-hidden bg-white">
+            <KitengeRibbon height={3} />
+            {/* Modal Header */}
+            <div className="px-4 sm:px-6 py-3.5 bg-gradient-to-r from-slate-900 via-[#003865] to-[#005A9E] text-white flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/30 text-amber-300 flex items-center justify-center shrink-0 border border-emerald-400/40">
+                  <MapIcon className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm sm:text-base font-black tracking-tight text-white truncate">
+                      Azure Learning Path Maps &amp; Adaptive Dashboard
+                    </h3>
+                    <span className="hidden sm:inline px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500 text-slate-950">
+                      Live Curriculum
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-sky-100 truncate">
+                    Visual roadmap across 3 official Learning Paths &amp; 12 modules with AI Tutor remediation
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowWorkspacePanels(true);
+                    setShowMapsModal(false);
+                    setTimeout(() => {
+                      document.getElementById('learning-path-progress-map-section')?.scrollIntoView({ behavior: 'smooth' });
+                    }, 120);
+                  }}
+                  className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-extrabold transition-colors cursor-pointer"
+                  title="Pin this map directly onto the practice page"
+                >
+                  <Layers className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Pin to Page</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMapsModal(false)}
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                  aria-label="Close Maps Modal"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body with Adaptive Summary Dashboard & Step-by-Step Learning Path Progress Map */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 min-h-0 bg-slate-50/50">
+              {/* Adaptive Learning Path Summary Dashboard (Maps modules to AI tutorials for low accuracy) */}
+              <AdaptiveLearningPathDashboard
+                stats={stats}
+                questions={questions}
+                onSelectModuleForPractice={(modId, pathId) => {
+                  if (pathId) setSelectedPathId(pathId);
+                  setSelectedModuleId(modId);
+                  setShowMapsModal(false);
+                  setCurrentQuestionIndex(0);
+                  setActiveTab('quiz');
+                }}
+                onNavigateToTab={(tab) => {
+                  setActiveTab(tab);
+                  setShowMapsModal(false);
+                }}
+                onLaunchAiTutorial={(topic, promptText, modId) => {
+                  setShowMapsModal(false);
+                  setActiveTab('assistant');
+                  window.dispatchEvent(
+                    new CustomEvent('az900_open_ai_tutorial', {
+                      detail: { topic, prompt: promptText, moduleId: modId },
+                    })
+                  );
+                }}
+              />
+
+              {/* Visual Step-by-Step Learning Path Progress Map */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                    <MapIcon className="w-4 h-4 text-[#006600]" />
+                    <span>Curriculum Step-by-Step Milestone Progression Map</span>
+                  </h4>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {stats.completedModules?.length || 0} of 12 modules completed
+                  </span>
+                </div>
+                <LearningPathProgressMap
+                  stats={stats}
+                  selectedPathId={selectedPathId}
+                  selectedModuleId={selectedModuleId}
+                  onSelectModule={(modId, pathId) => {
+                    setSelectedPathId(pathId);
+                    setSelectedModuleId(modId);
+                    setShowMapsModal(false);
+                    setCurrentQuestionIndex(0);
+                    setActiveTab('quiz');
+                  }}
+                  onToggleModuleComplete={handleToggleModuleComplete}
+                  questionCountByModule={questionCountByModule}
+                  defaultExpanded={true}
+                />
+              </div>
+            </div>
+          </div>
+        </ResponsiveModalContainer>
       )}
 
       {/* Comprehensive Candidate User Guide & Printable/Downloadable PDF Manual */}
@@ -5277,6 +5621,17 @@ export default function App() {
               setActiveTab('quiz');
             }
           }
+        }}
+      />
+      {/* Responsive 'Ask AI Tutor' Slide-Over Panel (Mobile) / Expandable Drawer (Laptop) */}
+      <AiTutorDrawer
+        isOpen={isAiTutorDrawerOpen}
+        onClose={() => setIsAiTutorDrawerOpen(false)}
+        currentQuestion={currentQ}
+        onOpenFullTab={() => {
+          setIsAiTutorDrawerOpen(false);
+          if (currentQ) setTutorQuestionContext(currentQ);
+          setActiveTab('assistant');
         }}
       />
       </div>
