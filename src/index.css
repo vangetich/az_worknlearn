@@ -890,6 +890,25 @@ body.gateway-no-scrollbar::-webkit-scrollbar {
 }
 
 /* =====================================================================
+   FOCUS MODE TOP-ALIGNED POPUPS, MODAL WINDOWS & REVIEW WINDOWS
+   Presents any popup, window, or review modal at the top part of the view
+   whenever Focus Mode is active.
+   ===================================================================== */
+html[data-focus-mode="true"] .unified-modal-viewport-overlay,
+html[data-focus-mode="true"] .fixed.inset-0.items-center,
+html[data-focus-mode="true"] .fixed.inset-0.items-end {
+  align-items: flex-start !important;
+  padding-top: 0.75rem !important;
+}
+
+html[data-focus-mode="true"] .unified-modal-flex-container,
+html[data-focus-mode="true"] .fixed.inset-0 > .my-auto {
+  margin-top: 0 !important;
+  margin-bottom: auto !important;
+}
+
+
+/* =====================================================================
    APPLICATION-WIDE ACCESSIBILITY FONT SIZE SCALING (85% – 150%)
    ===================================================================== */
 :root {

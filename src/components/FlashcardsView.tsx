@@ -29,6 +29,7 @@ import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
 
 interface FlashcardsViewProps {
   stats: UserStats;
+  initialModuleId?: number | 'all';
   onPracticeModule?: (moduleId: number) => void;
 }
 
@@ -48,6 +49,7 @@ interface QuickFireAnswerRecord {
 
 export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   stats,
+  initialModuleId = 'all',
   onPracticeModule,
 }) => {
   // Primary mode: 'study' (Front/Back Flip Cards) vs 'quickfire' (15-20 Card Rapid Knowledge Drill)
@@ -55,11 +57,20 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   const [activeFilter, setActiveFilter] = useState<
     'missed' | 'all' | 1 | 2 | 3 | 'starred'
   >('all');
-  const [selectedModuleFilter, setSelectedModuleFilter] = useState<number | 'all'>('all');
+  const [selectedModuleFilter, setSelectedModuleFilter] = useState<number | 'all'>(initialModuleId);
   const [selectedCardType, setSelectedCardType] = useState<FlashcardType | 'all'>('all');
 
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (initialModuleId !== undefined) {
+      setSelectedModuleFilter(initialModuleId);
+      setActiveFilter('all');
+      setCurrentIndex(0);
+      setIsFlipped(false);
+    }
+  }, [initialModuleId]);
 
   const [masteredCards, setMasteredCards] = useState<string[]>(() => {
     try {
@@ -95,6 +106,39 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   const [quickFireCompleted, setQuickFireCompleted] = useState<boolean>(false);
   const [quickFireStreak, setQuickFireStreak] = useState<number>(0);
   const [cardElapsedSeconds, setCardElapsedSeconds] = useState<number>(0);
+
+  // Blind Recall Mode State
+  const [isBlindRecallMode, setIsBlindRecallMode] = useState<boolean>(false);
+  const [blindRecallInput, setBlindRecallInput] = useState<string>('');
+  const [blindRecallSubmitted, setBlindRecallSubmitted] = useState<boolean>(false);
+  const [blindRecallCorrect, setBlindRecallCorrect] = useState<boolean | null>(null);
+
+  const handleSubmitBlindRecall = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentCard || !blindRecallInput.trim()) return;
+    const guess = blindRecallInput.trim().toLowerCase();
+    const term = currentCard.term.toLowerCase();
+    const acronym = (currentCard.acronym || '').toLowerCase();
+    const isCorrect: boolean = Boolean(
+      term.includes(guess) || guess.includes(term) || (acronym && acronym === guess)
+    );
+    setBlindRecallSubmitted(true);
+    setBlindRecallCorrect(isCorrect);
+    if (isCorrect) {
+      if (!masteredCards.includes(currentCard.id)) {
+        setMasteredCards((prev) => [...prev, currentCard.id]);
+      }
+      setNeedsReviewCards((prev) => prev.filter((id) => id !== currentCard.id));
+    } else {
+      markCardNeedsReview(currentCard.id);
+    }
+  };
+
+  useEffect(() => {
+    setBlindRecallInput('');
+    setBlindRecallSubmitted(false);
+    setBlindRecallCorrect(null);
+  }, [currentIndex, activeFilter, selectedModuleFilter, selectedCardType]);
 
   // Persist mastery, starred, and needs-review lists
   useEffect(() => {
@@ -506,6 +550,22 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
             >
               <Zap className="w-3.5 h-3.5" />
               <span>Quick-Fire Knowledge Drill ({quickFireCount}Q)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPracticeMode('study');
+                setIsBlindRecallMode((prev) => !prev);
+              }}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                isBlindRecallMode
+                  ? 'bg-purple-700 text-white shadow-2xs font-black'
+                  : 'text-slate-600 hover:text-slate-900 bg-purple-50/60'
+              }`}
+              title="Blind Recall: Type the service name before revealing"
+            >
+              <Target className="w-3.5 h-3.5 text-purple-600" />
+              <span>Blind Recall {isBlindRecallMode ? 'ON' : 'OFF'}</span>
             </button>
           </div>
 
@@ -1100,42 +1160,110 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
                     <div className="space-y-4 animate-in fade-in duration-200">
                       <div className="text-xs uppercase font-extrabold text-[#0078D4] tracking-wider flex items-center gap-1.5">
                         <BookOpen className="w-4 h-4" />
-                        <span>Official Concept &amp; Scenario Trigger</span>
-                      </div>
-
-                      <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-snug">
-                        {currentCard.term}
-                      </h2>
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {currentCard.acronym && (
-                          <div className="inline-block px-3 py-1 rounded-lg bg-slate-100 font-mono text-xs font-bold text-slate-700">
-                            {currentCard.acronym}
-                          </div>
-                        )}
-                        {currentCard.keyUnits.map((unit) => (
-                          <span
-                            key={unit}
-                            className="px-2 py-0.5 rounded-md bg-sky-50 text-[#005A9E] border border-sky-200/80 text-[11px] font-bold"
-                          >
-                            {unit}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 text-amber-950 text-sm font-medium leading-relaxed">
-                        <span className="font-bold text-amber-900 block mb-1">
-                          Exam Scenario Trigger:
-                        </span>
-                        {currentCard.frontPrompt}
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-2 text-xs text-slate-400 font-medium">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                         <span>
-                          Click anywhere or press Space to reveal the Azure Curriculum definition, mistake diagnostic, and exam trap!
+                          {isBlindRecallMode
+                            ? 'Blind Recall Mode — Name the Azure Service / Concept'
+                            : 'Official Concept & Scenario Trigger'}
                         </span>
                       </div>
+
+                      {isBlindRecallMode && !blindRecallSubmitted ? (
+                        <div className="space-y-4 pt-2">
+                          <div className="p-4 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 text-sm font-medium leading-relaxed">
+                            <span className="font-bold text-purple-950 block mb-1">
+                              Recall Challenge (Define/Trigger):
+                            </span>
+                            {currentCard.frontPrompt}
+                            <div className="text-xs text-purple-800 mt-2">
+                              <em>Hint categories:</em> {currentCard.category} • Module {currentCard.moduleId}
+                            </div>
+                          </div>
+
+                          <form onSubmit={handleSubmitBlindRecall} className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1">
+                                Type Azure Service Name or Concept Term:
+                              </label>
+                              <input
+                                type="text"
+                                value={blindRecallInput}
+                                onChange={(e) => setBlindRecallInput(e.target.value)}
+                                placeholder="e.g. Azure Policy, ExpressRoute, LRS..."
+                                className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 bg-white"
+                                autoFocus
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="submit"
+                                disabled={!blindRecallInput.trim()}
+                                className="px-5 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-black text-xs shadow-sm cursor-pointer disabled:opacity-40"
+                              >
+                                Submit Recall Answer
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBlindRecallSubmitted(true);
+                                  setBlindRecallCorrect(false);
+                                }}
+                                className="px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                              >
+                                Reveal Answer
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-snug">
+                              {currentCard.term}
+                            </h2>
+                            {isBlindRecallMode && blindRecallSubmitted && (
+                              <span
+                                className={`px-2.5 py-1 rounded-lg text-xs font-black ${
+                                  blindRecallCorrect
+                                    ? 'bg-emerald-100 text-emerald-900'
+                                    : 'bg-rose-100 text-rose-900'
+                                }`}
+                              >
+                                {blindRecallCorrect ? 'Correct Recall! ✓' : 'Incorrect — Review Correct Term'}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {currentCard.acronym && (
+                              <div className="inline-block px-3 py-1 rounded-lg bg-slate-100 font-mono text-xs font-bold text-slate-700">
+                                {currentCard.acronym}
+                              </div>
+                            )}
+                            {currentCard.keyUnits.map((unit) => (
+                              <span
+                                key={unit}
+                                className="px-2 py-0.5 rounded-md bg-sky-50 text-[#005A9E] border border-sky-200/80 text-[11px] font-bold"
+                              >
+                                {unit}
+                              </span>
+                            ))}
+                          </div>
+
+                          <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 text-amber-950 text-sm font-medium leading-relaxed">
+                            <span className="font-bold text-amber-900 block mb-1">
+                              Exam Scenario Trigger:
+                            </span>
+                            {currentCard.frontPrompt}
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-2 text-xs text-slate-400 font-medium">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                            <span>
+                              Click anywhere or press Space to reveal the Azure Curriculum definition, mistake diagnostic, and exam trap!
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ) : (
                     /* BACK OF CARD */

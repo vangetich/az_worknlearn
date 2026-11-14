@@ -51,8 +51,7 @@ type GuideSection =
   | 'features'
   | 'aims'
   | 'faq'
-  | 'study-plan'
-  | 'readme-history';
+  | 'study-plan';
 
 export const UserGuideModal: React.FC<UserGuideModalProps> = ({
   onClose,
@@ -270,7 +269,7 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
             </div>
             <div class="doc-meta">
               <span><strong>Document:</strong> Official Study Guide</span>
-              <span><strong>Version:</strong> 2.4.0 (2026 Edition)</span>
+              <span><strong>Version:</strong> 3.0.0 (2026 Phase 25 Edition)</span>
               <span><strong>Passing Benchmark:</strong> 700 / 1000 Pts</span>
               <span><strong>Date:</strong> ${today}</span>
             </div>
@@ -452,14 +451,40 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
 
           <div class="feature-card">
             <div class="feature-header">
-              <span>8. Full-Length 45-Minute Mock Exam Simulator</span>
+              <span>8. High-Volume Mock Exam Simulator (40–90 Qs) &amp; Weakness Precision Mode (15–25 Qs)</span>
               <span>Mock Exam Tab / Modal</span>
             </div>
             <div class="feature-aim">
-              Pedagogical Aim: State-dependent retrieval practice and real test pacing.
+              Pedagogical Aim: State-dependent retrieval practice, speed routine conditioning, and targeted weakness remediation.
             </div>
             <p>
-              Simulates official Pearson VUE test conditions with domain-weighted question balances (28% Path 1, 40% Path 2, 32% Path 3), a strict 45-minute countdown, a 700/1000 scaled score, and an in-depth domain breakdown report.
+              Simulates official Pearson VUE test conditions with 40, 45, 50, 55, 60, 75, and 90-question stamina presets plus a dedicated 15–25 Question Weakness Precision Mode targeting missed questions, low-accuracy modules (&lt;75%), and Advanced/Intermediate traps.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-header">
+              <span>9. 6-Axis D3 Domain Skill Radar, Peer Rank Bell Curve &amp; Interactive Heatmap</span>
+              <span>Analytics &amp; Cohort Views</span>
+            </div>
+            <div class="feature-aim">
+              Pedagogical Aim: Visual spatial diagnostics, cohort percentile benchmarking, and rapid weak-domain drill-down.
+            </div>
+            <p>
+              Features a 6-axis D3 Spider Chart across all six official AZ-900 domain areas, a Cohort Performance Peer Rank Indicator with a Gaussian distribution bell-curve overlay (1st–99th percentile standing across 1,480 peers), a D3 Domain Accuracy Heatmap with entrance &amp; hover-zoom animations, and a Recharts 10-Session Accuracy Trend Sparkline with automated plateau detection.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-header">
+              <span>10. Daily Goal Progress Ring, Fire-Streak Celebration, Difficulty Streaks &amp; Audio Cues</span>
+              <span>Header &amp; Practice Engine</span>
+            </div>
+            <div class="feature-aim">
+              Pedagogical Aim: Behavioral momentum, multi-tier difficulty consistency, and subtle multi-sensory reinforcement.
+            </div>
+            <p>
+              Includes the Header Daily Study Goal Ring with an interactive Fire-Streaking Celebration Modal &amp; Cohort Share Badge, separate Fundamental/Intermediate/Advanced Difficulty Streak counters, a 6-stage Learning Journey Milestone Timeline (unlocking UI themes &amp; AI Prompt Packs), 30 deep Flashcards with a Quick-Fire 15–20 Card Drill, global 'R' Quick-Retry shortcut, and Web Audio API sound effects (ping, woosh, chime).
             </p>
           </div>
 
@@ -628,8 +653,10 @@ Generated: ${today}
 5. Study Zone Command Hub: Centered accordion grouping quick-sorts, difficulty locks, and simulators.
 6. 5-Minute Quick-Retry Queue: Hyper-focused error drilling right after review sessions.
 7. Focus Session Pomodoro: Synchronizes daily study seconds across browser tabs with 25-minute break chimes.
-8. Full-Length 45-Minute Mock Exam: Real test conditions, weighted questions, and score breakdown.
-9. Simultaneous Cross-Platform Sync & Security: Real-time mobile + laptop sync, silent token refresh for long study hours, M-Pesa STK Push SIM isolation, and Kenya Data Protection Act (2019) compliance.
+8. High-Volume Mock Exam (40–90 Qs) & Weakness Precision Mode (15–25 Qs): Extended stamina presets (45, 50, 55, 60, 75, 90 Qs) and targeted 15–25 question weakness drills.
+9. 6-Axis D3 Domain Skill Radar, Peer Rank Bell Curve & Recharts Accuracy Sparkline: Spider chart across 6 AZ-900 domains, Gaussian percentile standing curve in Cohort view, D3 Heatmap with entrance/hover-zoom animations, and 10-session plateau sparkline in Review History.
+10. Daily Goal Ring & Fire-Streak Celebration, Difficulty Streaks, Learning Journey Timeline, 30 Flashcards Quick-Fire Drill, Global 'R' Quick-Retry Shortcut & Web Audio API Manager (ping/woosh/chime).
+11. Simultaneous Cross-Platform Sync & Security: Real-time mobile + laptop sync, silent token refresh for long study hours, M-Pesa STK Push SIM isolation, and Kenya Data Protection Act (2019) compliance.
     `.trim();
 
     navigator.clipboard.writeText(textContent);
@@ -757,7 +784,6 @@ ${
             { id: 'aims', label: '4. Pedagogical Aims', icon: Zap },
             { id: 'faq', label: '5. FAQ Section', icon: HelpCircle },
             { id: 'study-plan', label: '6. 4-Week Study Plan', icon: Clock },
-            { id: 'readme-history', label: '7. README & Build History', icon: FileText },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeSection === tab.id;
@@ -982,6 +1008,46 @@ ${
                     title: '10. Grounded Knowledge Assistant',
                     badge: 'Official Docs Grounded',
                     desc: 'AI tutor that cross-references official Microsoft Azure documentation to explain complex architectural questions with certified citations and zero hallucinations.',
+                  },
+                  {
+                    title: '11. High-Volume Mock Exam (45–90 Qs) & Weakness Precision Mode (15–25 Qs)',
+                    badge: 'Exam Stamina & Precision',
+                    desc: 'Practice 40, 45, 50, 55, 60, 75, or 90-question timed mock exams to build speed routines and exam cohesion, or switch to the 15–25 Question Weakness Precision Mode to drill missed questions and <75% accuracy modules.',
+                  },
+                  {
+                    title: '12. Daily Study Goal Ring & Interactive Fire-Streak Celebration Modal',
+                    badge: 'Streak & Social Share',
+                    desc: 'Live SVG progress ring in the Header tracking daily answered questions and streak momentum. Reaching 100% triggers confetti, an interactive fire-streaking SVG animation, and a shareable cohort progress badge.',
+                  },
+                  {
+                    title: '13. 6-Axis D3 Domain Skill Radar & D3 Heatmap Hover-Zoom',
+                    badge: 'D3.js Visual Diagnostics',
+                    desc: 'Interactive 6-axis spider chart on the Analytics tab comparing your proficiency across all six AZ-900 domain areas against the 78% cohort benchmark and 70% pass target, paired with a D3 Domain Accuracy Heatmap featuring smooth entrance and center-anchored hover-zoom animations.',
+                  },
+                  {
+                    title: '14. Recharts 10-Session Accuracy Trend Sparkline',
+                    badge: 'Plateau Detection',
+                    desc: 'Located in the Review History tab, visualizes the accuracy trajectory of your last 10 quiz sessions (S1–S10) and automatically flags learning plateaus (±4% band over 4 sessions) with targeted breakthrough tips.',
+                  },
+                  {
+                    title: '15. Cohort Peer Rank Indicator & Gaussian Distribution Curve Overlay',
+                    badge: 'Global Percentile Standing',
+                    desc: 'Located in the Cohort Performance view, plots your exact percentile standing (1st–99th percentile, Top X%, and estimated rank out of 1,480 global Harambee peers) on a D3 normal distribution bell curve with a What-If Percentile Simulator slider.',
+                  },
+                  {
+                    title: '16. 30 Deep Flashcards & Quick-Fire 15–20 Card Drill',
+                    badge: 'Active Recall Engine',
+                    desc: '30 comprehensive flashcards enriched with Memory Hooks, Common Exam Traps, and Real-World Scenarios, plus a Quick-Fire 15 or 20-card timed drill with instant self-grading and 1-click missed-card re-drilling.',
+                  },
+                  {
+                    title: '17. Header Difficulty Streak Tracker & Learning Journey Milestone Timeline',
+                    badge: 'Gamified Progression',
+                    desc: 'Tracks separate consecutive correct streaks for Fundamental (F), Intermediate (I), and Advanced (A) difficulty levels in the Header, while the Analytics Learning Journey timeline unlocks 5 custom UI themes and 5 AI Tutor Prompt Packs.',
+                  },
+                  {
+                    title: '18. Global "R" Quick-Retry Shortcut, Web Audio Manager & All-Screen Dropdown Nav',
+                    badge: 'Ergonomics & Speed',
+                    desc: 'Press "R" anywhere to instantly launch your 5-minute Quick-Retry session. Enjoy Web Audio API synthesized cues (ping, woosh, chime) respecting mute state, and navigate all 16 studio views cleanly via the space-saving Categorized Dropdown Navigation Bar across Desktop, Laptop, Tablet, and Mobile.',
                   },
                 ].map((feat, idx) => (
                   <div
@@ -1441,99 +1507,6 @@ ${
                     <li>Use 5-Minute Quick-Retry to test all missed questions immediately.</li>
                     <li>Check the Confidence Matrix in Analytics to eliminate any remaining blind spots.</li>
                   </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 7: README.MD & BUILD_HISTORY.MD VIEWER & DOWNLOADER */}
-          {activeSection === 'readme-history' && (
-            <div className="space-y-5 animate-in fade-in duration-150">
-              <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-400 text-slate-950">
-                    Repository Documentation Files
-                  </span>
-                  <h3 className="text-base font-black mt-1">
-                    Project README.md &amp; Separate BUILD_HISTORY.md
-                  </h3>
-                  <p className="text-xs text-sky-100 mt-0.5">
-                    Both files are saved in the workspace root (`/README.md` and `/BUILD_HISTORY.md`) and can also be downloaded directly below.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const readmeBlob = new Blob(
-                        [
-                          `# Microsoft Azure Fundamentals (AZ-900) Smart Quiz Builder & Adaptive Practice Studio\n\nSee /README.md in the project root for full setup, architecture, Adaptive Learning Path, Analyze Distractors, Azure Concept Snap, Daily Study Goal Ring, Global Harambee Peer Leaderboard, M-Pesa Daraja & Stripe payments, 2FA/MFA security, Peer Challenge mode, offline Markdown notes export, and API telemetry documentation.`,
-                        ],
-                        { type: 'text/markdown;charset=utf-8' }
-                      );
-                      const url = URL.createObjectURL(readmeBlob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'README.md';
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download README.md</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const historyBlob = new Blob(
-                        [
-                          `# History of Build — AZ-900 Smart Quiz Builder & Adaptive Practice Studio\n\nSee /BUILD_HISTORY.md and /HISTORY.md in the project root for the chronological engineering log covering Phase 1 (Curriculum Foundation) through Phase 15 (M-Pesa Daraja, 2FA/MFA, Peer Challenge Mode, Offline Markdown Export, and Collapsible Controls).`,
-                        ],
-                        { type: 'text/markdown;charset=utf-8' }
-                      );
-                      const url = URL.createObjectURL(historyBlob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'BUILD_HISTORY.md';
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download BUILD_HISTORY.md</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-xs text-[#0078D4] uppercase">
-                      📄 /README.md (Project Root)
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                      Active &amp; Ready
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-700 leading-relaxed">
-                    Covers full-stack setup (`npm install`, `npm run dev`, `npx vitest run`), official AZ-900 Learning Paths (Cloud Concepts, Azure Architecture &amp; Services, Management &amp; Governance), Adaptive Difficulty &amp; Persistent Override Selector, Study Mode, Analyze Distractors, Azure Concept Snap, Daily Study Goal Ring, Global Peer Leaderboard, M-Pesa Daraja &amp; Stripe checkout, 2FA/MFA security layers, Peer Challenge micro-drills, Markdown study notes export, collapsible practice toolbar, and Express/PostgreSQL API routes.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/40 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-xs text-amber-900 uppercase">
-                      📜 /BUILD_HISTORY.md &amp; /HISTORY.md
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900">
-                      15 Engineering Phases
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-700 leading-relaxed">
-                    Chronological engineering log detailing Phase 1 (Curriculum &amp; Exam Engine) through Phase 15: Virtual Study Rooms &amp; Whiteboards, Settings Password Reset, Admin Protection Layer &amp; Dashboard, M-Pesa Daraja STK Push &amp; Subscription Cost Transparency, Admin 2FA &amp; User Profile MFA, Peer Challenge Cohort Micro-Drills, Offline Markdown Study Guide Export, and Collapsible Single-Line Practice Controls.
-                  </p>
                 </div>
               </div>
             </div>

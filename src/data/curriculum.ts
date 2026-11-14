@@ -1,4 +1,4 @@
-import { LearningPathInfo } from '../types/quiz';
+import { LearningPathInfo, ModuleComplexityLevel } from '../types/quiz';
 
 export const LEARNING_PATHS: LearningPathInfo[] = [
   {
@@ -13,6 +13,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 1,
         pathId: 1,
+        complexityLevel: 'Beginner',
         title: 'Fundamental Cloud Concepts',
         description: 'Define cloud computing, explore the Shared Responsibility Model across IaaS, PaaS, SaaS, and differentiate public, private, and hybrid models.',
         units: [
@@ -27,6 +28,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 2,
         pathId: 1,
+        complexityLevel: 'Beginner',
         title: 'Cloud Benefits',
         description: 'Understand high availability, horizontal vs. vertical scalability, elasticity, agility, reliability, and predictability.',
         units: [
@@ -44,6 +46,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 3,
         pathId: 1,
+        complexityLevel: 'Beginner',
         title: 'Cloud Pricing & Consumption Models',
         description: 'Distinguish Capital Expenditure (CapEx) from Operational Expenditure (OpEx), and master consumption-based serverless models.',
         units: [
@@ -69,6 +72,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 4,
         pathId: 2,
+        complexityLevel: 'Beginner',
         title: 'Core Azure Architectural Components',
         description: 'Hierarchical structure from Management Groups to Subscriptions and Resource Groups, plus Regions, Region Pairs, and Availability Zones.',
         units: [
@@ -84,6 +88,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 5,
         pathId: 2,
+        complexityLevel: 'Intermediate',
         title: 'Azure Compute & Networking Services',
         description: 'Virtual Machines, Scale Sets, App Service, ACI, AKS, Virtual Networks, Subnets, Peering, VPN Gateway, ExpressRoute, and Endpoints.',
         units: [
@@ -101,6 +106,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 6,
         pathId: 2,
+        complexityLevel: 'Intermediate',
         title: 'Azure Storage Services',
         description: 'Storage Account services (Blob, Disk, Files, Tables, Queues), Hot/Cool/Cold/Archive access tiers, redundancy (LRS, ZRS, GRS), and migration.',
         units: [
@@ -115,6 +121,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 7,
         pathId: 2,
+        complexityLevel: 'Advanced',
         title: 'Azure Identity, Access, & Security',
         description: 'Microsoft Entra ID (Azure AD), SSO, MFA, Conditional Access, Azure RBAC, Zero Trust Architecture, and Defense-in-Depth.',
         units: [
@@ -143,6 +150,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 8,
         pathId: 3,
+        complexityLevel: 'Intermediate',
         title: 'Azure Cost Management',
         description: 'Pricing & TCO Calculators, Cost Management & Billing, Reserved Instances, Savings Plans, Hybrid Benefit, and Resource Tagging.',
         units: [
@@ -158,6 +166,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 9,
         pathId: 3,
+        complexityLevel: 'Advanced',
         title: 'Azure Governance & Compliance Tools',
         description: 'Microsoft Purview data governance, Azure Policy, Initiative Definitions, and Resource Locks (CanNotDelete and ReadOnly).',
         units: [
@@ -173,6 +182,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 10,
         pathId: 3,
+        complexityLevel: 'Advanced',
         title: 'Azure Management & Deployment Tools',
         description: 'Azure Portal, Azure CLI, Azure PowerShell, Cloud Shell, Azure Arc for hybrid/multi-cloud, ARM Templates, and Bicep.',
         units: [
@@ -189,6 +199,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 11,
         pathId: 3,
+        complexityLevel: 'Intermediate',
         title: 'Azure Monitoring & Advisory Tools',
         description: 'Azure Advisor personalized recommendations, Azure Service Health outages/planned maintenance, and Azure Monitor full-stack observability.',
         units: [
@@ -203,6 +214,7 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
       {
         id: 12,
         pathId: 3,
+        complexityLevel: 'Advanced',
         title: 'Real-World Scenario Assessment & Synthesis',
         description: 'Full scenario-based drills integrating multi-tier architecture, regulatory compliance, cost control, and high availability.',
         units: [
@@ -216,3 +228,18 @@ export const LEARNING_PATHS: LearningPathInfo[] = [
     ],
   },
 ];
+
+const MODULE_COMPLEXITY_MAP: Record<number, ModuleComplexityLevel> = LEARNING_PATHS.reduce(
+  (acc, path) => {
+    path.modules.forEach((mod) => {
+      acc[mod.id] = mod.complexityLevel;
+    });
+    return acc;
+  },
+  {} as Record<number, ModuleComplexityLevel>
+);
+
+export function getModuleComplexityLevel(moduleId: number): ModuleComplexityLevel {
+  return MODULE_COMPLEXITY_MAP[moduleId] || 'Intermediate';
+}
+

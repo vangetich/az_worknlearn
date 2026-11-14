@@ -87,6 +87,8 @@ import { ApiDocumentationModal } from './components/ApiDocumentationModal';
 import { CurriculumReadinessModal } from './components/CurriculumReadinessModal';
 import { AdminBackOfficeModal } from './components/AdminBackOfficeModal';
 import { DomainAccuracyHeatmapD3 } from './components/DomainAccuracyHeatmapD3';
+import { AzureServiceConceptHeatmap } from './components/AzureServiceConceptHeatmap';
+import { AudioPacingCoach } from './components/AudioPacingCoach';
 import { PerformanceTrendsView } from './components/PerformanceTrendsView';
 import { CohortPerformanceView } from './components/CohortPerformanceView';
 import { ExitStudySessionModal } from './components/ExitStudySessionModal';
@@ -122,9 +124,10 @@ import {
   KenyanFlagMiniEmblem,
 } from './components/MotifDecorations';
 import { BUILTIN_QUESTIONS } from './data/questionBank';
-import { LEARNING_PATHS } from './data/curriculum';
+import { LEARNING_PATHS, getModuleComplexityLevel } from './data/curriculum';
 import { CURRICULUM_STUDY_MODULES } from './data/studyNotes';
-import { Question, UserStats, QuestionAttempt } from './types/quiz';
+import { Question, UserStats, QuestionAttempt, ModuleComplexityLevel } from './types/quiz';
+import { FloatingFocusModeButton } from './components/FloatingFocusModeButton';
 import {
   getInitialStats,
   saveUserAttempt,
@@ -334,6 +337,30 @@ export default function App() {
     }
     return 'all';
   });
+  const [selectedModuleDifficultyFilter, setSelectedModuleDifficultyFilterState] = useState<
+    'all' | ModuleComplexityLevel
+  >(() => {
+    try {
+      const saved = localStorage.getItem('az900_module_difficulty_filter_v1');
+      if (saved === 'Beginner' || saved === 'Intermediate' || saved === 'Advanced' || saved === 'all') {
+        return saved;
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return 'all';
+  });
+
+  const handleModuleDifficultyChange = useCallback((level: 'all' | ModuleComplexityLevel) => {
+    setSelectedModuleDifficultyFilterState(level);
+    try {
+      localStorage.setItem('az900_module_difficulty_filter_v1', level);
+    } catch {
+      // ignore
+    }
+    setCurrentQuestionIndex(0);
+  }, []);
+
   const [selectedThreadFilters, setSelectedThreadFilters] = useState<ThreadTagId[]>([]);
 
   const handleToggleThreadFilter = (threadId: ThreadTagId) => {
@@ -797,6 +824,17 @@ export default function App() {
     const timer = setTimeout(() => setFocusModeToast(null), 3000);
     return () => clearTimeout(timer);
   }, [focusModeToast]);
+
+  // Synchronize Focus Mode attribute on document so all popups, modal windows & review windows open at the top of the view
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-focus-mode', isFocusMode ? 'true' : 'false');
+      document.body.setAttribute('data-focus-mode', isFocusMode ? 'true' : 'false');
+    }
+    if (isFocusMode && typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [isFocusMode]);
 
   const toggleFocusMode = useCallback(
     (_source?: 'shortcut' | 'button') => {
@@ -1308,6 +1346,12 @@ export default function App() {
       if (selectedDifficultyFilter !== 'all' && q.difficulty !== selectedDifficultyFilter) {
         return false;
       }
+      if (
+        selectedModuleDifficultyFilter !== 'all' &&
+        getModuleComplexityLevel(q.moduleId) !== selectedModuleDifficultyFilter
+      ) {
+        return false;
+      }
       if (selectedThreadFilters.length > 0) {
         const qThreads = getThreadTagsForQuestion(q, 3).map((t) => t.id);
         if (!selectedThreadFilters.some((tag) => qThreads.includes(tag))) {
@@ -1427,6 +1471,7 @@ export default function App() {
     selectedPathId,
     selectedModuleId,
     selectedDifficultyFilter,
+    selectedModuleDifficultyFilter,
     selectedThreadFilters,
     onlyBookmarks,
     onlySavedNotes,
@@ -2275,6 +2320,14 @@ export default function App() {
               <span className="text-xs font-bold text-slate-400">
                 Question {currentQuestionIndex + 1} of {filteredQuestions.length}
               </span>
+              <AudioPacingCoach
+                isAudioMuted={isAudioMuted}
+                onToggleAudioMute={handleToggleAudioMute}
+                currentQuestionIndex={currentQuestionIndex}
+                sessionAnsweredCount={sessionAttempts.length}
+                isFocusMode={isFocusMode}
+                compact
+              />
               <QuizFocusTimerPill timer={quizFocusTimer} compact />
               <ThemeToggle />
               <button
@@ -2600,6 +2653,40 @@ export default function App() {
                         )}
                       </div>
 
+                      {/* 2a. Module Difficulty Toggle (Beginner / Intermediate / Advanced) */}
+                      <div
+                        className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-white/95 border border-emerald-300/90 shadow-2xs shrink-0 whitespace-nowrap"
+                        role="group"
+                        aria-label="Filter questions by Module Difficulty (Beginner, Intermediate, Advanced)"
+                      >
+                        <span className="px-1.5 text-[9.5px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                          <Layers className="w-3 h-3 text-emerald-700 shrink-0" />
+                          <span>Mod Diff:</span>
+                        </span>
+                        {(['all', 'Beginner', 'Intermediate', 'Advanced'] as const).map((lvl) => {
+                          const isActive = selectedModuleDifficultyFilter === lvl;
+                          return (
+                            <button
+                              key={lvl}
+                              type="button"
+                              onClick={() => handleModuleDifficultyChange(lvl)}
+                              className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold transition-all cursor-pointer ${
+                                isActive
+                                  ? 'bg-emerald-700 text-white shadow-2xs'
+                                  : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-800'
+                              }`}
+                              title={
+                                lvl === 'all'
+                                  ? 'Show questions from all module complexity levels'
+                                  : `Filter questions from ${lvl} complexity modules`
+                              }
+                            >
+                              {lvl === 'all' ? 'All' : lvl}
+                            </button>
+                          );
+                        })}
+                      </div>
+
                       {/* 2b. Interconnecting Thread Multi-Select Filter */}
                       <ThreadMultiSelectDropdown
                         selectedThreads={selectedThreadFilters}
@@ -2833,6 +2920,40 @@ export default function App() {
                         </select>
                       </div>
 
+                      {/* Module Difficulty Toggle (Beginner / Intermediate / Advanced defined in module metadata) */}
+                      <div
+                        className="inline-flex items-center gap-1 p-1 rounded-xl bg-white/95 border border-emerald-300 shadow-2xs backdrop-blur-xs"
+                        role="group"
+                        aria-label="Module Difficulty filter (Beginner, Intermediate, Advanced)"
+                      >
+                        <span className="px-2 text-[10.5px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1 whitespace-nowrap">
+                          <Layers className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          <span>Module Difficulty:</span>
+                        </span>
+                        {(['all', 'Beginner', 'Intermediate', 'Advanced'] as const).map((lvl) => {
+                          const isActive = selectedModuleDifficultyFilter === lvl;
+                          return (
+                            <button
+                              key={lvl}
+                              type="button"
+                              onClick={() => handleModuleDifficultyChange(lvl)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                                isActive
+                                  ? 'bg-emerald-700 text-white shadow-2xs'
+                                  : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-800'
+                              }`}
+                              title={
+                                lvl === 'all'
+                                  ? 'Include all module complexity levels (Modules 1–12)'
+                                  : `Filter by ${lvl} complexity modules`
+                              }
+                            >
+                              {lvl === 'all' ? 'All Modules' : lvl}
+                            </button>
+                          );
+                        })}
+                      </div>
+
                       {/* Interconnecting Thread Multi-Select Filter */}
                       <ThreadMultiSelectDropdown
                         selectedThreads={selectedThreadFilters}
@@ -2937,9 +3058,9 @@ export default function App() {
               );
             })()}
 
-            {/* Interactive D3.js Domain Accuracy Heatmap (Toggled directly in Practice Workspace or inside Workspace Panels) */}
+            {/* Interactive D3.js Domain Accuracy Heatmap & Azure Service Concept Mistake Heatmap */}
             {!isFocusMode && (showPracticeHeatmap || showWorkspacePanels) && (
-              <div className="animate-quiz-card-fade-in-up">
+              <div className="space-y-4 animate-quiz-card-fade-in-up">
                 <DomainAccuracyHeatmapD3
                   stats={stats}
                   onSelectModule={(modId, pathId) => {
@@ -2953,6 +3074,26 @@ export default function App() {
                     setShowMicroDrill(modId);
                   }}
                   onDrillWeakAreas={handleDrillWeakAreas}
+                />
+                <AzureServiceConceptHeatmap
+                  stats={stats}
+                  questions={questions}
+                  onOpenStudyModule={(modId, pathId) => {
+                    setSelectedPathId(pathId);
+                    setSelectedModuleId(modId);
+                    setActiveTab('study-decks');
+                  }}
+                  onOpenFlashcards={(modId) => {
+                    setSelectedModuleId(modId);
+                    setActiveTab('flashcards');
+                  }}
+                  onPracticeConcept={(modId, pathId) => {
+                    setSelectedPathId(pathId);
+                    setSelectedModuleId(modId);
+                    setCurrentQuestionIndex(0);
+                    setShowPostSessionReview(false);
+                    setActiveTab('quiz');
+                  }}
                 />
               </div>
             )}
@@ -3301,32 +3442,6 @@ export default function App() {
                               ? `Rolling Avg: ${rollingAverageAccuracy}% (${sessionRollingOutcomes.length}/${ROLLING_WINDOW_SIZE})`
                               : 'Starts at Medium'}
                           </span>
-                        </div>
-
-                        {/* Focus Mode Indicator in Quiz Session Header with Dynamic Platform-Aware Hover Guide */}
-                        <div className="relative group/focusguide">
-                          <button
-                            type="button"
-                            onClick={() => toggleFocusMode('button')}
-                            className="px-2.5 py-1 rounded-lg bg-black/25 hover:bg-black/40 border border-white/20 text-[10.5px] font-black text-white flex items-center gap-1.5 transition-colors cursor-pointer"
-                            aria-label="Focus Mode indicator — hover to view keyboard shortcuts"
-                          >
-                            <Maximize2 className="w-3 h-3 text-amber-300 shrink-0" />
-                            <span>Focus Mode</span>
-                            <kbd className="px-1 py-0.2 rounded bg-white/15 font-mono text-[9.5px] text-sky-200">
-                              {formatShortcutCombo(activeShortcuts.focusMode, detectedPlatform)}
-                            </kbd>
-                          </button>
-
-                          <KeyboardShortcutGuidePopover
-                            isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
-                            effectiveDynamicDifficulty={effectiveDynamicDifficulty}
-                            onToggleDynamicDifficulty={() =>
-                              setIsDynamicDifficultyEnabled((prev) => !prev)
-                            }
-                            onOpenAccessibilitySettings={() => setShowAccessibilityModal(true)}
-                            align="right"
-                          />
                         </div>
 
                         {/* Quiz Session Pomodoro Focus Timer (25m block -> 5m break & Azure trivia) */}
@@ -3910,6 +4025,17 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Audio Pacing Coach: Subtle Background Ticking & Ambient Nature Rhythm for High-Volume Question Drills */}
+                <div className="mb-4">
+                  <AudioPacingCoach
+                    isAudioMuted={isAudioMuted}
+                    onToggleAudioMute={handleToggleAudioMute}
+                    currentQuestionIndex={currentQuestionIndex}
+                    sessionAnsweredCount={sessionAttempts.length}
+                    isFocusMode={isFocusMode}
+                  />
+                </div>
+
                 <div
                   key={`filtered-results-${searchQuery}-${currentQ?.id || currentQuestionIndex}`}
                   className="animate-quiz-card-fade-in-up"
@@ -4247,6 +4373,7 @@ export default function App() {
           <div className="responsive-tab-page-shell max-w-6xl mx-auto">
             <FlashcardsView
               stats={stats}
+              initialModuleId={selectedModuleId}
               onPracticeModule={handleSelectModuleFromTracker}
             />
           </div>
@@ -4359,7 +4486,11 @@ export default function App() {
         {/* TAB: STUDY DECKS & MATRIX */}
         {activeTab === 'study-decks' && (
           <div className="responsive-tab-page-shell max-w-6xl mx-auto">
-            <StudyDeck onPracticeModule={handleSelectModuleFromTracker} />
+            <StudyDeck
+              initialPathId={selectedPathId === 'all' ? 1 : (selectedPathId as 1 | 2 | 3)}
+              initialModuleId={selectedModuleId === 'all' ? 1 : selectedModuleId}
+              onPracticeModule={handleSelectModuleFromTracker}
+            />
           </div>
         )}
 
@@ -4378,6 +4509,26 @@ export default function App() {
         {/* TAB: DOMAIN CONFIDENCE & SKILL RADAR */}
         {activeTab === 'analytics' && (
           <div className="responsive-tab-page-shell max-w-6xl mx-auto space-y-5">
+            <AzureServiceConceptHeatmap
+              stats={stats}
+              questions={questions}
+              onOpenStudyModule={(modId, pathId) => {
+                setSelectedPathId(pathId);
+                setSelectedModuleId(modId);
+                setActiveTab('study-decks');
+              }}
+              onOpenFlashcards={(modId) => {
+                setSelectedModuleId(modId);
+                setActiveTab('flashcards');
+              }}
+              onPracticeConcept={(modId, pathId) => {
+                setSelectedPathId(pathId);
+                setSelectedModuleId(modId);
+                setCurrentQuestionIndex(0);
+                setShowPostSessionReview(false);
+                setActiveTab('quiz');
+              }}
+            />
             <DomainSkillRadar
               stats={stats}
               onDrillDomain={handleDrillWeakAreas}
@@ -4759,6 +4910,8 @@ export default function App() {
           handleChangeLockedDifficulty(diff === 'all' ? null : diff);
           setCurrentQuestionIndex(0);
         }}
+        selectedModuleDifficultyFilter={selectedModuleDifficultyFilter}
+        onModuleDifficultyChange={handleModuleDifficultyChange}
         selectedThreadFilters={selectedThreadFilters}
         onToggleThreadFilter={handleToggleThreadFilter}
         onClearThreadFilters={handleClearThreadFilters}
@@ -5052,7 +5205,33 @@ export default function App() {
         isOpen={showAccessibilityModal}
         onClose={() => setShowAccessibilityModal(false)}
       />
+
+      {/* Relocated Semi-Bottom-Right Circular Focus Button with Rectangular Hover Features Popup */}
+      <FloatingFocusModeButton
+        isFocusMode={isFocusMode}
+        onToggleFocusMode={() => toggleFocusMode('button')}
+        isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
+        effectiveDynamicDifficulty={effectiveDynamicDifficulty}
+        onToggleDynamicDifficulty={() => setIsDynamicDifficultyEnabled((prev) => !prev)}
+        onOpenAccessibilitySettings={() => setShowAccessibilityModal(true)}
+        retryQueueCount={retryQueueQuestionIds.length}
+        onTriggerQuickRetry={() => {
+          if (retryQueueQuestionIds.length > 0 && retryQueueSecondsLeft > 0) {
+            setOnlyRetryQueue((prev) => !prev);
+            setCurrentQuestionIndex(0);
+            setActiveTab('quiz');
+          } else {
+            const unresolvedIds = Array.from(getUnresolvedMistakesMap(stats).keys());
+            if (unresolvedIds.length > 0) {
+              setOnlyUnresolvedMistakes(true);
+              setCurrentQuestionIndex(0);
+              setActiveTab('quiz');
+            }
+          }
+        }}
+      />
       </div>
     </ProtectedRoute>
   );
 }
+

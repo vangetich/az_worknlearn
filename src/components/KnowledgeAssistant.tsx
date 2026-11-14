@@ -13,6 +13,8 @@ import {
   X,
   ArrowRight,
   FileText,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 import { ChatMessage, Question } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
@@ -205,7 +207,74 @@ What concept would you like to master today?`,
   const [selectedDocEntry, setSelectedDocEntry] = useState<OfficialAzureDocEntry | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isDictating, setIsDictating] = useState<boolean>(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  const handleToggleVoiceDictation = () => {
+    setSpeechError(null);
+    if (isDictating && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      setIsDictating(false);
+      return;
+    }
+
+    const SpeechRecognitionAPI =
+      typeof window !== 'undefined'
+        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        : null;
+
+    if (!SpeechRecognitionAPI) {
+      setSpeechError('Web Speech API voice input requires Chrome, Edge, or Safari.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognitionAPI();
+      recognition.lang = 'en-US';
+      recognition.continuous = true;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsDictating(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        let spoken = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            spoken += event.results[i][0].transcript + ' ';
+          }
+        }
+        const cleaned = spoken.trim();
+        if (cleaned) {
+          setInputQuery((prev) => (prev.trim() ? `${prev.trim()} ${cleaned}` : cleaned));
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error !== 'aborted') {
+          setSpeechError(`Voice input stopped (${event.error || 'mic permission required'}).`);
+        }
+        setIsDictating(false);
+      };
+
+      recognition.onend = () => {
+        setIsDictating(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setSpeechError('Could not initialize microphone speech recognition.');
+      setIsDictating(false);
+    }
+  };
 
   // Cross-reference user query in the Microsoft Azure Documentation search bar
   const matchedDocs = useMemo(() => {
@@ -637,7 +706,12 @@ ${citationsList}`;
       </div>
 
       {/* Input Box */}
-      <div className="p-4 bg-white border-t border-slate-200">
+      <div className="p-4 bg-white border-t border-slate-200 space-y-2">
+        {speechError && (
+          <div className="text-xs text-rose-700 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200">
+            {speechError}
+          </div>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -652,6 +726,18 @@ ${citationsList}`;
             placeholder="Ask anything about AZ-900 (grounded in official Microsoft Learn documentation)..."
             className="flex-1 px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0078D4]/20 focus:border-[#0078D4]"
           />
+          <button
+            type="button"
+            onClick={handleToggleVoiceDictation}
+            className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+              isDictating
+                ? 'bg-rose-600 text-white border-rose-700 animate-pulse'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-300'
+            }`}
+            title={isDictating ? 'Stop voice input' : 'Speak your question (Voice-to-Text)'}
+          >
+            {isDictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-[#0078D4]" />}
+          </button>
           <button
             type="submit"
             disabled={!inputQuery.trim() || isLoading}

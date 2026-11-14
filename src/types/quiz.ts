@@ -31,10 +31,13 @@ export interface Question {
   isAiGenerated?: boolean;
 }
 
+export type ModuleComplexityLevel = 'Beginner' | 'Intermediate' | 'Advanced';
+
 export interface ModuleInfo {
   id: number;
   title: string;
   pathId: 1 | 2 | 3;
+  complexityLevel: ModuleComplexityLevel;
   description: string;
   units: string[];
   keyTerms: string[];

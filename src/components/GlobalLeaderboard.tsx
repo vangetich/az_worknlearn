@@ -22,6 +22,15 @@ import {
 } from 'lucide-react';
 import { UserStats } from '../types/quiz';
 import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
+import {
   CohortLeaderboardEntry,
   fetchGlobalHarambeeLeaderboard,
   syncLearnerToGlobalCohort,
@@ -658,6 +667,70 @@ export const GlobalLeaderboard: React.FC<GlobalLeaderboardProps> = ({
               )}
             </div>
           </div>
+        </div>
+
+      </div>
+
+      {/* Recharts Cohort Performance Analytics & Comparison Chart */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-[#0078D4]" />
+              <span>Harambee Cohort Top Performers Visualization</span>
+            </h3>
+            <p className="text-xs text-slate-500">
+              Comparing Total Questions Answered, Daily Streaks, and Mastered Modules across top cohort peers.
+            </p>
+          </div>
+          <span className="px-2.5 py-1 rounded-lg bg-sky-50 text-[#0078D4] border border-sky-200 text-xs font-bold">
+            Real-Time Recharts Analytics
+          </span>
+        </div>
+
+        <div className="w-full h-[260px] pt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={fullLeaderboard.slice(0, 8).map((p) => ({
+                name: p.name.split(' ')[0],
+                answered: p.totalAnswered,
+                streak: p.streakDays * 5,
+                mastered: p.masteredModules * 10,
+                rawMastered: p.masteredModules,
+                rawStreak: p.streakDays,
+              }))}
+              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+            >
+              <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
+              <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#0f172a',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#fff',
+                  fontSize: '12px',
+                  boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)',
+                }}
+                formatter={(val: any, name: any, item: any) => {
+                  if (name === 'answered') return [`${val} Questions`, 'Total Answered'];
+                  if (name === 'streak') return [`${item.payload.rawStreak} Days`, 'Daily Streak'];
+                  if (name === 'mastered') return [`${item.payload.rawMastered}/12 Modules`, 'Mastered Modules'];
+                  return [val, name];
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              <Bar dataKey="answered" name="Questions Answered" fill="#0078D4" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="mastered" name="Mastered Modules (x10)" fill="#10b981" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="streak" name="Streak Days (x5)" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-[#004C87] to-slate-900 border border-slate-800 text-white p-5 sm:p-7 shadow-xl">
+        <div className="absolute top-0 left-0 right-0">
+          <KitengeRibbon height={3} />
         </div>
 
         {/* Sync Notification Toast */}

@@ -41,6 +41,7 @@ export interface ResponsiveModalContainerProps {
  * Unified Responsive Container Wrapper for all pop-up modals.
  * Uses CSS viewport units (vh, vw, dvh, dvw) and flexbox constraints (flex-col, min-h-0, overflow-hidden)
  * rendered via createPortal(document.body) so modals automatically scale and fit within the user's active device screen.
+ * When Focus Mode is active (`data-focus-mode="true"`), modals and review windows are presented at the top part of the view.
  */
 export const ResponsiveModalContainer: React.FC<
   ResponsiveModalContainerProps
@@ -70,6 +71,9 @@ export const ResponsiveModalContainer: React.FC<
   if (!isOpen || typeof document === 'undefined') return null;
 
   const widthClass = MAX_WIDTH_VW_MAP[maxWidth] || MAX_WIDTH_VW_MAP.lg;
+  const isFocusModeActive =
+    document.documentElement.getAttribute('data-focus-mode') === 'true' ||
+    document.body.getAttribute('data-focus-mode') === 'true';
 
   return createPortal(
     <div
@@ -77,11 +81,17 @@ export const ResponsiveModalContainer: React.FC<
       aria-modal="true"
       aria-label={ariaLabel}
       onClick={closeOnBackdropClick && onClose ? onClose : undefined}
-      className={`unified-modal-viewport-overlay fixed inset-0 ${zIndexClass} w-[100vw] h-[100vh] max-w-[100vw] max-h-[100vh] flex items-center justify-center p-[1.5vh_2.5vw] sm:p-[2.5vh_3vw] overflow-y-auto overscroll-contain animate-in fade-in duration-150 ${overlayClassName}`}
+      className={`unified-modal-viewport-overlay fixed inset-0 ${zIndexClass} w-[100vw] h-[100vh] max-w-[100vw] max-h-[100vh] flex ${
+        isFocusModeActive
+          ? 'items-start justify-center pt-3 sm:pt-4 px-[2.5vw]'
+          : 'items-center justify-center p-[1.5vh_2.5vw] sm:p-[2.5vh_3vw]'
+      } overflow-y-auto overscroll-contain animate-in fade-in duration-150 ${overlayClassName}`}
     >
       <div
         onClick={closeOnBackdropClick ? (e) => e.stopPropagation() : undefined}
-        className={`unified-modal-flex-container w-full ${widthClass} max-h-[94vh] sm:max-h-[90vh] my-auto flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 ${containerClassName}`}
+        className={`unified-modal-flex-container w-full ${widthClass} max-h-[94vh] sm:max-h-[90vh] ${
+          isFocusModeActive ? 'mt-0 mb-auto' : 'my-auto'
+        } flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 ${containerClassName}`}
       >
         {children}
       </div>

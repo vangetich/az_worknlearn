@@ -190,3 +190,67 @@ This document provides the complete chronological engineering history, architect
   - Built vertical scroll protection (`max-h-[82vh] overflow-y-auto overscroll-contain`) into the dropdown menu so all actions remain fully reachable on short or landscape mobile screens.
   - Refactored KPI summary cards in `AdminDashboard.tsx` to `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3` and mode switchers to responsive flex columns (`flex-col sm:flex-row`) preventing awkward text wrapping and card clipping on narrow screens (320px–480px).
   - Maintained strict single-admin whitelist authorization (`vangetich@gmail.com`) and RFC 6238 TOTP 2FA security enforcement across all viewports.
+
+---
+
+## 📅 Phase 19: AI-Driven Study Pace Projections & Interactive Azure Concept Map
+- **AI-Driven Study Pace Projector (`src/utils/studyPaceProjector.ts` & `LearningPathProgressMap.tsx`)**:
+  - Engineered a predictive study velocity engine computing estimated completion dates (`EST. READY: <Date>`), remaining hours, velocity status badges (`Ahead of Pace`, `On Pace`, `Steady Pace`, `Needs Boost`), and 85%+ mastery forecasts across all 3 Learning Paths and 11 modules.
+  - Added an interactive **What-If Pace Simulator** (`Actual Pace` vs. `15 Q/day`, `25 Q/day`, `40 Q/day` Intensive Sprint) and Target Exam Date countdown (`7d`, `14d`, `21d`, `30d`), backed by 9 automated unit tests in `src/utils/__tests__/studyPaceProjector.test.ts`.
+- **Interactive Azure Concept Map (`AzureConceptMapView.tsx`)**:
+  - Built an interactive knowledge graph visualizing 18 core AZ-900 services and concepts across 6 functional clusters and 22 directed architectural relationships (`Secured By`, `Hosted On`, `Governed By`, `Monitored By`, `Contrasts With`) with pan/zoom SVG controls, live mastery badges, exam trap alerts, and 1-click targeted practice launches.
+
+---
+
+## 📅 Phase 20: 6 Live Interoperable Virtual Study Room Domain Chambers
+- **Study Chamber Workbench (`StudyChamberWorkbench.tsx` & `StudyRoomChambersData.ts`)**:
+  - Transformed the 6 Virtual Study Room chambers (`Cloud Concepts Lounge`, `Core Services Lab`, `Security & Zero-Trust Vault`, `Governance & Cost Command`, `45m Timed Exam War-Room`, and `Mistake Review & ELI5 Clinic`) into live, interoperable study workbenches.
+  - Each chamber synchronizes curated flashcards, timed domain micro-drills, interactive Azure architecture blueprints, and real-time Harambee cohort presence.
+
+---
+
+## 📅 Phase 21: High-Volume Mock Exam Simulator (`45–90 Qs`) & Weakness Precision Mode (`15–25 Qs`)
+- **High-Stamina Question Presets (`MockExamModal.tsx`)**:
+  - Expanded the Mock Exam configurator to support **40, 45, 50, 55, 60, 75, and 90-question** exam simulations with proportional Pearson VUE countdown timers (`45m` to `95m`) to build speed routines, exam question cohesion, and deep stamina.
+- **Weakness Precision Mode (`15, 20, or 25 Questions`)**:
+  - Added a dedicated `Weakness Precision (15–25 Qs)` exam mode that prioritizes the learner's historically missed questions, low-accuracy modules (`<75%`), and `Advanced` / `Intermediate` exam traps.
+
+---
+
+## 📅 Phase 22: Space-Saving All-Screen Categorized Dropdown Navigation Bar & Slim Header
+- **All-Screen Categorized Dropdown Navigation (`Header.tsx`)**:
+  - Consolidated all 16 workspace views into 4 intuitive dropdown category menus (**Core Study**, **Exam & Drills**, **Insights & History**, **AI Tutor & Community**) plus an **All (16)** master launcher across Desktop, Laptop, Tablet, and Mobile in both Portrait and Landscape modes.
+  - Added an ultra-slim single-row header profile for Laptop and Desktop screens, prominent `Azure Cloud Explorer • AZ-900 • Fundamentals Practice Studio` branding across all viewports, active tab indicators, and closing hover effects (`Close Menu ×`).
+
+---
+
+## 📅 Phase 23: Daily Study Goal Ring, Celebratory Fire-Streak Modal & Recharts Accuracy Trend Sparkline
+- **Header Daily Study Goal Ring & Fire Animation (`Header.tsx`)**:
+  - Integrated a live SVG circular progress ring calculating daily study completion from today's answered questions (80% weight) and active streak momentum (20% weight), displaying an animated fire badge upon reaching 100%.
+- **Interactive Daily Goal Celebration Modal (`DailyGoalCelebrationModal.tsx`)**:
+  - Triggers automatically at 100% daily quota completion with celebratory confetti bursts, an interactive multi-layer SVG fire-streaking flame & ember particle animation, and a **Share Progress with Cohort Peers** social badge generator.
+- **Recharts 10-Session Accuracy Trend Sparkline (`AccuracyTrendSparkline.tsx` & `ReviewHistoryView.tsx`)**:
+  - Integrated a Recharts area sparkline in the Review History tab visualizing the accuracy of the last 10 quiz sessions (`S1`–`S10`) with automated **Learning Plateau Detection** (`±4%` band across the last 4 sessions) and interactive session inspection pills.
+
+---
+
+## 📅 Phase 24: 6-Axis D3 Domain Skill Radar, 30 Deep Flashcards + Quick-Fire Drill, Difficulty Streaks & Learning Journey
+- **6-Axis D3 Domain Skill Radar (`DomainSkillRadar.tsx`)**:
+  - Built an interactive D3.js spider chart in the Analytics tab mapping user proficiency across all 6 official AZ-900 sub-domains (*Cloud Concepts*, *Core Architecture*, *Compute & Networking*, *Storage & Identity*, *Cost & Governance*, *Security & Monitoring*) with Cohort Benchmark (`78%`) and Pass Target (`70%`) polygons and 1-click weak-domain drills.
+- **30 Deep AZ-900 Flashcards & Quick-Fire 15–20 Card Drill (`FlashcardsView.tsx` & `flashcardsData.ts`)**:
+  - Expanded the flashcard bank to 30 comprehensive cards with Memory Hooks, Common Exam Traps, and Real-World Scenarios, and engineered a **Quick-Fire 15–20 Card Drill** mode with instant self-grading (`Got It` vs. `Missed / Drill Again`) and 1-click missed-card re-drilling.
+- **Difficulty Streak Tracker (`DifficultyStreakTracker.tsx`) & Learning Journey Timeline (`LearningJourneyTimeline.tsx`)**:
+  - Added separate Header streak counters for `Fundamental`, `Intermediate`, and `Advanced` tiers, and an interactive 6-stage **Learning Journey Timeline** in Analytics that unlocks 5 custom UI themes and 5 AI Tutor Prompt Packs.
+
+---
+
+## 📅 Phase 25: Global `'R'` Quick-Retry Shortcut, Web Audio API Manager, Cohort Peer Rank Bell Curve & D3 Heatmap Hover-Zoom
+- **Global `'R'` Keyboard Shortcut (`App.tsx` & `KeyboardShortcutGuide.tsx`)**:
+  - Implemented a global `'R'` keyboard shortcut that immediately launches the **5-Minute Quick-Retry Session** for unresolved missed questions when the retry queue is active.
+- **Web Audio API Sound Manager (`src/services/audioManager.ts`)**:
+  - Engineered a synthesized Web Audio API service triggering a harmonic `ping` for correct answers, a soft `woosh` for incorrect answers, and a celebratory `chime` for daily goal milestones—integrated into `handleAnswerQuestion` and respecting `isAudioMuted`.
+- **Cohort Performance 'Peer Rank' Distribution Curve Overlay (`CohortPerformanceView.tsx`)**:
+  - Added an interactive **Peer Rank Indicator** with a D3 Gaussian distribution bell-curve overlay visualizing the learner's exact percentile standing (`1st`–`99th` percentile, `Top X%`, estimated rank out of `1,480` global Harambee peers, and Z-score $\sigma$) alongside a live What-If Percentile Simulator slider.
+- **D3 Domain Accuracy Heatmap Entrance & Hover-Zoom Animations (`DomainAccuracyHeatmapD3.tsx`)**:
+  - Enhanced the D3 heatmap cells with staggered center-scale entrance animations (`scale(0.86) -> scale(1)` with `d3.easeBackOut`) and fluid center-anchored hover-zoom transitions (`scale(1.065)` with `d3.select(this).raise()` and an SVG drop-shadow filter).
+

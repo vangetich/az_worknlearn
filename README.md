@@ -191,17 +191,78 @@ An interactive, full-stack **Microsoft Certified: Azure Fundamentals (AZ-900)** 
 
 ---
 
+### 20. 🧭 AI-Driven Study Pace Projections, Azure Concept Map & 6 Live Virtual Study Chambers
+- **AI-Driven Study Pace Projections (`LearningPathProgressMap.tsx` & `studyPaceProjector.ts`)**:
+  - Calculates estimated completion dates (`EST. READY: <Date>`), remaining hours, velocity badges (`Ahead of Pace`, `On Pace`, `Steady Pace`, `Needs Boost`), and 85%+ mastery forecasts for every Learning Path and curriculum module.
+  - Interactive Pace Simulator (`Actual Pace` vs. `15 Q/day`, `25 Q/day`, `40 Q/day` Intensive Sprint) and Target Exam Date Countdown (`7d`, `14d`, `21d`, `30d`).
+- **Interactive Azure Concept Map (`AzureConceptMapView.tsx`)**:
+  - Visualizes 18 core AZ-900 services and architectural concepts across all 3 official Learning Paths and 6 functional clusters with 22 semantic relationship edges (`Secured By`, `Hosted On`, `Governed By`, `Monitored By`, `Contrasts With`).
+  - Supports pan/zoom SVG canvas, live mastery status badges, exam trap callouts, and 1-click targeted practice launches.
+- **6 Live Interoperable Virtual Study Room Chambers (`StudyChamberWorkbench.tsx` & `StudyRoomChambersData.ts`)**:
+  - Dedicated interactive workbenches for all 6 chambers (`Cloud Concepts Lounge`, `Core Services Lab`, `Security & Zero-Trust Vault`, `Governance & Cost Command`, `45m Timed Exam War-Room`, and `Mistake Review & ELI5 Clinic`) with synchronized flashcards, domain question drills, architecture blueprints, and Harambee cohort presence.
+
+---
+
+### 21. 🏆 High-Volume Mock Exam Simulator (45/50/55/60/75/90 Qs) & Weakness Precision Mode (15–25 Qs)
+- **Extended Exam Stamina Presets (`MockExamModal.tsx`)**:
+  - Supports **40, 45, 50, 55, 60, 75, and 90-question** full-length mock exam configurations with proportional Pearson VUE timing (`45m` up to `95m`) to build speed routines, exam question cohesion, and deep cognitive endurance.
+- **Weakness Area Precision Mode (15, 20, or 25 Challenging Questions)**:
+  - Dedicated exam mode (`examFocusMode: 'weakness'`) that mines the learner's historically missed questions, low-accuracy modules (`<75%`), and `Advanced` / `Intermediate` traps to remediate blind spots under realistic exam conditions.
+
+---
+
+### 22. 🧭 Space-Saving All-Screen Categorized Dropdown Navigation Bar & Slim Header
+- **Categorized Dropdown Menus Across All Viewports (`Header.tsx`)**:
+  - Organizes all 16 workspace views into 4 intuitive dropdown categories (**Core Study**, **Exam & Drills**, **Insights & History**, **AI Tutor & Community**) plus an **All (16)** master directory across Desktop, Laptop, Tablet, and Mobile in both Portrait and Landscape orientations.
+  - Features an active-view pill indicator, hover-glow closing button (`Close Menu ×`), `Escape` key & outside-click dismissal, and an ultra-slim single-row header profile on Laptop and Desktop screens with a prominent `Azure Cloud Explorer • AZ-900 • Fundamentals Practice Studio` brand title.
+
+---
+
+### 23. 🔥 Daily Study Goal Ring, Confetti Celebration Modal & Recharts Accuracy Trend Sparkline
+- **Header Daily Study Goal Progress Ring & Fire Streak Animation (`Header.tsx`)**:
+  - Live SVG progress ring combining today's answered questions (80% weight) and active streak momentum (20% weight) with an animated fire icon upon reaching 100%.
+- **Interactive Daily Goal Celebration Modal (`DailyGoalCelebrationModal.tsx`)**:
+  - Triggers automatically (or on-demand from the Header ring) with a 42-piece celebratory confetti burst, animated multi-layer SVG fire-streak flame & rising ember particles, and a **Share Progress with Cohort Peers** social badge generator.
+- **Recharts 10-Session Accuracy Trend Sparkline (`AccuracyTrendSparkline.tsx` & `ReviewHistoryView.tsx`)**:
+  - Visualizes the learner's last 10 quiz sessions (`S1`–`S10`) in the Review History tab with automatic **Learning Plateau Detection** (`±4%` band across the last 4 sessions), 70% AZ-900 passing reference line, and interactive session inspection pills.
+
+---
+
+### 24. 🕸️ 6-Axis D3 Domain Skill Radar, 30 Deep Flashcards + Quick-Fire Drill, Difficulty Streaks & Learning Journey
+- **6-Axis D3 Domain Skill Radar (`DomainSkillRadar.tsx`)**:
+  - Interactive D3 spider chart in the Analytics tab visualizing proficiency across all 6 official AZ-900 sub-domains (*Cloud Concepts*, *Core Architecture*, *Compute & Networking*, *Storage & Identity*, *Cost & Governance*, *Security & Monitoring*) with Cohort Benchmark (`78%`) and Pass Target (`70%`) overlays plus 1-click weak-domain drill-downs.
+- **30 Deep AZ-900 Flashcards & Quick-Fire 15–20 Card Drill (`FlashcardsView.tsx` & `flashcardsData.ts`)**:
+  - Expanded 30-card curriculum deck with Memory Hooks, Common Exam Traps, and Real-World Scenarios, paired with a **Quick-Fire 15–20 Card Drill** mode featuring instant self-grading (`Got It` vs. `Missed / Drill Again`), mistake review queue, and 1-click `Re-Drill Missed Cards Only`.
+- **Header Difficulty Streak Tracker (`DifficultyStreakTracker.tsx`)**:
+  - Tracks separate consecutive correct answer streaks (current & personal best) for **Fundamental (`F`)**, **Intermediate (`I`)**, and **Advanced (`A`)** tiers directly in the Header.
+- **Learning Journey Milestone Timeline (`LearningJourneyTimeline.tsx`)**:
+  - Interactive 6-stage milestone timeline in the Analytics tab unlocking persistent **UI Accent Themes** (*Azure Classic*, *Savannah Gold*, *Kilimanjaro Emerald*, *Nairobi Cyberpunk*, *Royal Harambee*) and specialized **AI Tutor Prompt Packs**.
+
+---
+
+### 25. ⚡ Global 'R' Quick-Retry Shortcut, Web Audio API Manager, Cohort Peer Rank Bell Curve & D3 Heatmap Hover-Zoom
+- **Global `'R'` Keyboard Shortcut for Quick-Retry (`App.tsx` & `KeyboardShortcutGuide.tsx`)**:
+  - Pressing `R` anywhere outside text inputs immediately launches the **5-Minute Quick-Retry Session** when unresolved missed questions are queued, or provides an instant status toast when the retry queue is clear.
+- **Web Audio API Sound Manager Service (`src/services/audioManager.ts`)**:
+  - Zero-dependency synthesized audio service delivering subtle, non-intrusive acoustic cues: a harmonic `ping` for correct answers, a soft `woosh` for incorrect answers, and a celebratory `chime` arpeggio when daily study goals or milestones are reached—strictly respecting `isAudioMuted`.
+- **Cohort Performance 'Peer Rank' Distribution Curve Overlay (`CohortPerformanceView.tsx`)**:
+  - Visualizes the learner's exact percentile standing (`1st`–`99th` percentile, `Top X%`, estimated rank out of `1,480` global Harambee peers, and Z-score $\sigma$) on an interactive D3 Gaussian bell-curve overlay with shaded cumulative area and a What-If Percentile Simulator slider.
+- **D3 Domain Accuracy Heatmap Entrance & Hover-Zoom Animations (`DomainAccuracyHeatmapD3.tsx`)**:
+  - Fluid staggered center-scale entrance transitions (`scale(0.86) -> scale(1)` with `d3.easeBackOut`) and responsive center-anchored hover-zoom (`scale(1.065)` with `d3.select(this).raise()` and elevated drop-shadow filter) across all heatmap cells.
+
+---
+
 ## 🏗️ Technical Architecture & Stack
 
 | Layer | Technology | Purpose |
 | :--- | :--- | :--- |
 | **Frontend Framework** | React 19 + TypeScript + Vite 6 | Modular SPA with responsive Tailwind CSS v4 styling |
-| **Data Visualization** | Recharts 3.10 + D3.js + HTML5 Canvas | Domain Radar, D3 Heatmaps, Shared Whiteboard Canvas, and Telemetry Line Charts |
+| **Data Visualization** | Recharts 3.10 + D3.js + HTML5 Canvas | 6-Axis Domain Skill Radar, Peer Rank Bell Curve, D3 Heatmaps, Recharts Accuracy Sparkline & Shared Whiteboard |
 | **Backend Server** | Express.js (`server.ts`) + WebSocket (`ws`) | REST API proxy, real-time Study Hub WebSockets, M-Pesa/Stripe ledger, and RBAC admin routes |
 | **Cloud Databases** | PostgreSQL + Supabase + Firebase Firestore | Multi-cloud progress sync, RBAC security rules (`firestore.rules`), and offline-first `localStorage` fallback |
 | **Payment Gateways** | Safaricom Daraja API + Stripe | Mobile money STK push payments & credit/debit card subscriptions |
-| **Audio & Speech** | Web Audio API + Web Speech API | Synthesized answer chimes, hands-free TTS question reader, and SpeechRecognition voice answering/notes |
-| **Unit Testing** | Vitest 5 (`npm test`) | Automated unit tests for authentication, PostgreSQL backend latency, and sync error resilience |
+| **Audio & Speech** | Web Audio API (`audioManager.ts`) + Web Speech API | Synthesized `ping`/`woosh`/`chime` cues, hands-free TTS question reader, and SpeechRecognition voice answering |
+| **Unit Testing** | Vitest 5 (`npm test`) | Automated unit tests (31 passing tests across 4 suites) for AI study pace projections, auth, and backend sync |
 
 ---
 
@@ -230,7 +291,7 @@ npm run dev
 
 ### 4. Run Unit Tests & Linting
 ```bash
-# Run Vitest unit test suites (including quizBackend.test.ts)
+# Run Vitest unit test suites (31 tests across 4 test files)
 npx vitest run
 
 # Type-check and lint the codebase
@@ -264,5 +325,6 @@ npm run build
 ---
 
 ## 📜 Build History
-For a complete chronological log of architectural phases, feature implementations, UI/UX refinements, and testing milestones, see **[BUILD_HISTORY.md](./BUILD_HISTORY.md)**, **[HISTORY.md](./HISTORY.md)**, and **[BUILD.md](./BUILD.md)**.
+For a complete chronological log of architectural phases, feature implementations, UI/UX refinements, and testing milestones (Phases 1 through 25), see **[BUILD_HISTORY.md](./BUILD_HISTORY.md)**, **[HISTORY.md](./HISTORY.md)**, and **[BUILD.md](./BUILD.md)**.
+
 

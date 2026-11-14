@@ -15,6 +15,7 @@ import {
 import { KenyanFlagMiniEmblem, MaasaiMedallion } from './MotifDecorations';
 import { THREAD_TAG_META, ThreadTagId } from '../data/azureThemesData';
 import { getThreadTagIcon } from './ThreadTagBadge';
+import { ModuleComplexityLevel } from '../types/quiz';
 
 interface PracticeControlOverflowMenuProps {
   isOpen: boolean;
@@ -22,9 +23,12 @@ interface PracticeControlOverflowMenuProps {
   // 1. Sort
   questionSortOrder: 'default' | 'newest-first' | 'hardest-first' | 'module-progression' | 'easiest-first';
   onSortChange: (order: 'default' | 'newest-first' | 'hardest-first' | 'module-progression' | 'easiest-first') => void;
-  // 2. Diff
+  // 2. Question Difficulty
   selectedDifficultyFilter: 'all' | 'Fundamental' | 'Intermediate' | 'Advanced';
   onDifficultyChange: (diff: 'all' | 'Fundamental' | 'Intermediate' | 'Advanced') => void;
+  // 2a. Module Difficulty (Complexity Level defined in Module Metadata)
+  selectedModuleDifficultyFilter: 'all' | ModuleComplexityLevel;
+  onModuleDifficultyChange: (level: 'all' | ModuleComplexityLevel) => void;
   // 2b. Interconnecting Thread multi-select
   selectedThreadFilters?: ThreadTagId[];
   onToggleThreadFilter?: (threadId: ThreadTagId) => void;
@@ -49,6 +53,8 @@ export const PracticeControlOverflowMenu: React.FC<PracticeControlOverflowMenuPr
   onSortChange,
   selectedDifficultyFilter,
   onDifficultyChange,
+  selectedModuleDifficultyFilter,
+  onModuleDifficultyChange,
   selectedThreadFilters = [],
   onToggleThreadFilter,
   onClearThreadFilters,
@@ -86,6 +92,17 @@ export const PracticeControlOverflowMenu: React.FC<PracticeControlOverflowMenuPr
     { id: 'Advanced', label: 'Advanced', description: 'Complex governance traps', accent: 'bg-purple-600' },
   ];
 
+  const MODULE_COMPLEXITY_OPTIONS: Array<{
+    id: 'all' | ModuleComplexityLevel;
+    label: string;
+    description: string;
+  }> = [
+    { id: 'all', label: 'All Modules', description: 'Modules 1–12 across all paths' },
+    { id: 'Beginner', label: 'Beginner Modules', description: 'Cloud Concepts & Core Architecture (M1–M4)' },
+    { id: 'Intermediate', label: 'Intermediate Modules', description: 'Compute, Storage, Cost & Monitor (M5, M6, M8, M11)' },
+    { id: 'Advanced', label: 'Advanced Modules', description: 'Identity, Governance, IaC & Synthesis (M7, M9, M10, M12)' },
+  ];
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200"
@@ -117,7 +134,7 @@ export const PracticeControlOverflowMenu: React.FC<PracticeControlOverflowMenuPr
                 </span>
               </div>
               <p className="text-xs text-slate-500 truncate">
-                Configure Sort, Diff, Heatmap, Maps &amp; Study Zone
+                Configure Sort, Question/Module Difficulty, Heatmap, Maps &amp; Study Zone
               </p>
             </div>
           </div>
@@ -182,13 +199,13 @@ export const PracticeControlOverflowMenu: React.FC<PracticeControlOverflowMenuPr
           </div>
 
           {/* ==========================================
-              CONTROL 2: DIFFICULTY LEVEL
+              CONTROL 2: QUESTION DIFFICULTY LEVEL
              ========================================== */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                 <Filter className="w-3.5 h-3.5 text-[#0078D4]" />
-                <span>2. Difficulty Level ('Diff')</span>
+                <span>2. Question Difficulty ('Diff')</span>
               </label>
               <span className="text-[11px] font-bold text-[#0078D4]">
                 {selectedDifficultyFilter === 'all' ? 'All Levels' : selectedDifficultyFilter}
@@ -219,6 +236,55 @@ export const PracticeControlOverflowMenu: React.FC<PracticeControlOverflowMenuPr
                     </div>
                     {isSelected && (
                       <span className="w-4 h-4 rounded-full bg-white text-[#0078D4] flex items-center justify-center shrink-0">
+                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ==========================================
+              CONTROL 2A: MODULE DIFFICULTY TOGGLE (BEGINNER / INTERMEDIATE / ADVANCED)
+             ========================================== */}
+          <div className="space-y-2 pt-1 border-t border-slate-100">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Module Difficulty ('Beginner / Intermediate / Advanced')</span>
+              </label>
+              <span className="text-[11px] font-bold text-emerald-700">
+                {selectedModuleDifficultyFilter === 'all'
+                  ? 'All Modules'
+                  : `${selectedModuleDifficultyFilter} Modules`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              {MODULE_COMPLEXITY_OPTIONS.map((modDiff) => {
+                const isSelected = selectedModuleDifficultyFilter === modDiff.id;
+                return (
+                  <button
+                    key={modDiff.id}
+                    type="button"
+                    onClick={() => {
+                      onModuleDifficultyChange(modDiff.id);
+                    }}
+                    className={`min-h-[46px] p-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs'
+                        : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-black truncate">{modDiff.label}</div>
+                      <div className={`text-[10px] truncate ${isSelected ? 'text-emerald-100' : 'text-slate-500'}`}>
+                        {modDiff.description}
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <span className="w-4 h-4 rounded-full bg-white text-emerald-800 flex items-center justify-center shrink-0">
                         <Check className="w-2.5 h-2.5 stroke-[3]" />
                       </span>
                     )}

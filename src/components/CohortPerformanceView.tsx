@@ -181,6 +181,410 @@ export const CohortPerformanceView: React.FC<CohortPerformanceViewProps> = ({
   const overallCohortTopQuartile = 90;
   const overallDelta = overallUserAccuracy > 0 ? overallUserAccuracy - overallCohortAverage : -overallCohortAverage;
 
+  // Peer Rank & Distribution Curve Overlay state and calculations
+  const curveSvgRef = useRef<SVGSVGElement | null>(null);
+  const [peerScope, setPeerScope] = useState<'overall' | 1 | 2 | 3>('overall');
+  const [previewAccuracy, setPreviewAccuracy] = useState<number | null>(null);
+  const [curveHoverScore, setCurveHoverScore] = useState<number | null>(null);
+
+  const peerRankMetrics = useMemo(() => {
+    const totalCohortPeers = 1480;
+    let scopeTitle = 'Global AZ-900 Cohort (All Paths)';
+    let mean = overallCohortAverage; // 79%
+    let topQuartile = overallCohortTopQuartile; // 90%
+    let stdDev = 11.5;
+    let rawUserScore = overallUserAccuracy;
+    let hasAttempted = (stats.totalAnswered || 0) > 0;
+
+    if (peerScope !== 'overall') {
+      const pathComp = comparisons.find((c) => c.pathId === peerScope);
+      if (pathComp) {
+        scopeTitle = pathComp.shortTitle;
+        mean = pathComp.cohortAverage;
+        topQuartile = pathComp.cohortTopQuartile;
+        stdDev = peerScope === 2 ? 12.5 : 10.8;
+        rawUserScore = pathComp.userAccuracy;
+        hasAttempted = pathComp.userAttempts > 0;
+      }
+    }
+
+    const effectiveScore =
+      previewAccuracy !== null
+        ? previewAccuracy
+        : hasAttempted
+        ? rawUserScore
+        : mean;
+
+    const erf = (z: number): number => {
+      const sign = z >= 0 ? 1 : -1;
+      const absZ = Math.abs(z);
+      const a1 = 0.254829592;
+      const a2 = -0.284496736;
+      const a3 = 1.421413741;
+      const a4 = -1.453152027;
+      const a5 = 1.061405429;
+      const p = 0.3275911;
+      const t = 1.0 / (1.0 + p * absZ);
+      const y =
+        1.0 -
+        (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) *
+          Math.exp(-absZ * absZ);
+      return sign * y;
+    };
+
+    const normalCdf = (x: number, mu: number, sigma: number): number => {
+      return 0.5 * (1 + erf((x - mu) / (sigma * Math.sqrt(2))));
+    };
+
+    const zScore = (effectiveScore - mean) / stdDev;
+    const rawPercentile = Math.round(normalCdf(effectiveScore, mean, stdDev) * 100);
+    const percentile = Math.max(1, Math.min(99, rawPercentile));
+    const topPercent = Math.max(1, 100 - percentile);
+    const estimatedRank = Math.max(
+      1,
+      Math.min(totalCohortPeers, Math.round(totalCohortPeers * (1 - percentile / 100)))
+    );
+
+    let tierName = 'Developing Explorer';
+    let tierBadgeClass = 'bg-amber-100 text-amber-800 border-amber-300';
+    if (percentile >= 90) {
+      tierName = 'Vanguard Architect (Top 10%)';
+      tierBadgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+    } else if (percentile >= 75) {
+      tierName = 'Top Quartile Contender';
+      tierBadgeClass = 'bg-blue-100 text-blue-800 border-blue-300';
+    } else if (effectiveScore >= 70) {
+      tierName = 'Exam Pass Ready';
+      tierBadgeClass = 'bg-indigo-100 text-indigo-800 border-indigo-300';
+    }
+
+    return {
+      scopeTitle,
+      mean,
+      topQuartile,
+      stdDev,
+      rawUserScore,
+      hasAttempted,
+      effectiveScore,
+      zScore,
+      percentile,
+      topPercent,
+      estimatedRank,
+      totalCohortPeers,
+      tierName,
+      tierBadgeClass,
+      normalCdf,
+    };
+  }, [
+    peerScope,
+    previewAccuracy,
+    overallCohortAverage,
+    overallCohortTopQuartile,
+    overallUserAccuracy,
+    stats.totalAnswered,
+    comparisons,
+  ]);
+
+  // Render D3 Peer Rank Distribution Curve Overlay
+  useEffect(() => {
+    if (!curveSvgRef.current) return;
+
+    const svg = d3.select(curveSvgRef.current);
+    svg.selectAll('*').remove();
+
+    const width = 760;
+    const height = 265;
+    const margin = { top: 34, right: 32, bottom: 42, left: 44 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const { mean, stdDev, topQuartile, effectiveScore, percentile } = peerRankMetrics;
+
+    const gaussianPdf = (x: number) => {
+      const exponent = -0.5 * Math.pow((x - mean) / stdDev, 2);
+      return (1 / (stdDev * Math.sqrt(2 * Math.PI))) * Math.exp(exponent);
+    };
+
+    const points: { score: number; density: number }[] = [];
+    for (let s = 20; s <= 100; s += 1) {
+      points.push({ score: s, density: gaussianPdf(s) });
+    }
+
+    const maxDensity = d3.max(points, (d) => d.density) || 0.04;
+
+    const xScale = d3.scaleLinear().domain([20, 100]).range([0, innerWidth]);
+    const yScale = d3
+      .scaleLinear()
+      .domain([0, maxDensity * 1.18])
+      .range([innerHeight, 0]);
+
+    const defs = svg.append('defs');
+
+    // Shaded cumulative user percentile gradient
+    const areaGrad = defs
+      .append('linearGradient')
+      .attr('id', 'peerRankPercentileGrad')
+      .attr('x1', '0%')
+      .attr('y1', '0%')
+      .attr('x2', '100%')
+      .attr('y2', '0%');
+    areaGrad.append('stop').attr('offset', '0%').attr('stop-color', '#38bdf8').attr('stop-opacity', 0.16);
+    areaGrad.append('stop').attr('offset', '65%').attr('stop-color', '#0078D4').attr('stop-opacity', 0.30);
+    areaGrad.append('stop').attr('offset', '100%').attr('stop-color', '#10b981').attr('stop-opacity', 0.42);
+
+    // Full cohort backdrop gradient
+    const bgCurveGrad = defs
+      .append('linearGradient')
+      .attr('id', 'peerRankBgCurveGrad')
+      .attr('x1', '0%')
+      .attr('y1', '0%')
+      .attr('x2', '0%')
+      .attr('y2', '100%');
+    bgCurveGrad.append('stop').attr('offset', '0%').attr('stop-color', '#94a3b8').attr('stop-opacity', 0.20);
+    bgCurveGrad.append('stop').attr('offset', '100%').attr('stop-color', '#f1f5f9').attr('stop-opacity', 0.04);
+
+    const g = svg
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const yTicks = yScale.ticks(4);
+    g.selectAll('.peer-grid-line')
+      .data(yTicks)
+      .enter()
+      .append('line')
+      .attr('x1', 0)
+      .attr('x2', innerWidth)
+      .attr('y1', (d) => yScale(d))
+      .attr('y2', (d) => yScale(d))
+      .attr('stroke', '#e2e8f0')
+      .attr('stroke-dasharray', '3,3')
+      .attr('stroke-width', 1);
+
+    const areaGenerator = d3
+      .area<{ score: number; density: number }>()
+      .x((d) => xScale(d.score))
+      .y0(innerHeight)
+      .y1((d) => yScale(d.density))
+      .curve(d3.curveBasis);
+
+    const lineGenerator = d3
+      .line<{ score: number; density: number }>()
+      .x((d) => xScale(d.score))
+      .y((d) => yScale(d.density))
+      .curve(d3.curveBasis);
+
+    // 1. Full cohort distribution area
+    g.append('path')
+      .datum(points)
+      .attr('fill', 'url(#peerRankBgCurveGrad)')
+      .attr('d', areaGenerator);
+
+    // 2. Shaded cumulative percentile area up to user's score
+    const clampedScore = Math.max(20, Math.min(100, effectiveScore));
+    const percentilePoints = points.filter((p) => p.score <= clampedScore);
+    if (
+      percentilePoints.length === 0 ||
+      percentilePoints[percentilePoints.length - 1].score < clampedScore
+    ) {
+      percentilePoints.push({
+        score: clampedScore,
+        density: gaussianPdf(clampedScore),
+      });
+    }
+
+    g.append('path')
+      .datum(percentilePoints)
+      .attr('fill', 'url(#peerRankPercentileGrad)')
+      .attr('d', areaGenerator)
+      .attr('opacity', 0)
+      .transition()
+      .duration(550)
+      .ease(d3.easeCubicOut)
+      .attr('opacity', 1);
+
+    // 3. Bell curve outline
+    g.append('path')
+      .datum(points)
+      .attr('fill', 'none')
+      .attr('stroke', '#0078D4')
+      .attr('stroke-width', 2.75)
+      .attr('d', lineGenerator);
+
+    // 4. Reference threshold markers (70% Pass Mark, Cohort Mean, Top 25% Quartile)
+    const refMarkers = [
+      {
+        score: 70,
+        label: '70% Pass',
+        color: '#d97706',
+        dash: '4,4',
+        labelYOffset: -8,
+      },
+      {
+        score: mean,
+        label: `Cohort Avg (${mean}%)`,
+        color: '#475569',
+        dash: '3,3',
+        labelYOffset: -20,
+      },
+      {
+        score: topQuartile,
+        label: `Top 25% (${topQuartile}%)`,
+        color: '#059669',
+        dash: '4,3',
+        labelYOffset: -8,
+      },
+    ];
+
+    refMarkers.forEach((m) => {
+      const mx = xScale(m.score);
+      const my = yScale(gaussianPdf(m.score));
+      g.append('line')
+        .attr('x1', mx)
+        .attr('x2', mx)
+        .attr('y1', Math.max(8, my - 10))
+        .attr('y2', innerHeight)
+        .attr('stroke', m.color)
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', m.dash);
+
+      g.append('text')
+        .attr('x', mx)
+        .attr('y', Math.max(10, my + m.labelYOffset))
+        .attr('text-anchor', 'middle')
+        .attr('fill', m.color)
+        .attr('font-size', '10px')
+        .attr('font-weight', '800')
+        .text(m.label);
+    });
+
+    // 5. User Peer Rank Position Marker & Beacon
+    const userX = xScale(clampedScore);
+    const userY = yScale(gaussianPdf(clampedScore));
+
+    g.append('line')
+      .attr('x1', userX)
+      .attr('x2', userX)
+      .attr('y1', userY)
+      .attr('y2', innerHeight)
+      .attr('stroke', '#0078D4')
+      .attr('stroke-width', 2.5);
+
+    g.append('circle')
+      .attr('cx', userX)
+      .attr('cy', userY)
+      .attr('r', 11)
+      .attr('fill', '#0078D4')
+      .attr('opacity', 0.22);
+
+    g.append('circle')
+      .attr('cx', userX)
+      .attr('cy', userY)
+      .attr('r', 6)
+      .attr('fill', '#0078D4')
+      .attr('stroke', '#ffffff')
+      .attr('stroke-width', 2.2);
+
+    const badgeWidth = 148;
+    const badgeHeight = 24;
+    const badgeX = Math.max(
+      4,
+      Math.min(innerWidth - badgeWidth - 4, userX - badgeWidth / 2)
+    );
+    const badgeY = Math.max(-28, userY - 36);
+
+    const badgeGroup = g
+      .append('g')
+      .attr('transform', `translate(${badgeX}, ${badgeY})`);
+
+    badgeGroup
+      .append('rect')
+      .attr('width', badgeWidth)
+      .attr('height', badgeHeight)
+      .attr('rx', 12)
+      .attr('fill', '#0078D4')
+      .attr('stroke', '#0284c7')
+      .attr('stroke-width', 1.5);
+
+    badgeGroup
+      .append('text')
+      .attr('x', badgeWidth / 2)
+      .attr('y', 15.5)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#ffffff')
+      .attr('font-size', '10.5px')
+      .attr('font-weight', '800')
+      .text(`You: ${clampedScore}% • P${percentile}`);
+
+    // 6. X-axis accuracy labels
+    const xAxis = d3
+      .axisBottom(xScale)
+      .tickValues([20, 35, 50, 60, 70, 80, 90, 100])
+      .tickFormat((d) => `${d}%`);
+
+    const xAxisGroup = g
+      .append('g')
+      .attr('transform', `translate(0,${innerHeight})`)
+      .call(xAxis);
+
+    xAxisGroup
+      .selectAll('text')
+      .attr('fill', '#475569')
+      .attr('font-size', '11px')
+      .attr('font-weight', '700');
+    xAxisGroup.select('.domain').attr('stroke', '#cbd5e1');
+    xAxisGroup.selectAll('line').attr('stroke', '#cbd5e1');
+
+    g.append('text')
+      .attr('x', innerWidth / 2)
+      .attr('y', innerHeight + 35)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#64748b')
+      .attr('font-size', '10.5px')
+      .attr('font-weight', '700')
+      .text('AZ-900 Accuracy Distribution (%) vs. Global Harambee Cohort Bell Curve');
+
+    // Interactive hover scrub overlay
+    const hoverLine = g
+      .append('line')
+      .attr('y1', 0)
+      .attr('y2', innerHeight)
+      .attr('stroke', '#334155')
+      .attr('stroke-width', 1)
+      .attr('stroke-dasharray', '2,2')
+      .style('opacity', 0);
+
+    const hoverDot = g
+      .append('circle')
+      .attr('r', 4.5)
+      .attr('fill', '#10b981')
+      .attr('stroke', '#ffffff')
+      .attr('stroke-width', 1.5)
+      .style('opacity', 0);
+
+    g.append('rect')
+      .attr('width', innerWidth)
+      .attr('height', innerHeight)
+      .attr('fill', 'transparent')
+      .style('cursor', 'crosshair')
+      .on('mousemove', (event) => {
+        const [mx] = d3.pointer(event);
+        const hoveredScore = Math.round(
+          Math.max(20, Math.min(100, xScale.invert(mx)))
+        );
+        const hx = xScale(hoveredScore);
+        const hy = yScale(gaussianPdf(hoveredScore));
+        hoverLine.attr('x1', hx).attr('x2', hx).style('opacity', 0.75);
+        hoverDot.attr('cx', hx).attr('cy', hy).style('opacity', 1);
+        setCurveHoverScore(hoveredScore);
+      })
+      .on('mouseleave', () => {
+        hoverLine.style('opacity', 0);
+        hoverDot.style('opacity', 0);
+        setCurveHoverScore(null);
+      });
+  }, [peerRankMetrics]);
+
   // Chart data structure for D3 grouped bars
   const chartData = useMemo(() => {
     const list = comparisons.map((c) => ({
@@ -461,6 +865,23 @@ export const CohortPerformanceView: React.FC<CohortPerformanceViewProps> = ({
     return LEARNING_PATHS.find((p) => p.id === selectedComparison.pathId);
   }, [selectedComparison]);
 
+  const hoveredCurvePercentile =
+    curveHoverScore !== null
+      ? Math.max(
+          1,
+          Math.min(
+            99,
+            Math.round(
+              peerRankMetrics.normalCdf(
+                curveHoverScore,
+                peerRankMetrics.mean,
+                peerRankMetrics.stdDev
+              ) * 100
+            )
+          )
+        )
+      : null;
+
   return (
     <div className="space-y-6 sm:space-y-7 w-full max-w-full overflow-x-hidden min-w-0">
       {/* African Kitenge Header Accent Ribbon */}
@@ -498,11 +919,13 @@ export const CohortPerformanceView: React.FC<CohortPerformanceViewProps> = ({
             </p>
           </div>
 
-          {/* Quick Stat Pill: Overall Delta */}
-          <div className="shrink-0 p-4 rounded-xl bg-gradient-to-br from-slate-900 to-[#003865] text-white shadow-md border border-slate-700 min-w-[210px]">
+          {/* Quick Stat Pill: Overall Standing & Peer Rank */}
+          <div className="shrink-0 p-4 rounded-xl bg-gradient-to-br from-slate-900 to-[#003865] text-white shadow-md border border-slate-700 min-w-[230px]">
             <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-sky-200 uppercase tracking-wider">
               <span>Overall Standing</span>
-              <Users className="w-3.5 h-3.5 text-amber-400" />
+              <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[10px] font-black">
+                Peer Rank: P{peerRankMetrics.percentile}
+              </span>
             </div>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="text-2xl sm:text-3xl font-black font-mono text-white">
@@ -521,6 +944,198 @@ export const CohortPerformanceView: React.FC<CohortPerformanceViewProps> = ({
               >
                 {overallDelta >= 0 ? `+${overallDelta}% Ahead` : `${overallDelta}% Gap`}
               </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Peer Rank Indicator & Distribution Curve Overlay */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-slate-100">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-[#0078D4] border border-blue-200 text-[11px] font-extrabold mb-1.5">
+              <Award className="w-3.5 h-3.5" />
+              <span>Peer Rank Indicator • Gaussian Distribution Curve Overlay</span>
+            </div>
+            <h3 className="text-base sm:text-lg font-black text-slate-900">
+              Global Cohort Percentile Standing & Bell-Curve Overlay
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Visualizes your exact percentile rank along the global cohort probability distribution ({peerRankMetrics.totalCohortPeers.toLocaleString()} active Harambee peers)
+            </p>
+          </div>
+
+          {/* Scope Selector Pills */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200/80">
+            {[
+              { id: 'overall' as const, label: 'Overall Cohort' },
+              { id: 1 as const, label: 'Path 1: Cloud' },
+              { id: 2 as const, label: 'Path 2: Architecture' },
+              { id: 3 as const, label: 'Path 3: Governance' },
+            ].map((tab) => {
+              const active = peerScope === tab.id;
+              return (
+                <button
+                  key={String(tab.id)}
+                  type="button"
+                  onClick={() => {
+                    setPeerScope(tab.id);
+                    setPreviewAccuracy(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    active
+                      ? 'bg-[#0078D4] text-white shadow-xs font-black'
+                      : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
+          {/* Left 4 Columns: Peer Rank Metric Summary & Simulator */}
+          <div className="lg:col-span-4 space-y-3.5">
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-blue-50/50 border border-slate-200/90 space-y-3.5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Percentile Rank
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-3xl sm:text-4xl font-black text-[#0078D4]">
+                      {peerRankMetrics.percentile}
+                      <span className="text-lg font-bold">th</span>
+                    </span>
+                    <span className="text-xs font-extrabold text-emerald-700">
+                      Top {peerRankMetrics.topPercent}%
+                    </span>
+                  </div>
+                </div>
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${peerRankMetrics.tierBadgeClass}`}
+                >
+                  {peerRankMetrics.tierName}
+                </span>
+              </div>
+
+              {/* Percentile Gauge Bar */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-[10.5px] font-semibold text-slate-500">
+                  <span>1st Percentile</span>
+                  <span>50th Median</span>
+                  <span>99th Percentile</span>
+                </div>
+                <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden relative">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-sky-400 via-[#0078D4] to-emerald-500 transition-all duration-500"
+                    style={{ width: `${peerRankMetrics.percentile}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
+                  <div className="text-[10px] font-bold uppercase text-slate-400">
+                    Cohort Standing
+                  </div>
+                  <div className="text-sm font-black text-slate-900 mt-0.5">
+                    #{peerRankMetrics.estimatedRank.toLocaleString()}{' '}
+                    <span className="text-xs font-normal text-slate-500">
+                      / {peerRankMetrics.totalCohortPeers.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200/80">
+                  <div className="text-[10px] font-bold uppercase text-slate-400">
+                    Z-Score Delta
+                  </div>
+                  <div className="text-sm font-black text-slate-900 mt-0.5">
+                    {peerRankMetrics.zScore >= 0 ? '+' : ''}
+                    {peerRankMetrics.zScore.toFixed(2)}σ{' '}
+                    <span className="text-xs font-normal text-slate-500">
+                      (μ={peerRankMetrics.mean}%)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {!peerRankMetrics.hasAttempted && previewAccuracy === null && (
+                <p className="text-[11px] text-amber-800 bg-amber-50/90 px-3 py-2 rounded-xl border border-amber-200/80">
+                  Showing baseline cohort median ({peerRankMetrics.mean}%) preview. Answer questions or drag the simulator slider below to inspect any accuracy!
+                </p>
+              )}
+            </div>
+
+            {/* Interactive What-If Score Slider */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="peer-rank-whatif-slider"
+                  className="text-xs font-bold text-slate-700"
+                >
+                  Interactive Percentile Simulator
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-[#0078D4]">
+                    {peerRankMetrics.effectiveScore}% Accuracy
+                  </span>
+                  {previewAccuracy !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewAccuracy(null)}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 underline cursor-pointer"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+              <input
+                id="peer-rank-whatif-slider"
+                type="range"
+                min={25}
+                max={100}
+                value={peerRankMetrics.effectiveScore}
+                onChange={(e) => setPreviewAccuracy(Number(e.target.value))}
+                className="w-full accent-[#0078D4] cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
+                <span>25%</span>
+                <span>70% Pass</span>
+                <span>{peerRankMetrics.mean}% Mean</span>
+                <span>100%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right 8 Columns: D3 Distribution Curve SVG */}
+          <div className="lg:col-span-8">
+            <div className="rounded-2xl bg-slate-50/70 border border-slate-200/80 p-3 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-1">
+                <span className="text-xs font-bold text-slate-700">
+                  {peerRankMetrics.scopeTitle} • Shaded Cumulative Area: {peerRankMetrics.percentile}th Percentile
+                </span>
+                {curveHoverScore !== null && hoveredCurvePercentile !== null ? (
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                    Inspecting {curveHoverScore}% Accuracy → {hoveredCurvePercentile}th Percentile (Top {Math.max(1, 100 - hoveredCurvePercentile)}%)
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    Hover across the bell curve to inspect any score percentile
+                  </span>
+                )}
+              </div>
+              <div className="w-full overflow-x-auto">
+                <svg
+                  ref={curveSvgRef}
+                  className="w-full h-auto min-w-[460px] select-none"
+                  role="img"
+                  aria-label="Peer Rank normal distribution curve overlay showing your percentile standing against the global cohort"
+                />
+              </div>
             </div>
           </div>
         </div>

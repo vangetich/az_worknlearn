@@ -44,6 +44,9 @@ import {
   TrendingUp,
   TrendingDown,
   GitBranch,
+  ArrowLeftRight,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
@@ -974,6 +977,62 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     });
   };
 
+  // 'Quick-Swap' Active Recall Mode: Toggle between 'question-first' and 'answer-first' views
+  const [quickSwapMode, setQuickSwapMode] = useState<'question-first' | 'answer-first'>(() => {
+    try {
+      const saved = localStorage.getItem('az900_quick_swap_mode_v1');
+      if (saved === 'answer-first' || saved === 'question-first') return saved;
+    } catch {
+      // ignore
+    }
+    return 'question-first';
+  });
+  const [isAnswerFirstScenarioRevealed, setIsAnswerFirstScenarioRevealed] =
+    useState<boolean>(false);
+
+  const handleSetQuickSwapMode = (mode: 'question-first' | 'answer-first') => {
+    setQuickSwapMode(mode);
+    try {
+      localStorage.setItem('az900_quick_swap_mode_v1', mode);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleToggleQuickSwapMode = () => {
+    handleSetQuickSwapMode(
+      quickSwapMode === 'question-first' ? 'answer-first' : 'question-first'
+    );
+  };
+
+  // 'Blind Recall' Mode: Questions are displayed without multiple-choice options initially;
+  // the user attempts to answer/describe the concept first, then reveals the options to check understanding.
+  const [isBlindRecallMode, setIsBlindRecallMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('az900_blind_recall_mode_v1') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [blindRecallAttemptText, setBlindRecallAttemptText] = useState<string>('');
+  const [isBlindRecallOptionsRevealed, setIsBlindRecallOptionsRevealed] =
+    useState<boolean>(false);
+
+  const handleToggleBlindRecallMode = () => {
+    setIsBlindRecallMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('az900_blind_recall_mode_v1', String(next));
+      } catch {
+        // ignore
+      }
+      if (next) {
+        setIsBlindRecallOptionsRevealed(false);
+      }
+      return next;
+    });
+  };
+
   // Per-Question Exam Readiness Timer & Rolling Average Completion Time
   const QUESTION_TIMING_STORAGE_KEY = 'az900_question_timing_v1';
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
@@ -1005,6 +1064,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     setElapsedSeconds(0);
     setShowKnowledgeCheck(false);
     setSelectedConceptId(null);
+    setIsAnswerFirstScenarioRevealed(false);
+    setBlindRecallAttemptText('');
+    setIsBlindRecallOptionsRevealed(false);
     const savedNote = getQuestionNote(question.id);
     setQuestionNoteText(savedNote);
     setHasNote(Boolean(savedNote.trim()));
@@ -1429,6 +1491,12 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const isSelectedCorrect = selectedOption === question.correctAnswer;
   const isQuestionSkipped = Boolean(stats?.skippedQuestionIds?.includes(question.id));
 
+  React.useEffect(() => {
+    if (isFocusMode && showImmediateFeedback && typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [isFocusMode, showImmediateFeedback]);
+
   // Color-coded Difficulty Badge Configuration (Fundamental, Intermediate, Advanced)
   const difficultyBadgeConfig =
     question.difficulty === 'Fundamental'
@@ -1845,18 +1913,22 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               />
             </button>
 
-            {/* Centered Modal Popup Fitted Cleanly into the Active Viewport */}
+            {/* Modal Popup Fitted Cleanly into the Active Viewport (Top-aligned in Focus Mode) */}
             {showStudyZoneMenu &&
               typeof document !== 'undefined' &&
               createPortal(
                 <div
-                  className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150"
+                  className={`fixed inset-0 z-[120] flex ${
+                    isFocusMode ? 'items-start pt-3 sm:pt-4' : 'items-center'
+                  } justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150`}
                   onClick={() => setShowStudyZoneMenu(false)}
                 >
                   <div
                     ref={studyZoneMenuRef}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full max-w-[min(36rem,calc(100vw-1.25rem))] my-auto max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] flex flex-col overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-2xl text-left animate-in zoom-in-95 duration-200"
+                    className={`w-full max-w-[min(36rem,calc(100vw-1.25rem))] ${
+                      isFocusMode ? 'mt-0 mb-auto' : 'my-auto'
+                    } max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] flex flex-col overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-2xl text-left animate-in zoom-in-95 duration-200`}
                   >
                     {/* Modal Header */}
                     <div className="shrink-0 bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white px-4 sm:px-5 py-3.5 sm:py-4 flex items-center justify-between gap-3 border-b border-slate-800">
@@ -2098,6 +2170,61 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                               <span>Exam Sim (45m Timer)</span>
                             </button>
                           </div>
+
+                          {/* Quick-Swap Active Recall View Toggle (Question-First vs Answer-First) */}
+                          {!isExamMode && (
+                            <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-indigo-200">
+                              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Quick-Swap Active Recall:</span>
+                              </span>
+                              <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 border border-slate-200">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetQuickSwapMode('question-first')}
+                                  className={`px-2.5 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer ${
+                                    quickSwapMode === 'question-first'
+                                      ? 'bg-[#0078D4] text-white shadow-2xs'
+                                      : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                                >
+                                  Question-First
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetQuickSwapMode('answer-first')}
+                                  className={`px-2.5 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer ${
+                                    quickSwapMode === 'answer-first'
+                                      ? 'bg-indigo-600 text-white shadow-2xs'
+                                      : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                                >
+                                  Answer-First
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Blind Recall Mode Toggle (Hide Multiple-Choice Options Initially) */}
+                          {!isExamMode && (
+                            <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-emerald-200">
+                              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                <EyeOff className="w-3.5 h-3.5 text-emerald-700" />
+                                <span>Blind Recall Mode (Hide Options First):</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleToggleBlindRecallMode}
+                                className={`px-3 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer ${
+                                  isBlindRecallMode
+                                    ? 'bg-emerald-700 text-white shadow-2xs'
+                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                                }`}
+                              >
+                                {isBlindRecallMode ? 'Blind Recall: ON' : 'Blind Recall: OFF'}
+                              </button>
+                            </div>
+                          )}
 
                           {/* Question Difficulty Filter */}
                           {onSelectDifficultyFilter && (
@@ -2742,6 +2869,85 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         >
           {/* Main Question & Answering Column */}
           <div className={`space-y-6 min-w-0 ${showKnowledgeCheck ? 'lg:col-span-8' : 'w-full'}`}>
+            {/* Focus Mode Top Review Window: Presented at the top part of the view when a question is answered in Focus Mode */}
+            {isFocusMode && showImmediateFeedback && (
+              <div
+                role="region"
+                aria-label="Focus Mode Top Answer Review Window"
+                className={`p-4 sm:p-5 rounded-2xl border-2 shadow-lg space-y-3 animate-in fade-in slide-in-from-top-2 duration-200 ${
+                  isSelectedCorrect
+                    ? 'bg-emerald-50/95 border-emerald-400 text-emerald-950'
+                    : 'bg-rose-50/95 border-rose-400 text-rose-950'
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-slate-200/80">
+                  <div className="flex items-center gap-2.5">
+                    {isSelectedCorrect ? (
+                      <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                    ) : (
+                      <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-slate-900 text-amber-300">
+                          Focus Mode Top Review Window
+                        </span>
+                        <span className="font-black text-sm sm:text-base">
+                          {isSelectedCorrect
+                            ? `Correct! Option ${question.correctAnswer} Verified`
+                            : `Incorrect (Selected ${selectedOption}) • Correct Answer: Option ${question.correctAnswer}`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {onOpenPersonalizedReview && unresolvedMistakesCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={onOpenPersonalizedReview}
+                        className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-rose-100 text-rose-800 border border-rose-300 text-xs font-extrabold inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Review Queue ({unresolvedMistakesCount})</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={onNext}
+                      className="px-3.5 py-1.5 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-black inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <span>Next Question</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-white/90 border border-emerald-200 space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 block">
+                      Why Option {question.correctAnswer} is Correct
+                    </span>
+                    <p className="text-slate-800 leading-relaxed">{question.whyCorrect}</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white/90 border border-amber-200 space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 block">
+                      {!isSelectedCorrect && selectedOption
+                        ? `Why Option ${selectedOption} Was a Distractor`
+                        : 'AZ-900 Exam Anchor Tip'}
+                    </span>
+                    <p className="text-slate-800 leading-relaxed">
+                      {!isSelectedCorrect && selectedOption
+                        ? question.distractorBreakdown.find((d) => d.letter === selectedOption)
+                            ?.reason || question.examTip
+                        : question.examTip}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Hands-Free Text-to-Speech (TTS) Audio Reader Toolbar */}
             <QuizTtsBar
               question={question}
@@ -2798,9 +3004,79 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   </h3>
                 </div>
 
-                {/* Analyze Distractors, ELI5 Analogy & Knowledge Check Toggle Switches (Hidden in Exam Simulation Mode) */}
+                {/* Quick-Swap, Analyze Distractors, ELI5 Analogy & Knowledge Check Toggle Switches (Hidden in Exam Simulation Mode) */}
                 {!isExamMode ? (
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+                    {/* Quick-Swap Segmented Mode Toggle: Question-First <-> Answer-First */}
+                    <div
+                      className="inline-flex items-center p-0.5 rounded-xl bg-indigo-50/90 border border-indigo-200 shadow-2xs"
+                      role="group"
+                      aria-label="Quick-Swap mode: toggle between Question-First and Answer-First active recall views"
+                    >
+                      <button
+                        type="button"
+                        onClick={handleToggleQuickSwapMode}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-indigo-900 hover:text-indigo-700 cursor-pointer"
+                        title="Quick-Swap Mode: Instantly flip between Question-First and Answer-First views for active recall"
+                      >
+                        <ArrowLeftRight className="w-3 h-3 text-indigo-600 shrink-0" />
+                        <span className="hidden xl:inline">Quick-Swap:</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetQuickSwapMode('question-first')}
+                        className={`px-2 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer ${
+                          quickSwapMode === 'question-first'
+                            ? 'bg-[#0078D4] text-white shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="Standard Question-First view: Read the scenario and select the correct option"
+                      >
+                        Question-First
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetQuickSwapMode('answer-first')}
+                        className={`px-2 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer ${
+                          quickSwapMode === 'answer-first'
+                            ? 'bg-indigo-600 text-white shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="Answer-First Active Recall view: Inspect the target Azure solution and principle first, then recall the governing scenario"
+                      >
+                        Answer-First
+                      </button>
+                    </div>
+
+                    {/* Blind Recall Mode Toggle Button */}
+                    <button
+                      type="button"
+                      onClick={handleToggleBlindRecallMode}
+                      aria-pressed={isBlindRecallMode}
+                      className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer border shadow-2xs ${
+                        isBlindRecallMode
+                          ? 'bg-gradient-to-r from-emerald-700 to-teal-700 text-white border-emerald-800 ring-2 ring-emerald-400/30'
+                          : 'bg-white hover:bg-emerald-50 text-emerald-900 border-emerald-200'
+                      }`}
+                      title="Blind Recall Mode: Hide the multiple-choice options initially so you can formulate or describe the concept first before revealing options"
+                    >
+                      {isBlindRecallMode ? (
+                        <EyeOff className="w-3.5 h-3.5 text-amber-300" />
+                      ) : (
+                        <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                      )}
+                      <span>Blind Recall</span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded text-[9.5px] font-black uppercase ${
+                          isBlindRecallMode
+                            ? 'bg-amber-400 text-slate-950'
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        {isBlindRecallMode ? 'ON' : 'OFF'}
+                      </span>
+                    </button>
+
                     {/* Interactive 'Analyze Distractors' Button */}
                     <button
                       type="button"
@@ -2888,17 +3164,148 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 )}
               </div>
 
-              {/* Full-Width Scenario Text Body */}
-              <div className="w-full max-w-none">
-                <ScenarioTextWithTooltips
-                  text={question.scenario}
-                  concepts={scenarioConcepts}
-                  onSelectConcept={setSelectedConceptId}
-                  isKnowledgeCheckActive={showKnowledgeCheck}
-                  onActivateKnowledgeCheck={() => setShowKnowledgeCheck(true)}
-                  textClassName="w-full max-w-none text-slate-700 text-sm sm:text-base leading-relaxed font-normal"
-                />
-              </div>
+              {/* Answer-First Active Recall Card (Shown at the top when Quick-Swap is set to 'answer-first') */}
+              {!isExamMode && quickSwapMode === 'answer-first' && (() => {
+                const targetOption = question.options.find(
+                  (o) => o.letter === question.correctAnswer
+                );
+                return (
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-indigo-950 via-slate-900 to-[#003E73] text-white border border-indigo-400/40 shadow-lg space-y-3.5 animate-in fade-in duration-200">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/15">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500 text-white border border-indigo-300/50 flex items-center gap-1">
+                          <ArrowLeftRight className="w-3 h-3 text-amber-300" />
+                          <span>Quick-Swap • Answer-First Active Recall</span>
+                        </span>
+                        <span className="text-[11px] text-indigo-200 font-semibold hidden sm:inline">
+                          Study the solution first, then recall the scenario &amp; requirement it solves
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSetQuickSwapMode('question-first')}
+                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-sky-200 border border-white/20 text-[11px] font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <ArrowLeftRight className="w-3 h-3" />
+                        <span>Swap to Question-First</span>
+                      </button>
+                    </div>
+
+                    {/* Target Correct Solution Banner */}
+                    <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 flex items-start gap-3">
+                      <span className="w-9 h-9 rounded-xl bg-emerald-500 text-slate-950 font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
+                        {question.correctAnswer}
+                      </span>
+                      <div className="space-y-1 min-w-0">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                          Target Azure Solution / Answer
+                        </div>
+                        <div className="text-base sm:text-lg font-black text-white leading-snug">
+                          {targetOption?.text || question.correctAnswer}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Core Architectural Rationale & Exam Tip */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1">
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Governing Architectural Rationale</span>
+                        </div>
+                        <p className="text-xs text-slate-200 leading-relaxed">
+                          {question.whyCorrect}
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-400/30 space-y-1">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                          <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
+                          <span>AZ-900 Exam Anchor Cue</span>
+                        </div>
+                        <p className="text-xs text-amber-100 leading-relaxed">
+                          {question.examTip}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Active Recall Prompt & Self-Verification Controls */}
+                    <div className="pt-2 border-t border-white/15 flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="text-xs text-indigo-100 font-semibold">
+                        <strong className="text-amber-300">Active Recall Prompt:</strong> Which business scenario &amp; requirement uniquely demands{' '}
+                        <span className="underline decoration-emerald-400 font-bold text-white">
+                          {targetOption?.text}
+                        </span>
+                        ?
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setIsAnswerFirstScenarioRevealed((prev) => !prev)
+                          }
+                          className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/25 text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-amber-300" />
+                          <span>
+                            {isAnswerFirstScenarioRevealed
+                              ? 'Hide Scenario Prompt'
+                              : 'Reveal Scenario & Question'}
+                          </span>
+                        </button>
+
+                        {!hasSubmitted && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleSelect(question.correctAnswer)}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                              title="Record that you accurately recalled the matching scenario and principle"
+                            >
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              <span>Recalled Correctly</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const fallbackWrong =
+                                  question.options.find(
+                                    (o) => o.letter !== question.correctAnswer
+                                  )?.letter || 'A';
+                                handleSelect(fallbackWrong);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-rose-500/25 hover:bg-rose-500/40 text-rose-200 border border-rose-400/40 text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer"
+                              title="Mark this concept for spaced repetition review"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Need Practice</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Full-Width Scenario Text Body (Always visible in Question-First mode, or when revealed in Answer-First mode) */}
+              {(isExamMode ||
+                quickSwapMode === 'question-first' ||
+                isAnswerFirstScenarioRevealed ||
+                hasSubmitted) && (
+                <div className="w-full max-w-none">
+                  <ScenarioTextWithTooltips
+                    text={question.scenario}
+                    concepts={scenarioConcepts}
+                    onSelectConcept={setSelectedConceptId}
+                    isKnowledgeCheckActive={showKnowledgeCheck}
+                    onActivateKnowledgeCheck={() => setShowKnowledgeCheck(true)}
+                    textClassName="w-full max-w-none text-slate-700 text-sm sm:text-base leading-relaxed font-normal"
+                  />
+                </div>
+              )}
 
               {/* ELI5 Child-Friendly Analogy Card (When ELI5 Toggle is Active) */}
               {showEli5Analogy && !isExamMode && (
@@ -3124,9 +3531,106 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           </div>
         )}
 
-        {/* 4 Choices (A, B, C, D) with subtle staggered fade-in-up entrance animation */}
-        <div className="space-y-3">
-          {question.options.map((option, optIdx) => {
+        {/* BLIND RECALL MODE: Initial Concept Formulation Gate (Hides 4 Choices Until User Attempts Recall & Reveals Options) */}
+        {!isExamMode && isBlindRecallMode && !isBlindRecallOptionsRevealed && !hasSubmitted ? (
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white border border-emerald-500/40 shadow-lg space-y-4 animate-in fade-in duration-200">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/15">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  <EyeOff className="w-4 h-4" />
+                </span>
+                <div>
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-300 block">
+                    Blind Recall Mode • Multiple-Choice Options Hidden
+                  </span>
+                  <span className="text-[11px] text-slate-300">
+                    Attempt to answer or describe the target Azure concept in your own words first, then reveal the options to verify your understanding.
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleToggleBlindRecallMode}
+                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 border border-white/15 text-[11px] font-bold transition-colors cursor-pointer"
+              >
+                Exit Blind Recall
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor={`blind-recall-input-${question.id}`}
+                className="block text-xs font-extrabold text-amber-300"
+              >
+                Your Initial Answer / Concept Hypothesis:
+              </label>
+              <textarea
+                id={`blind-recall-input-${question.id}`}
+                rows={2}
+                value={blindRecallAttemptText}
+                onChange={(e) => setBlindRecallAttemptText(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    setIsBlindRecallOptionsRevealed(true);
+                  }
+                }}
+                placeholder="Type the Azure service name, architectural tier, or governing concept you believe solves this question (or formulate it mentally)..."
+                className="w-full rounded-xl bg-slate-950/80 border border-emerald-400/40 focus:border-amber-400 px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-400 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+              <span className="text-[11px] text-slate-300">
+                {blindRecallAttemptText.trim().length > 0
+                  ? `✓ Concept drafted (${blindRecallAttemptText.trim().split(/\s+/).length} words) — ready to reveal options!`
+                  : 'Tip: Even a 2–3 word service guess strengthens long-term retrieval pathways.'}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setIsBlindRecallOptionsRevealed(true)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all cursor-pointer"
+              >
+                <Eye className="w-4 h-4 stroke-[2.5]" />
+                <span>Reveal Multiple-Choice Options (A–D)</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Compact Summary Banner when Blind Recall Options have been revealed */}
+            {!isExamMode && isBlindRecallMode && (isBlindRecallOptionsRevealed || hasSubmitted) && (
+              <div className="p-3 rounded-xl bg-emerald-50/90 border border-emerald-300 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-950">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Eye className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <div className="truncate">
+                    <span className="font-black uppercase tracking-wider text-[10px] text-emerald-800 mr-1.5">
+                      Your Blind Recall Hypothesis:
+                    </span>
+                    <span className="font-semibold italic text-slate-800">
+                      {blindRecallAttemptText.trim()
+                        ? `"${blindRecallAttemptText.trim()}"`
+                        : '(Mental recall formulated)'}
+                    </span>
+                  </div>
+                </div>
+                {!hasSubmitted && (
+                  <button
+                    type="button"
+                    onClick={() => setIsBlindRecallOptionsRevealed(false)}
+                    className="px-2 py-0.5 rounded-md bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-bold cursor-pointer shrink-0"
+                  >
+                    Hide Options Again
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* 4 Choices (A, B, C, D) with subtle staggered fade-in-up entrance animation */}
+            <div className="space-y-3">
+              {question.options.map((option, optIdx) => {
             const isSelected = selectedOption === option.letter;
             const isCorrectOption = option.letter === question.correctAnswer;
 
@@ -3190,6 +3694,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             );
           })}
         </div>
+          </>
+        )}
 
         {/* Exam Simulation Mode Locked Answer Banner (No Immediate Feedback) */}
         {isAnswered && isExamMode && !examFeedbackRevealed && (

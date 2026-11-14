@@ -334,6 +334,22 @@ export const DomainAccuracyHeatmapD3: React.FC<DomainAccuracyHeatmapD3Props> = (
       return '#dc2626';
     };
 
+    const defs = svg.append('defs');
+    const hoverShadow = defs
+      .append('filter')
+      .attr('id', 'heatmapCellHoverShadow')
+      .attr('x', '-20%')
+      .attr('y', '-20%')
+      .attr('width', '140%')
+      .attr('height', '140%');
+    hoverShadow
+      .append('feDropShadow')
+      .attr('dx', 0)
+      .attr('dy', 5)
+      .attr('stdDeviation', 5)
+      .attr('flood-color', '#0f172a')
+      .attr('flood-opacity', 0.22);
+
     const rootG = svg
       .append('g')
       .attr('transform', `translate(${margin.left},${margin.top})`);
@@ -413,6 +429,14 @@ export const DomainAccuracyHeatmapD3: React.FC<DomainAccuracyHeatmapD3Props> = (
       .style('font-weight', '700')
       .text((d) => d.weight);
 
+    const cellW = xScale.bandwidth();
+    const cellH = yScale.bandwidth();
+    const getCenterScaleTransform = (scale: number) => {
+      const dx = (cellW * (1 - scale)) / 2;
+      const dy = (cellH * (1 - scale)) / 2;
+      return `translate(${dx}, ${dy}) scale(${scale})`;
+    };
+
     // Heatmap Cells
     const cellGroups = rootG
       .selectAll('.heatmap-cell-group')
@@ -427,47 +451,78 @@ export const DomainAccuracyHeatmapD3: React.FC<DomainAccuracyHeatmapD3Props> = (
       )
       .style('cursor', 'pointer')
       .on('mouseenter', function (_, d) {
+        // Elevate hovered cell above adjacent cells so hover-zoom is never clipped
+        d3.select(this).raise();
         setHoveredCell(d);
-        d3.select(this)
-          .select('rect.cell-bg')
+
+        const zoomGroup = d3.select(this).select('.cell-zoom-content');
+        zoomGroup
+          .interrupt()
           .transition()
-          .duration(150)
-          .attr('stroke-width', 2.5)
-          .attr('transform', 'scale(1.015)');
+          .duration(180)
+          .ease(d3.easeCubicOut)
+          .attr('transform', getCenterScaleTransform(1.065))
+          .attr('opacity', 1);
+
+        zoomGroup
+          .select('rect.cell-bg')
+          .attr('stroke-width', 3)
+          .attr('stroke', '#0078d4')
+          .attr('filter', 'url(#heatmapCellHoverShadow)');
       })
       .on('mouseleave', function (_, d) {
         setHoveredCell(null);
         const isSelected = selectedCell?.id === d.id;
-        d3.select(this)
-          .select('rect.cell-bg')
+
+        const zoomGroup = d3.select(this).select('.cell-zoom-content');
+        zoomGroup
+          .interrupt()
           .transition()
-          .duration(150)
+          .duration(210)
+          .ease(d3.easeCubicOut)
+          .attr('transform', getCenterScaleTransform(1))
+          .attr('opacity', 1);
+
+        zoomGroup
+          .select('rect.cell-bg')
           .attr('stroke-width', isSelected ? 2.5 : 1.5)
-          .attr('transform', 'scale(1)');
+          .attr('stroke', strokeColorForCell(d.accuracy))
+          .attr('filter', null);
       })
       .on('click', (_, d) => {
         setSelectedCell(d);
       });
 
-    // Cell Background Rect with D3 Entrance Transition
-    cellGroups
+    // Inner zoomable group for synchronized entrance animation & hover-zoom
+    const cellZoomGroups = cellGroups
+      .append('g')
+      .attr('class', 'cell-zoom-content')
+      .attr('opacity', 0)
+      .attr('transform', getCenterScaleTransform(0.86));
+
+    // Staggered D3 entrance animation (scale 0.86 -> 1.0 + fade in)
+    cellZoomGroups
+      .transition()
+      .duration(480)
+      .delay((_, i) => i * 32)
+      .ease(d3.easeBackOut.overshoot(1.15))
+      .attr('opacity', 1)
+      .attr('transform', getCenterScaleTransform(1));
+
+    // Cell Background Rect
+    cellZoomGroups
       .append('rect')
       .attr('class', 'cell-bg')
-      .attr('width', xScale.bandwidth())
-      .attr('height', yScale.bandwidth())
+      .attr('width', cellW)
+      .attr('height', cellH)
       .attr('rx', 10)
       .attr('ry', 10)
       .attr('fill', (d) => (d.accuracy === null ? '#f8fafc' : colorScale(d.accuracy)))
       .attr('stroke', (d) => strokeColorForCell(d.accuracy))
-      .attr('stroke-width', (d) => (selectedCell?.id === d.id ? 2.5 : 1.5))
-      .attr('opacity', 0)
-      .transition()
-      .duration(420)
-      .delay((_, i) => i * 28)
-      .attr('opacity', 1);
+      .attr('stroke-width', (d) => (selectedCell?.id === d.id ? 2.5 : 1.5));
 
     // Module Code / Tier Header inside cell
-    cellGroups
+    cellZoomGroups
       .append('text')
       .attr('x', 8)
       .attr('y', isMobile ? 15 : 18)
@@ -489,7 +544,7 @@ export const DomainAccuracyHeatmapD3: React.FC<DomainAccuracyHeatmapD3Props> = (
     const badgeWidth = isMobile ? 42 : 52;
     const badgeHeight = isMobile ? 18 : 20;
 
-    cellGroups
+    cellZoomGroups
       .append('rect')
       .attr('x', 8)
       .attr('y', isMobile ? 23 : 27)
@@ -498,7 +553,7 @@ export const DomainAccuracyHeatmapD3: React.FC<DomainAccuracyHeatmapD3Props> = (
       .attr('rx', 5)
       .attr('fill', (d) => badgeBgForCell(d.accuracy));
 
-    cellGroups
+    cellZoomGroups
       .append('text')
       .attr('x', 8 + badgeWidth / 2)
       .attr('y', (isMobile ? 23 : 27) + badgeHeight / 2 + 3.5)
@@ -509,10 +564,10 @@ export const DomainAccuracyHeatmapD3: React.FC<DomainAccuracyHeatmapD3Props> = (
       .text((d) => (d.accuracy === null ? 'NEW' : `${d.accuracy}%`));
 
     // Attempt count & status label at bottom of cell
-    cellGroups
+    cellZoomGroups
       .append('text')
       .attr('x', 8)
-      .attr('y', yScale.bandwidth() - (isMobile ? 7 : 9))
+      .attr('y', cellH - (isMobile ? 7 : 9))
       .attr('fill', '#334155')
       .style('font-size', isMobile ? '8.5px' : '10px')
       .style('font-weight', '700')

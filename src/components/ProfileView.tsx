@@ -46,6 +46,7 @@ import { triggerAchievementOverlay } from './AchievementOverlay';
 import { AppTab } from './Header';
 import { StreakActivityGraph } from './StreakActivityGraph';
 import { StudyStreakCalendar } from './StudyStreakCalendar';
+import { DailyStudyConsistencyHeatmap } from './DailyStudyConsistencyHeatmap';
 import { ProfileAnalyticsTab } from './ProfileAnalyticsTab';
 import { DailyStudyReminder } from './DailyStudyReminder';
 import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
@@ -716,6 +717,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
          ===================================================================== */}
       {profileMainTab === 'analytics' && (
         <div className="space-y-4 sm:space-y-5">
+          <DailyStudyConsistencyHeatmap
+            stats={stats}
+            onStartPractice={onNavigateToPractice}
+            onOpenManageGoal={onOpenManageGoal}
+          />
           <ProfileAnalyticsTab
             stats={stats}
             onOpenManageGoal={onOpenManageGoal}
@@ -2685,6 +2691,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       <DailyStudyReminder
         stats={stats}
         onStartScenarioQuestion={onNavigateToPractice}
+      />
+
+      {/* 365-Day GitHub-Style Daily Study Consistency Heatmap */}
+      <DailyStudyConsistencyHeatmap
+        stats={stats}
+        onStartPractice={onNavigateToPractice}
+        onOpenManageGoal={onOpenManageGoal}
       />
 
       {/* 3-Month Study Streak Calendar Heat Map (Highlights Daily Goal Met Days) */}

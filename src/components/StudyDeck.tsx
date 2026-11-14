@@ -36,6 +36,14 @@ export const StudyDeck: React.FC<StudyDeckProps> = ({
   const [selectedPathId, setSelectedPathId] = useState<1 | 2 | 3>(initialPathId);
   const [selectedModuleId, setSelectedModuleId] = useState<number>(initialModuleId);
   const [activeView, setActiveView] = useState<'units' | 'matrices'>('units');
+
+  React.useEffect(() => {
+    setSelectedPathId(initialPathId);
+  }, [initialPathId]);
+
+  React.useEffect(() => {
+    setSelectedModuleId(initialModuleId);
+  }, [initialModuleId]);
   const [selectedMatrixCategory, setSelectedMatrixCategory] = useState<string>('All');
   const [completedUnitIds, setCompletedUnitIds] = useState<string[]>(() => {
     try {

@@ -50,6 +50,14 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
     }
   });
 
+  const [ambientSound, setAmbientSound] = useState<string>(() => {
+    try {
+      return localStorage.getItem('az900_focus_ambient_sound') || 'Savannah Rain';
+    } catch {
+      return 'Savannah Rain';
+    }
+  });
+
   // Current session timer in seconds
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
   const [isRunning, setIsRunning] = useState<boolean>(true);
@@ -311,6 +319,41 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
                     }`}
                   >
                     {mins}m
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Ambient Sound Selector */}
+          <div className="space-y-1.5 pt-2 border-t border-slate-100">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
+              <span>Ambient Pacing Sound:</span>
+              <span className="text-emerald-700 font-extrabold">{ambientSound}</span>
+            </span>
+            <div className="grid grid-cols-2 gap-1">
+              {['Savannah Rain', 'Rift Breeze', 'Forest Ticking', 'Ocean Waves', 'Muted'].map((sound) => {
+                const isSelected = ambientSound === sound;
+                return (
+                  <button
+                    key={sound}
+                    type="button"
+                    onClick={() => {
+                      setAmbientSound(sound);
+                      try {
+                        localStorage.setItem('az900_focus_ambient_sound', sound);
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    className={`py-1.5 px-2 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <Volume2 className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{sound}</span>
                   </button>
                 );
               })}

@@ -1287,34 +1287,6 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </button>
 
-            {/* Focus Mode Indicator with Hover-Only Platform-Aware Keyboard Shortcut Guide */}
-            <div className="relative group/focusguide shrink-0">
-              <button
-                type="button"
-                onClick={onToggleFocusMode}
-                className={`flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border whitespace-nowrap ${
-                  isFocusMode
-                    ? 'bg-emerald-600 text-white border-emerald-700 ring-2 ring-emerald-400/40'
-                    : 'bg-slate-900 hover:bg-slate-800 text-white border-slate-700'
-                }`}
-                aria-label="Focus Mode indicator — hover to view platform-aware keyboard shortcuts"
-              >
-                <Maximize2 className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                <span className="hidden 2xl:inline">Focus</span>
-                <kbd className="px-1 py-0.2 rounded bg-white/15 text-[9.5px] font-mono text-sky-200">
-                  {formatShortcutCombo(shortcutConfig.focusMode, detectedPlatform)}
-                </kbd>
-              </button>
-
-              <KeyboardShortcutGuidePopover
-                isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
-                effectiveDynamicDifficulty={effectiveDynamicDifficulty}
-                onToggleDynamicDifficulty={onToggleDynamicDifficulty}
-                onOpenAccessibilitySettings={openAccessibilityModal}
-                align="right"
-              />
-            </div>
-
             <button
               type="button"
               onClick={toggleMenuBar}
