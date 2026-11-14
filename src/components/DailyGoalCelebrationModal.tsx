@@ -133,14 +133,61 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
 
   const isModalVisible = Boolean(externalIsOpen || autoOpen);
 
-  const fireCelebrationConfetti = (intensity: 1 | 2 | 3 = 1) => {
+  const cohortSocialComparison = useMemo(() => {
+    const cohortAvgAccuracy = 76;
+    const cohortMedianStreak = 4;
+    const accuracyDelta = overallAccuracy - cohortAvgAccuracy;
+    const percentile = Math.max(
+      1,
+      Math.min(25, Math.round(18 - effectiveStreak * 1.1 - Math.max(0, accuracyDelta) * 0.35))
+    );
+    const badgeTier =
+      effectiveStreak >= 7 || overallAccuracy >= 85
+        ? 'Gold Savanna Vanguard'
+        : effectiveStreak >= 3 || overallAccuracy >= 75
+        ? 'Silver Rift Scholar'
+        : 'Bronze Cloud Rising';
+
+    return {
+      cohortAvgAccuracy,
+      cohortMedianStreak,
+      accuracyDelta,
+      percentile,
+      badgeTier,
+    };
+  }, [overallAccuracy, effectiveStreak]);
+
+  const fireCelebrationConfetti = (intensity: 1 | 2 | 3 = 2) => {
     try {
+      const colors = ['#F97316', '#F59E0B', '#EF4444', '#10B981', '#0078D4', '#38BDF8'];
       confetti({
         particleCount: intensity === 3 ? 110 : intensity === 2 ? 80 : 60,
         spread: intensity === 3 ? 95 : 75,
-        origin: { y: 0.35 },
-        colors: ['#F97316', '#F59E0B', '#EF4444', '#10B981', '#0078D4'],
+        origin: { x: 0.5, y: 0.35 },
+        colors,
       });
+      if (intensity >= 2) {
+        setTimeout(() => {
+          try {
+            confetti({
+              particleCount: 45,
+              angle: 60,
+              spread: 55,
+              origin: { x: 0.15, y: 0.55 },
+              colors,
+            });
+            confetti({
+              particleCount: 45,
+              angle: 120,
+              spread: 55,
+              origin: { x: 0.85, y: 0.55 },
+              colors,
+            });
+          } catch {
+            // ignore
+          }
+        }, 220);
+      }
     } catch {
       // ignore in non-DOM/SSR environments
     }
@@ -156,7 +203,7 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
         markCelebrated100Today();
         setAutoOpen(true);
         setFlameIntensity(2);
-        fireCelebrationConfetti(2);
+        fireCelebrationConfetti(3);
       }
     }
   }, [todayAnsweredCount, safeGoal]);
@@ -184,8 +231,9 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
   }, [userEmail]);
 
   const shareMessageText = useMemo(() => {
-    return `🔥 100% Daily AZ-900 Study Goal Reached! Solved ${todayAnsweredCount}/${safeGoal} questions today on a ${effectiveStreak}-day streak (${overallAccuracy}% overall accuracy) in Azure Cloud Explorer! #AZ900 #HarambeeCloud`;
-  }, [todayAnsweredCount, safeGoal, effectiveStreak, overallAccuracy]);
+    const deltaSign = cohortSocialComparison.accuracyDelta >= 0 ? `+${cohortSocialComparison.accuracyDelta}%` : `${cohortSocialComparison.accuracyDelta}%`;
+    return `🏅 [AZ-900 Daily Goal Reached • Top ${cohortSocialComparison.percentile}% of Cohort] Solved ${todayAnsweredCount}/${safeGoal} Qs today on a ${effectiveStreak}-day streak • ${overallAccuracy}% accuracy (${deltaSign} vs. ${cohortSocialComparison.cohortAvgAccuracy}% Harambee Cohort avg) • Badge: ${cohortSocialComparison.badgeTier}! #AZ900 #HarambeeCloud`;
+  }, [todayAnsweredCount, safeGoal, effectiveStreak, overallAccuracy, cohortSocialComparison]);
 
   const handleShareWithCohortPeers = async () => {
     const newShare: CohortGoalShareItem = {
@@ -196,7 +244,7 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
       dailyGoal: safeGoal,
       accuracyPct: overallAccuracy,
       timestamp: Date.now(),
-      message: `Completed 100% of my daily goal (${Math.max(todayAnsweredCount, safeGoal)}/${safeGoal} Qs) on a ${effectiveStreak}-day streak! 🔥`,
+      message: `Unlocked ${cohortSocialComparison.badgeTier} Badge (Top ${cohortSocialComparison.percentile}% of Cohort)! Completed ${Math.max(todayAnsweredCount, safeGoal)}/${safeGoal} Qs on a ${effectiveStreak}-day streak! 🔥`,
       reactions: 18,
       isCurrentUser: true,
     };
@@ -269,10 +317,10 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
 
         {/* Top Modal Header */}
         <div className="relative z-10 px-4 sm:px-6 pt-4 pb-3 flex items-center justify-between border-b border-white/10">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 shadow-xs flex items-center gap-1">
               <Flame className="w-3 h-3 fill-slate-950" />
-              <span>100% Daily Target Unlocked</span>
+              <span>Daily Goal Reached • 100% Quota</span>
             </span>
             <span className="text-[11px] font-extrabold text-amber-300">
               {effectiveStreak}-Day Streak 🔥
@@ -306,7 +354,7 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
               <button
                 type="button"
                 onClick={handleIgniteFlameBoost}
-                title="Click to stoke the interactive fire-streaking animation!"
+                title="Click to launch celebratory confetti and stoke the fire-streaking animation!"
                 className={`group relative w-24 h-24 sm:w-28 sm:h-28 rounded-3xl flex flex-col items-center justify-center transition-all duration-300 cursor-pointer border-2 shadow-2xl ${
                   flameIntensity === 3
                     ? 'bg-gradient-to-br from-red-600 via-orange-500 to-amber-400 border-yellow-200 scale-110 shadow-orange-500/50'
@@ -337,73 +385,110 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
                 id="daily-goal-celebration-title"
                 className="text-lg sm:text-xl font-black tracking-tight text-white"
               >
-                Hongera! 100% Daily Streak Target Crushed!
+                Hongera! Daily Goal Reached! 🎉
               </h2>
               <p className="text-xs text-slate-300 max-w-md mx-auto mt-1 leading-relaxed">
                 You completed <strong className="text-amber-300">{todayAnsweredCount}/{safeGoal} questions</strong> today and extended your <strong className="text-orange-300">{effectiveStreak}-day active study streak</strong>.
               </p>
             </div>
 
-            {/* Interactive Flame Boost Pill */}
-            <button
-              type="button"
-              onClick={handleIgniteFlameBoost}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-amber-400/50 text-[11px] font-extrabold text-amber-200 transition-all cursor-pointer active:scale-95"
-            >
-              <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-              <span>{flameTitle} • Tap to Stoke Fire</span>
-            </button>
-          </div>
-
-          {/* 3-Column Telemetry Strip */}
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="p-2.5 rounded-2xl bg-white/10 border border-white/15">
-              <span className="text-[10px] font-bold uppercase text-slate-300 block">
-                Daily Target
-              </span>
-              <span className="text-sm sm:text-base font-black text-emerald-300">
-                {todayAnsweredCount}/{safeGoal} Qs
-              </span>
-            </div>
-            <div className="p-2.5 rounded-2xl bg-white/10 border border-white/15">
-              <span className="text-[10px] font-bold uppercase text-slate-300 block">
-                Fire Streak
-              </span>
-              <span className="text-sm sm:text-base font-black text-amber-300 flex items-center justify-center gap-1">
-                <Flame className="w-4 h-4 fill-amber-400 text-orange-400" />
-                {effectiveStreak} Days
-              </span>
-            </div>
-            <div className="p-2.5 rounded-2xl bg-white/10 border border-white/15">
-              <span className="text-[10px] font-bold uppercase text-slate-300 block">
-                Accuracy
-              </span>
-              <span className="text-sm sm:text-base font-black text-sky-300">
-                {overallAccuracy}%
-              </span>
+            {/* Interactive Confetti & Flame Boost Controls */}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={handleIgniteFlameBoost}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-amber-400/50 text-[11px] font-extrabold text-amber-200 transition-all cursor-pointer active:scale-95"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                <span>{flameTitle} • Launch Confetti Salvo</span>
+              </button>
             </div>
           </div>
 
-          {/* Primary Action: Share Progress with Cohort Peers */}
-          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-[#0078D4]/30 via-indigo-900/40 to-amber-500/20 border border-sky-400/40 space-y-2.5">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
-                <MaasaiMedallion size={16} />
-                <span className="text-xs font-black text-white">
-                  Share Progress with Harambee Cohort Peers
+          {/* Shareable Progress Badge for Social Comparison */}
+          <div
+            aria-label="Shareable Progress Badge for Social Comparison"
+            className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-[#0c2d48] to-indigo-950 border-2 border-amber-400/70 shadow-xl space-y-3"
+          >
+            <div className="flex items-start justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 flex items-center justify-center text-slate-950 shadow-md shrink-0 border border-yellow-200">
+                  <Award className="w-6 h-6 stroke-[2.5]" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="px-2 py-0.5 rounded-md bg-amber-400/20 border border-amber-300/40 text-amber-200 text-[9.5px] font-black uppercase tracking-wider">
+                      Shareable Social Comparison Badge
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 text-[9.5px] font-black">
+                      Top {cohortSocialComparison.percentile}% of Cohort
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-black text-white truncate mt-0.5">
+                    {cohortSocialComparison.badgeTier} • {learnerDisplayName}
+                  </h3>
+                </div>
+              </div>
+              <MaasaiMedallion size={20} />
+            </div>
+
+            {/* 3-Column Social Comparison Metrics (You vs. Harambee Cohort Peers) */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="p-2 rounded-xl bg-slate-950/65 border border-white/10">
+                <span className="text-[9.5px] font-bold uppercase text-slate-400 block">
+                  Daily Quota
+                </span>
+                <span className="text-xs sm:text-sm font-black text-emerald-300 block">
+                  {todayAnsweredCount}/{safeGoal} Qs
+                </span>
+                <span className="text-[9.5px] font-bold text-emerald-400/90">
+                  100% Complete
                 </span>
               </div>
-              {copiedSummary && (
-                <span className="text-[10px] font-extrabold text-emerald-300 flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Copied to clipboard!
+
+              <div className="p-2 rounded-xl bg-slate-950/65 border border-white/10">
+                <span className="text-[9.5px] font-bold uppercase text-slate-400 block">
+                  Accuracy vs Peers
                 </span>
-              )}
+                <span className="text-xs sm:text-sm font-black text-sky-300 block">
+                  {overallAccuracy}% vs {cohortSocialComparison.cohortAvgAccuracy}%
+                </span>
+                <span
+                  className={`text-[9.5px] font-bold ${
+                    cohortSocialComparison.accuracyDelta >= 0
+                      ? 'text-emerald-300'
+                      : 'text-amber-300'
+                  }`}
+                >
+                  {cohortSocialComparison.accuracyDelta >= 0
+                    ? `+${cohortSocialComparison.accuracyDelta}% Above Avg`
+                    : `${cohortSocialComparison.accuracyDelta}% vs Peer Avg`}
+                </span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-slate-950/65 border border-white/10">
+                <span className="text-[9.5px] font-bold uppercase text-slate-400 block">
+                  Streak Rank
+                </span>
+                <span className="text-xs sm:text-sm font-black text-amber-300 block">
+                  🔥 {effectiveStreak}d vs {cohortSocialComparison.cohortMedianStreak}d
+                </span>
+                <span className="text-[9.5px] font-bold text-amber-200">
+                  Top {cohortSocialComparison.percentile}% Rank
+                </span>
+              </div>
             </div>
 
-            <p className="text-[11px] text-slate-200 bg-slate-950/60 p-2.5 rounded-xl border border-white/10 font-medium">
+            <p className="text-[11px] text-slate-200 bg-slate-950/65 p-2.5 rounded-xl border border-white/10 font-medium leading-relaxed">
               “{shareMessageText}”
             </p>
+
+            {copiedSummary && (
+              <div className="text-[10.5px] font-extrabold text-emerald-300 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" />
+                <span>Social comparison badge copied to clipboard!</span>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -418,12 +503,12 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
                 {hasSharedToCohort ? (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Shared with Cohort Peers!</span>
+                    <span>Badge Shared with Cohort Peers!</span>
                   </>
                 ) : (
                   <>
                     <Share2 className="w-4 h-4" />
-                    <span>Share Progress to Cohort Feed</span>
+                    <span>Share Progress Badge to Cohort</span>
                   </>
                 )}
               </button>
@@ -440,10 +525,10 @@ export const DailyGoalCelebrationModal: React.FC<DailyGoalCelebrationModalProps>
                   }
                 }}
                 className="px-3 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="Copy progress summary text"
+                title="Copy shareable progress badge text"
               >
                 {copiedSummary ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>Copy</span>
+                <span>Copy Badge</span>
               </button>
             </div>
           </div>

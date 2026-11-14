@@ -57,6 +57,7 @@ import {
   useKeyboardShortcutsConfig,
 } from './KeyboardShortcutGuide';
 import { formatShortcutCombo } from '../utils/keyboardShortcuts';
+import { DifficultyStreakTracker } from './DifficultyStreakTracker';
 
 /**
  * Animated Daily Study Goal Circular Progress Ring
@@ -269,6 +270,9 @@ interface HeaderProps {
   onOpenAccessibilitySettings?: () => void;
   unresolvedMistakesCount?: number;
   pendingOfflineCount?: number;
+  onSelectDifficultyForPractice?: (
+    difficulty: 'Fundamental' | 'Intermediate' | 'Advanced'
+  ) => void;
 }
 
 const PATH_COMPACT_INTEL: Record<
@@ -579,6 +583,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAccessibilitySettings,
   unresolvedMistakesCount,
   pendingOfflineCount = 0,
+  onSelectDifficultyForPractice,
 }) => {
   const [showEditDailyGoalModal, setShowEditDailyGoalModal] = useState<boolean>(false);
   const [showGoalAlertsModal, setShowGoalAlertsModal] = useState<boolean>(false);
@@ -649,6 +654,50 @@ export const Header: React.FC<HeaderProps> = ({
       }
       return next;
     });
+  };
+
+  // Closing hover effect options for the Tabs Menu (Dropdown & Horizontal Tabs Bar)
+  const [isDropdownHoverCloseEnabled, setIsDropdownHoverCloseEnabled] = useState<boolean>(true);
+  const [isNavBarHoverAutoHide, setIsNavBarHoverAutoHide] = useState<boolean>(false);
+  const [isClosingHoverActive, setIsClosingHoverActive] = useState<boolean>(false);
+  const navDropdownCloseTimerRef = React.useRef<any>(null);
+  const navBarAutoHideTimerRef = React.useRef<any>(null);
+
+  const handleNavDropdownMouseEnter = () => {
+    if (navDropdownCloseTimerRef.current) {
+      clearTimeout(navDropdownCloseTimerRef.current);
+      navDropdownCloseTimerRef.current = null;
+    }
+    setIsClosingHoverActive(false);
+  };
+
+  const handleNavDropdownMouseLeave = () => {
+    if (!isDropdownHoverCloseEnabled) return;
+    setIsClosingHoverActive(true);
+    if (navDropdownCloseTimerRef.current) {
+      clearTimeout(navDropdownCloseTimerRef.current);
+    }
+    navDropdownCloseTimerRef.current = setTimeout(() => {
+      setIsNavDropdownOpen(false);
+      setIsClosingHoverActive(false);
+    }, 360);
+  };
+
+  const handleNavBarMouseEnter = () => {
+    if (navBarAutoHideTimerRef.current) {
+      clearTimeout(navBarAutoHideTimerRef.current);
+      navBarAutoHideTimerRef.current = null;
+    }
+  };
+
+  const handleNavBarMouseLeave = () => {
+    if (!isNavBarHoverAutoHide || isMenuBarHidden) return;
+    if (navBarAutoHideTimerRef.current) {
+      clearTimeout(navBarAutoHideTimerRef.current);
+    }
+    navBarAutoHideTimerRef.current = setTimeout(() => {
+      setIsMenuBarHidden(true);
+    }, 450);
   };
 
   // State & timer handlers for Cloud Logo 1/4 screen student stats popup with random encouraging message
@@ -987,21 +1036,45 @@ export const Header: React.FC<HeaderProps> = ({
                 <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
               </div>
 
-              {/* Show/Hide inline horizontal tab strip toggle (Mobile Landscape only; portrait uses the Nav Dropdown) */}
+              {/* Show/Hide Tabs toggle — Visible in ALL viewable screen sizes (Portrait & Landscape) */}
               <button
                 type="button"
                 onClick={toggleMenuBar}
-                className={`hidden mobile-landscape:flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
+                className={`group/hidetabs flex items-center gap-1 px-2 sm:px-2.5 mobile-landscape:px-2 py-1 sm:py-1.5 mobile-landscape:py-1 rounded-xl text-[10px] sm:text-[11px] mobile-landscape:text-[10px] font-extrabold transition-all duration-200 shadow-2xs cursor-pointer border shrink-0 ${
                   isMenuBarHidden
                     ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
-                    : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80'
+                    : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300'
                 }`}
-                title={isMenuBarHidden ? 'Show compact landscape tab strip' : 'Hide compact landscape tab strip'}
+                title={isMenuBarHidden ? 'Show navigation tabs bar' : 'Hide navigation tabs bar'}
                 aria-expanded={!isMenuBarHidden}
+                aria-label={isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}
               >
-                <Layers className={`w-3 h-3 ${isMenuBarHidden ? 'text-white' : 'text-[#0078D4]'}`} />
-                <span>{isMenuBarHidden ? 'Tabs' : 'Hide'}</span>
+                <Layers
+                  className={`w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform duration-200 group-hover/hidetabs:scale-110 ${
+                    isMenuBarHidden ? 'text-white' : 'text-[#0078D4] group-hover/hidetabs:text-rose-600'
+                  }`}
+                />
+                <span>{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
+                {isMenuBarHidden ? (
+                  <ChevronDown className="w-3 h-3 text-white transition-transform duration-200 group-hover/hidetabs:translate-y-0.5" />
+                ) : (
+                  <ChevronUp className="w-3 h-3 text-slate-500 group-hover/hidetabs:text-rose-600 transition-transform duration-200 group-hover/hidetabs:-translate-y-0.5" />
+                )}
               </button>
+
+              <DifficultyStreakTracker
+                stats={stats}
+                questions={questions}
+                activeDifficulty={effectiveDynamicDifficulty}
+                onSelectDifficultyForPractice={(diff) => {
+                  if (onSelectDifficultyForPractice) {
+                    onSelectDifficultyForPractice(diff);
+                  } else {
+                    setActiveTab('quiz');
+                  }
+                }}
+                compact={true}
+              />
 
               <DailyStudyGoalRing
                 todayAnsweredCount={todayAnsweredCount}
@@ -1272,6 +1345,20 @@ export const Header: React.FC<HeaderProps> = ({
               consecutiveCorrect={consecutiveCorrect}
             />
 
+            <DifficultyStreakTracker
+              stats={stats}
+              questions={questions}
+              activeDifficulty={effectiveDynamicDifficulty}
+              onSelectDifficultyForPractice={(diff) => {
+                if (onSelectDifficultyForPractice) {
+                  onSelectDifficultyForPractice(diff);
+                } else {
+                  setActiveTab('quiz');
+                }
+              }}
+              compact={false}
+            />
+
             <FocusSessionWidget onOpenStudyBreak={onOpenStudyBreak} />
 
             {/* Focus Mode Indicator with Hover-Only Platform-Aware Keyboard Shortcut Guide */}
@@ -1359,7 +1446,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Large Tablet Portrait (1024px portrait) Nav Dropdown Menu Trigger */}
+            {/* All-Screen Tabs Dropdown Menu Trigger (Available on Desktop, Tablet Portrait & Landscape) */}
             <button
               type="button"
               onClick={() => {
@@ -1367,7 +1454,7 @@ export const Header: React.FC<HeaderProps> = ({
                 setIsMobileDetailsOpen(false);
                 setShowCloudStatsPopup(false);
               }}
-              className={`hidden compact-portrait:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
                 isNavDropdownOpen
                   ? 'bg-[#005A9E] text-white border-[#004578] ring-2 ring-sky-300/60'
                   : 'bg-sky-50/90 hover:bg-sky-100 text-[#005A9E] border-sky-300/80'
@@ -1388,36 +1475,46 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={toggleMenuBar}
-              className={`compact-portrait:hidden -mt-0.5 flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer border shrink-0 ${
+              className={`group/hidetabs -mt-0.5 flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all duration-200 shadow-2xs cursor-pointer border shrink-0 ${
                 isMenuBarHidden
                   ? 'bg-[#0078D4] text-white border-[#005A9E] hover:bg-[#005A9E]'
-                  : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80'
+                  : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300'
               }`}
               title={isMenuBarHidden ? 'Show sliding navigation tabs' : 'Hide sliding navigation tabs'}
               aria-expanded={!isMenuBarHidden}
             >
-              <Layers className={`w-3.5 h-3.5 ${isMenuBarHidden ? 'text-white' : 'text-[#0078D4]'}`} />
+              <Layers
+                className={`w-3.5 h-3.5 transition-transform duration-200 group-hover/hidetabs:scale-110 ${
+                  isMenuBarHidden ? 'text-white' : 'text-[#0078D4] group-hover/hidetabs:text-rose-600'
+                }`}
+              />
               <span>{isMenuBarHidden ? 'Show Tabs' : 'Hide Tabs'}</span>
               {isMenuBarHidden ? (
-                <ChevronDown className="w-3.5 h-3.5 text-white" />
+                <ChevronDown className="w-3.5 h-3.5 text-white transition-transform duration-200 group-hover/hidetabs:translate-y-0.5" />
               ) : (
-                <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                <ChevronUp className="w-3.5 h-3.5 text-slate-500 group-hover/hidetabs:text-rose-600 transition-transform duration-200 group-hover/hidetabs:-translate-y-0.5" />
               )}
             </button>
           </div>
         </div>
 
         {/* =====================================================================
-            RESPONSIVE NAVIGATION DROPDOWN MENU (Tablet Portrait, Mobile Portrait & Mobile Landscape)
-            Accommodates all 16 Nav Bar Buttons in organized Tailwind CSS grids
+            RESPONSIVE NAVIGATION DROPDOWN MENU (All Viewable Screen Sizes: Portrait & Landscape)
+            Accommodates all 16 Nav Bar Buttons + Closing Hover Effect & Options
            ===================================================================== */}
         {isNavDropdownOpen && (
           <div
             role="menu"
             aria-label="All Studio Navigation Tabs"
-            className="lg:hidden compact-portrait:block mb-2 p-2.5 sm:p-3 mobile-landscape:p-2 rounded-2xl bg-white/98 border border-sky-200/90 shadow-xl space-y-2.5 mobile-landscape:space-y-1.5 animate-in slide-in-from-top-1 duration-150 max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain"
+            onMouseEnter={handleNavDropdownMouseEnter}
+            onMouseLeave={handleNavDropdownMouseLeave}
+            className={`mb-2 p-2.5 sm:p-3 mobile-landscape:p-2 rounded-2xl bg-white/98 border shadow-xl space-y-2.5 mobile-landscape:space-y-1.5 animate-in slide-in-from-top-1 duration-150 max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain transition-all ${
+              isClosingHoverActive
+                ? 'border-rose-300 ring-2 ring-rose-200/70 opacity-90 scale-[0.995]'
+                : 'border-sky-200/90'
+            }`}
           >
-            {/* Dropdown Top Strip: Count + Quick Path Switcher */}
+            {/* Dropdown Top Strip: Count + Quick Path Switcher + Closing Hover Controls */}
             <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mobile-landscape:pb-1.5 border-b border-slate-100">
               <div className="flex items-center gap-2 min-w-0">
                 <MoranShieldMotif size={16} animate={false} />
@@ -1429,42 +1526,70 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </div>
 
-              {onSelectPath && (
-                <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg border border-slate-200/80 text-[10.5px] mobile-landscape:text-[9.5px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSelectPath('all');
-                      if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
-                    }}
-                    className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                      selectedPathId === 'all'
-                        ? 'bg-white text-slate-900 shadow-2xs font-black'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    All
-                  </button>
-                  {([1, 2, 3] as const).map((pId) => (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {onSelectPath && (
+                  <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg border border-slate-200/80 text-[10.5px] mobile-landscape:text-[9.5px] font-bold">
                     <button
-                      key={pId}
                       type="button"
                       onClick={() => {
-                        onSelectPath(pId);
-                        setInspectedPathInMenu(pId);
+                        onSelectPath('all');
                         if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
                       }}
                       className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                        selectedPathId === pId
-                          ? 'bg-[#0078D4] text-white font-black'
-                          : 'text-slate-600 hover:text-[#0078D4]'
+                        selectedPathId === 'all'
+                          ? 'bg-white text-slate-900 shadow-2xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      P{pId}
+                      All
                     </button>
-                  ))}
-                </div>
-              )}
+                    {([1, 2, 3] as const).map((pId) => (
+                      <button
+                        key={pId}
+                        type="button"
+                        onClick={() => {
+                          onSelectPath(pId);
+                          setInspectedPathInMenu(pId);
+                          if (activeTab !== 'quiz' && activeTab !== 'adaptive') setActiveTab('quiz');
+                        }}
+                        className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                          selectedPathId === pId
+                            ? 'bg-[#0078D4] text-white font-black'
+                            : 'text-slate-600 hover:text-[#0078D4]'
+                        }`}
+                      >
+                        P{pId}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Auto-Close on Hover Leave Option Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownHoverCloseEnabled((prev) => !prev)}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer ${
+                    isDropdownHoverCloseEnabled
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                      : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                  }`}
+                  title="Toggle automatic closing hover effect when cursor leaves the tabs menu"
+                >
+                  {isDropdownHoverCloseEnabled ? 'Hover-Close: ON' : 'Hover-Close: OFF'}
+                </button>
+
+                {/* Interactive Closing Hover Button (Expands & Rotates on Hover) */}
+                <button
+                  type="button"
+                  onClick={() => setIsNavDropdownOpen(false)}
+                  className="group/closedropdown flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-600 text-[10.5px] font-black transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer"
+                  title="Close Tabs Dropdown Menu"
+                  aria-label="Close Tabs Dropdown Menu"
+                >
+                  <X className="w-3.5 h-3.5 transition-transform duration-200 group-hover/closedropdown:rotate-90" />
+                  <span>Close Menu</span>
+                </button>
+              </div>
             </div>
 
             {/* Grouped Responsive Grid for All 16 Nav Bar Buttons */}
@@ -1671,13 +1796,15 @@ export const Header: React.FC<HeaderProps> = ({
           );
         })()}
 
-        {/* Permanent Slim Navigation Bar: Desktop/Laptop + Optional Single-Row Mobile Landscape Strip (Portrait uses Nav Dropdown) */}
+        {/* Permanent Slim Navigation Bar: Visible in ALL screen sizes (Portrait & Landscape) when not hidden */}
         <nav
           aria-label="Primary Studio Navigation"
-          className={`compact-portrait:hidden relative w-full lg:w-fit lg:max-w-full lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-xl lg:mb-1 shadow-xs backdrop-blur-md ${
+          onMouseEnter={handleNavBarMouseEnter}
+          onMouseLeave={handleNavBarMouseLeave}
+          className={`relative w-full lg:w-fit lg:max-w-full lg:mx-auto overflow-hidden transition-all duration-300 ease-in-out border-t lg:border border-sky-300/70 dark:border-sky-700/50 rounded-b-xl lg:rounded-xl lg:mb-1 shadow-xs backdrop-blur-md ${
             isMenuBarHidden
               ? 'max-h-0 opacity-0 pointer-events-none py-0 border-transparent lg:mb-0'
-              : 'max-h-64 mobile-landscape:max-h-14 opacity-100 py-1.5 mobile-landscape:py-1 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
+              : 'max-h-80 sm:max-h-64 mobile-landscape:max-h-14 opacity-100 py-1.5 mobile-landscape:py-1 bg-gradient-to-r from-[#0078D4]/45 via-[#0ea5e9]/50 to-[#0078D4]/45 dark:from-[#0284c7]/45 dark:via-[#0369a1]/50 dark:to-[#0284c7]/45'
           }`}
         >
           <WavyAzureFabricMotif className="opacity-50" />
@@ -1713,12 +1840,41 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="hidden xl:flex items-center shrink-0 px-1 opacity-95 hover:opacity-100 transition-opacity" title="Kenyan Warrior Heritage Motif">
               <MoranShieldMotif size={18} animate={true} />
             </div>
+
+            {/* Interactive Closing Hover Effect Control for Tabs Menu Bar + Auto-Hide Option */}
+            <div className="flex items-center gap-1 pl-1 border-l border-white/35 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsNavBarHoverAutoHide((prev) => !prev)}
+                className={`px-1.5 py-0.5 rounded-md text-[9.5px] font-extrabold transition-all cursor-pointer border ${
+                  isNavBarHoverAutoHide
+                    ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
+                    : 'bg-white/50 text-slate-800 border-white/60 hover:bg-white/80'
+                }`}
+                title="Toggle Auto-Close on Hover Leave for the Tabs Menu Bar"
+              >
+                {isNavBarHoverAutoHide ? 'Auto-Hide: ON' : 'Auto-Hide'}
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleMenuBar}
+                className="group/closetabs relative flex items-center justify-center hover:justify-start gap-0 hover:gap-1.5 px-2 hover:px-2.5 py-1 max-w-[28px] hover:max-w-[120px] overflow-hidden rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white border border-rose-400/80 text-[10.5px] font-black transition-all duration-300 ease-in-out shadow-2xs hover:shadow-md cursor-pointer shrink-0"
+                title="Hover & click to collapse/hide the navigation tabs menu bar"
+                aria-label="Hide Tabs Menu"
+              >
+                <X className="w-3.5 h-3.5 shrink-0 transition-transform duration-300 group-hover/closetabs:rotate-90" />
+                <span className="whitespace-nowrap opacity-0 group-hover/closetabs:opacity-100 max-w-0 group-hover/closetabs:max-w-[85px] transition-all duration-300 ease-in-out font-extrabold">
+                  Hide Tabs
+                </span>
+              </button>
+            </div>
           </div>
         </nav>
 
-        {/* Minimalist Floating Expand Handle (Desktop & Mobile Landscape when menu bar is hidden) */}
+        {/* Minimalist Floating Expand Handle (Visible across ALL screen sizes — Portrait & Landscape — when menu bar is hidden) */}
         {isMenuBarHidden && (
-          <div className="compact-portrait:hidden flex justify-center -mt-0.5 mb-1.5 py-1 mobile-landscape:py-0.5 relative z-20">
+          <div className="flex justify-center -mt-0.5 mb-1.5 py-1 mobile-landscape:py-0.5 relative z-20">
             <button
               type="button"
               onClick={toggleMenuBar}

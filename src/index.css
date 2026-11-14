@@ -84,6 +84,75 @@
   --theme-focus-ring: #38bdf8;
 }
 
+/* Savanna Gold Specialized UI Theme (Unlocked via First Module Mastered Milestone) */
+[data-theme="savanna-gold"] {
+  --theme-bg-body: #fffbeb;
+  --theme-bg-card: #ffffff;
+  --theme-bg-card-elevated: #fffdf5;
+  --theme-bg-surface-subtle: #fef3c7;
+  --theme-bg-header: rgba(255, 251, 235, 0.96);
+  --theme-text-primary: #1c1917;
+  --theme-text-secondary: #44403c;
+  --theme-text-muted: #78716c;
+  --theme-border: #fde68a;
+  --theme-border-strong: #fcd34d;
+  --theme-border-azure: rgba(217, 119, 6, 0.38);
+  --theme-accent-azure: #d97706;
+  --theme-accent-glow: rgba(217, 119, 6, 0.16);
+  --theme-card-shadow: 0 4px 20px rgba(180, 83, 9, 0.08);
+  --theme-card-shadow-hover: 0 8px 30px rgba(217, 119, 6, 0.16);
+  --theme-input-bg: #ffffff;
+  --theme-kitenge-dot: #b45309;
+  --theme-kitenge-bg: #fffbeb;
+  --theme-focus-ring: #d97706;
+}
+
+/* Emerald Rift Canopy Specialized UI Theme (Unlocked via 50 Questions Answered Milestone) */
+[data-theme="emerald-rift"] {
+  --theme-bg-body: #ecfdf5;
+  --theme-bg-card: #ffffff;
+  --theme-bg-card-elevated: #f8fafc;
+  --theme-bg-surface-subtle: #d1fae5;
+  --theme-bg-header: rgba(236, 253, 245, 0.96);
+  --theme-text-primary: #064e3b;
+  --theme-text-secondary: #065f46;
+  --theme-text-muted: #047857;
+  --theme-border: #a7f3d0;
+  --theme-border-strong: #6ee7b7;
+  --theme-border-azure: rgba(5, 150, 105, 0.35);
+  --theme-accent-azure: #059669;
+  --theme-accent-glow: rgba(5, 150, 105, 0.15);
+  --theme-card-shadow: 0 4px 20px rgba(5, 150, 105, 0.08);
+  --theme-card-shadow-hover: 0 8px 30px rgba(5, 150, 105, 0.16);
+  --theme-input-bg: #ffffff;
+  --theme-kitenge-dot: #059669;
+  --theme-kitenge-bg: #ecfdf5;
+  --theme-focus-ring: #059669;
+}
+
+/* Kilimanjaro Aurora Specialized Dark UI Theme (Unlocked via Curriculum Grandmaster Milestone) */
+[data-theme="kilimanjaro-aurora"] {
+  --theme-bg-body: #090a1a;
+  --theme-bg-card: #12152e;
+  --theme-bg-card-elevated: #191d3d;
+  --theme-bg-surface-subtle: #1e2247;
+  --theme-bg-header: rgba(18, 21, 46, 0.95);
+  --theme-text-primary: #f8fafc;
+  --theme-text-secondary: #e2e8f0;
+  --theme-text-muted: #94a3b8;
+  --theme-border: #2e3469;
+  --theme-border-strong: #434c94;
+  --theme-border-azure: rgba(129, 140, 248, 0.45);
+  --theme-accent-azure: #818cf8;
+  --theme-accent-glow: rgba(129, 140, 248, 0.3);
+  --theme-card-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), 0 0 1px 1px rgba(129, 140, 248, 0.25);
+  --theme-card-shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(129, 140, 248, 0.35);
+  --theme-input-bg: #0c0e22;
+  --theme-kitenge-dot: #a78bfa;
+  --theme-kitenge-bg: #090a1a;
+  --theme-focus-ring: #818cf8;
+}
+
 html,
 body,
 #root {

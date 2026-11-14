@@ -131,9 +131,10 @@ export const DomainSkillRadar: React.FC<DomainSkillRadarProps> = ({
   onDrillDomain,
   onSelectModule,
 }) => {
-  const [rendererMode, setRendererMode] = useState<'recharts' | 'd3'>('recharts');
+  const [rendererMode, setRendererMode] = useState<'d3' | 'recharts'>('d3');
   const [showCohortOverlay, setShowCohortOverlay] = useState<boolean>(true);
   const [selectedDomainId, setSelectedDomainId] = useState<string>('compute-net-storage');
+  const [hoveredDomainId, setHoveredDomainId] = useState<string | null>(null);
 
   const domainSkills: OfficialDomainSkillPoint[] = useMemo(() => {
     return OFFICIAL_SIX_DOMAINS.map((dom) => {
@@ -186,13 +187,25 @@ export const DomainSkillRadar: React.FC<DomainSkillRadarProps> = ({
     return [...domainSkills].sort((a, b) => a.proficiency - b.proficiency)[0];
   }, [domainSkills]);
 
+  const weakDomains = useMemo(() => {
+    const belowTarget = domainSkills.filter((d) => d.proficiency < 70);
+    return belowTarget.length > 0 ? belowTarget : weakestDomain ? [weakestDomain] : [];
+  }, [domainSkills, weakestDomain]);
+
+  const allWeakModuleIds = useMemo(() => {
+    const set = new Set<number>();
+    weakDomains.forEach((d) => d.moduleIds.forEach((m) => set.add(m)));
+    return Array.from(set);
+  }, [weakDomains]);
+
   const inspectedDomain = useMemo(() => {
-    return domainSkills.find((d) => d.id === selectedDomainId) || weakestDomain || domainSkills[0];
-  }, [domainSkills, selectedDomainId, weakestDomain]);
+    const activeId = hoveredDomainId || selectedDomainId;
+    return domainSkills.find((d) => d.id === activeId) || weakestDomain || domainSkills[0];
+  }, [domainSkills, hoveredDomainId, selectedDomainId, weakestDomain]);
 
   // Precompute D3 radial spider geometry for the 6 official domains
   const d3SpiderGeometry = useMemo(() => {
-    const size = 280;
+    const size = 296;
     const center = size / 2;
     const maxRadius = 96;
     const radiusScale = d3.scaleLinear().domain([0, 100]).range([0, maxRadius]);
@@ -212,7 +225,7 @@ export const DomainSkillRadar: React.FC<DomainSkillRadarProps> = ({
       const angle = idx * angleStep - Math.PI / 2;
       const xEnd = center + Math.cos(angle) * maxRadius;
       const yEnd = center + Math.sin(angle) * maxRadius;
-      const labelRadius = maxRadius + 22;
+      const labelRadius = maxRadius + 24;
       const xLabel = center + Math.cos(angle) * labelRadius;
       const yLabel = center + Math.sin(angle) * labelRadius;
       const rVal = radiusScale(d.proficiency);
@@ -304,18 +317,43 @@ export const DomainSkillRadar: React.FC<DomainSkillRadarProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-sky-100/80 hidden sm:block">
-              Interactive spider chart comparing your proficiency across all 6 official AZ-900 skill domains vs. the 70% pass target
+              Interactive D3 spider chart across all 6 official AZ-900 domains — click any vertex or card to drill weak domains
             </p>
           </div>
         </div>
 
-        {/* Engine Switcher (Recharts Spider vs D3 Polar Mesh) + Cohort Toggle */}
+        {/* Engine Switcher (D3 Spider Chart vs Recharts Spider) + Cohort Toggle + Drill All Weak Domains CTA */}
         <div className="flex items-center gap-1.5 flex-wrap ml-auto">
+          {onDrillDomain && allWeakModuleIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onDrillDomain(allWeakModuleIds)}
+              className="px-2.5 py-1 rounded-xl text-[11px] font-black bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 shadow-xs flex items-center gap-1 cursor-pointer transition-all"
+              title={`Launch targeted drill across weak domains (${weakDomains.map((d) => d.shortLabel).join(', ')})`}
+            >
+              <Zap className="w-3.5 h-3.5 fill-slate-950" />
+              <span>Drill Weak Domains ({weakDomains.length})</span>
+            </button>
+          )}
+
           <div
             className="flex items-center bg-slate-950/45 p-0.5 rounded-xl border border-white/15 text-[11px] font-bold"
             role="tablist"
             aria-label="Spider Chart Engine Switcher"
           >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={rendererMode === 'd3'}
+              onClick={() => setRendererMode('d3')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                rendererMode === 'd3'
+                  ? 'bg-[#0078D4] text-white font-extrabold shadow-2xs'
+                  : 'text-sky-100/80 hover:text-white'
+              }`}
+            >
+              D3 Spider Chart
+            </button>
             <button
               type="button"
               role="tab"
@@ -328,19 +366,6 @@ export const DomainSkillRadar: React.FC<DomainSkillRadarProps> = ({
               }`}
             >
               Recharts Spider
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={rendererMode === 'd3'}
-              onClick={() => setRendererMode('d3')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                rendererMode === 'd3'
-                  ? 'bg-[#0078D4] text-white font-extrabold shadow-2xs'
-                  : 'text-sky-100/80 hover:text-white'
-              }`}
-            >
-              D3 Polar Mesh
             </button>
           </div>
 
@@ -360,8 +385,8 @@ export const DomainSkillRadar: React.FC<DomainSkillRadarProps> = ({
 
       {/* Main Spider Chart + 6-Domain Breakdown Grid */}
       <div className="p-3.5 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
-        {/* Left Column: Spider Visualization (6 cols) */}
-        <div className="lg:col-span-6 bg-slate-50/80 rounded-2xl border border-slate-200/80 p-3 flex flex-col items-center justify-center">
+        {/* Left Column: Spider Visualization + Interactive Domain Drill-Down Bar (6 cols) */}
+        <div className="lg:col-span-6 bg-slate-50/80 rounded-2xl border border-slate-200/80 p-3 flex flex-col items-center justify-center space-y-2.5">
           {rendererMode === 'recharts' ? (
             <div className="w-full h-64 sm:h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -420,7 +445,7 @@ export const DomainSkillRadar: React.FC<DomainSkillRadarProps> = ({
             <div className="w-full h-64 sm:h-72 flex items-center justify-center">
               <svg
                 viewBox={`0 0 ${d3SpiderGeometry.size} ${d3SpiderGeometry.size}`}
-                className="w-full h-full max-w-[290px] max-h-[290px] overflow-visible"
+                className="w-full h-full max-w-[300px] max-h-[300px] overflow-visible"
                 role="img"
                 aria-label="D3 Six-Domain Spider Chart"
               >
@@ -446,18 +471,34 @@ export const DomainSkillRadar: React.FC<DomainSkillRadarProps> = ({
                   </g>
                 ))}
 
-                {/* Radial Spokes */}
-                {d3SpiderGeometry.axes.map((axis) => (
-                  <line
-                    key={`axis-${axis.id}`}
-                    x1={d3SpiderGeometry.center}
-                    y1={d3SpiderGeometry.center}
-                    x2={axis.xEnd}
-                    y2={axis.yEnd}
-                    stroke="#CBD5E1"
-                    strokeWidth={1}
+                {/* Radial Spokes (Highlight active/weak spoke) */}
+                {d3SpiderGeometry.axes.map((axis) => {
+                  const isFocused = inspectedDomain?.id === axis.id;
+                  const isWeak = axis.proficiency < 70;
+                  return (
+                    <line
+                      key={`axis-${axis.id}`}
+                      x1={d3SpiderGeometry.center}
+                      y1={d3SpiderGeometry.center}
+                      x2={axis.xEnd}
+                      y2={axis.yEnd}
+                      stroke={isFocused ? '#0078D4' : isWeak ? '#F59E0B' : '#CBD5E1'}
+                      strokeWidth={isFocused ? 2 : 1.1}
+                      strokeDasharray={isWeak && !isFocused ? '3 2' : undefined}
+                    />
+                  );
+                })}
+
+                {/* 70% Pass Threshold D3 Polygon */}
+                <g transform={`translate(${d3SpiderGeometry.center}, ${d3SpiderGeometry.center})`}>
+                  <path
+                    d={d3SpiderGeometry.targetPath}
+                    fill="rgba(16, 185, 129, 0.05)"
+                    stroke="#10B981"
+                    strokeWidth={1.4}
+                    strokeDasharray="4 3"
                   />
-                ))}
+                </g>
 
                 {/* Cohort Benchmark Polygon */}
                 {showCohortOverlay && (
@@ -482,29 +523,48 @@ export const DomainSkillRadar: React.FC<DomainSkillRadarProps> = ({
                   />
                 </g>
 
-                {/* Interactive Vertices & Axis Labels */}
+                {/* Interactive Vertices & Axis Labels (Click or Hover to Inspect / Drill Weak Domain) */}
                 {d3SpiderGeometry.axes.map((axis) => {
                   const isSelected = inspectedDomain?.id === axis.id;
+                  const isWeak = axis.proficiency < 70;
                   return (
                     <g
                       key={`vertex-${axis.id}`}
                       className="cursor-pointer"
-                      onClick={() => setSelectedDomainId(axis.id)}
+                      onMouseEnter={() => setHoveredDomainId(axis.id)}
+                      onMouseLeave={() => setHoveredDomainId(null)}
+                      onClick={() => {
+                        setSelectedDomainId(axis.id);
+                      }}
                     >
+                      {isWeak && (
+                        <circle
+                          cx={axis.xVertex}
+                          cy={axis.yVertex}
+                          r={isSelected ? 10 : 8}
+                          fill="rgba(245, 158, 11, 0.25)"
+                        />
+                      )}
                       <circle
                         cx={axis.xVertex}
                         cy={axis.yVertex}
-                        r={isSelected ? 6 : 4.5}
-                        fill={axis.proficiency >= 70 ? '#10B981' : '#0078D4'}
+                        r={isSelected ? 6.5 : 5}
+                        fill={axis.proficiency >= 70 ? '#10B981' : '#F59E0B'}
                         stroke="#FFFFFF"
-                        strokeWidth={1.8}
+                        strokeWidth={2}
                       />
                       <text
                         x={axis.xLabel}
                         y={axis.yLabel}
                         textAnchor="middle"
                         dominantBaseline="middle"
-                        className="text-[8.5px] font-extrabold fill-slate-800"
+                        className={`text-[8.5px] font-extrabold transition-colors ${
+                          isSelected
+                            ? 'fill-[#0078D4]'
+                            : isWeak
+                            ? 'fill-amber-800'
+                            : 'fill-slate-800'
+                        }`}
                       >
                         {axis.shortLabel} ({axis.proficiency}%)
                       </text>
@@ -516,14 +576,18 @@ export const DomainSkillRadar: React.FC<DomainSkillRadarProps> = ({
           )}
 
           {/* Spider Chart Legend */}
-          <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] font-bold text-slate-600 pt-1">
+          <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] font-bold text-slate-600 pt-0.5">
             <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-[#0078D4] inline-block" />
               <span>Your Proficiency</span>
             </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+              <span>Weak Domain (&lt;70%)</span>
+            </span>
             {showCohortOverlay && (
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+                <span className="w-3 h-0.5 border-t-2 border-dashed border-amber-500 inline-block" />
                 <span>Cohort Benchmark</span>
               </span>
             )}
@@ -532,6 +596,53 @@ export const DomainSkillRadar: React.FC<DomainSkillRadarProps> = ({
               <span>70% Exam Pass Target</span>
             </span>
           </div>
+
+          {/* Interactive Selected / Weak Domain Drill-Down Inspector Bar */}
+          {inspectedDomain && (
+            <div className="w-full p-2.5 rounded-xl bg-white border border-sky-200/90 shadow-2xs flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="px-1.5 py-0.5 rounded bg-sky-100 text-[#0078D4] text-[9.5px] font-black uppercase">
+                    Selected Vertex: D{inspectedDomain.domainNumber}
+                  </span>
+                  <span className="text-xs font-extrabold text-slate-900 truncate">
+                    {inspectedDomain.title}
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-black ${
+                      inspectedDomain.proficiency >= 70
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-900'
+                    }`}
+                  >
+                    {inspectedDomain.proficiency}% ({inspectedDomain.proficiency >= 70 ? 'Passing' : `${70 - inspectedDomain.proficiency}% to 70% Target`})
+                  </span>
+                </div>
+                <p className="text-[10.5px] text-slate-600 mt-0.5">
+                  Exam Weight: <strong>{inspectedDomain.examWeight}</strong> • Modules:{' '}
+                  <strong>{inspectedDomain.moduleIds.map((m) => `M${m}`).join(', ')}</strong> • Cohort Avg: {inspectedDomain.cohortAvg}%
+                </p>
+              </div>
+
+              {(onDrillDomain || onSelectModule) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onDrillDomain) {
+                      onDrillDomain(inspectedDomain.moduleIds);
+                    } else if (onSelectModule) {
+                      onSelectModule(inspectedDomain.moduleIds[0]);
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white text-[11px] font-black flex items-center gap-1 shadow-2xs cursor-pointer shrink-0 transition-colors"
+                >
+                  <Target className="w-3.5 h-3.5" />
+                  <span>Drill D{inspectedDomain.domainNumber} ({inspectedDomain.moduleIds.map((m) => `M${m}`).join(', ')})</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right Column: Six Official AZ-900 Domains Interactive Cards (6 cols) */}

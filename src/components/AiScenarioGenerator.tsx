@@ -10,12 +10,20 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { LEARNING_PATHS } from '../data/curriculum';
-import { Question } from '../types/quiz';
+import { Question, UserStats } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
+import {
+  JourneyAiPromptReward,
+  PENDING_AI_PROMPT_STORAGE_KEY,
+  getAllUnlockedJourneyPrompts,
+} from './LearningJourneyTimeline';
 
 interface AiScenarioGeneratorProps {
   onQuestionGenerated: (question: Question) => void;
   onCancel?: () => void;
+  stats?: UserStats;
+  questions?: Question[];
+  initialPromptReward?: JourneyAiPromptReward | null;
 }
 
 const PRESET_TOPICS = [
@@ -32,14 +40,55 @@ const PRESET_TOPICS = [
 export const AiScenarioGenerator: React.FC<AiScenarioGeneratorProps> = ({
   onQuestionGenerated,
   onCancel,
+  stats,
+  questions = [],
+  initialPromptReward = null,
 }) => {
-  const [selectedPathId, setSelectedPathId] = useState<number>(2);
-  const [selectedModuleId, setSelectedModuleId] = useState<number>(5);
-  const [difficulty, setDifficulty] = useState<'Fundamental' | 'Intermediate' | 'Advanced'>('Intermediate');
-  const [customPrompt, setCustomPrompt] = useState<string>('');
+  const [selectedPathId, setSelectedPathId] = useState<number>(
+    initialPromptReward?.pathId || 2
+  );
+  const [selectedModuleId, setSelectedModuleId] = useState<number>(
+    initialPromptReward?.moduleId || 5
+  );
+  const [difficulty, setDifficulty] = useState<
+    'Fundamental' | 'Intermediate' | 'Advanced'
+  >(initialPromptReward?.difficulty || 'Intermediate');
+  const [customPrompt, setCustomPrompt] = useState<string>(
+    initialPromptReward?.promptText || ''
+  );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successCount, setSuccessCount] = useState<number>(0);
+
+  React.useEffect(() => {
+    if (initialPromptReward) {
+      setSelectedPathId(initialPromptReward.pathId);
+      setSelectedModuleId(initialPromptReward.moduleId);
+      setDifficulty(initialPromptReward.difficulty);
+      setCustomPrompt(initialPromptReward.promptText);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(PENDING_AI_PROMPT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as JourneyAiPromptReward;
+        if (parsed && parsed.promptText) {
+          setSelectedPathId(parsed.pathId || 2);
+          setSelectedModuleId(parsed.moduleId || 5);
+          setDifficulty(parsed.difficulty || 'Intermediate');
+          setCustomPrompt(parsed.promptText);
+        }
+        localStorage.removeItem(PENDING_AI_PROMPT_STORAGE_KEY);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [initialPromptReward]);
+
+  const unlockedJourneyPrompts = React.useMemo(() => {
+    if (!stats) return [];
+    return getAllUnlockedJourneyPrompts(stats, questions);
+  }, [stats, questions]);
 
   // Available modules for selected path
   const currentPath = LEARNING_PATHS.find((p) => p.id === selectedPathId) || LEARNING_PATHS[0];
@@ -238,7 +287,7 @@ export const AiScenarioGenerator: React.FC<AiScenarioGeneratorProps> = ({
           {/* Preset Topics Chips */}
           <div className="mt-3">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-              💡 Or click a high-yield exam prompt:
+              Or click a high-yield exam prompt:
             </span>
             <div className="flex flex-wrap gap-1.5">
               {PRESET_TOPICS.map((topic, i) => (
@@ -246,13 +295,47 @@ export const AiScenarioGenerator: React.FC<AiScenarioGeneratorProps> = ({
                   key={i}
                   type="button"
                   onClick={() => setCustomPrompt(topic)}
-                  className="text-xs px-2.5 py-1 rounded-full bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-600 border border-slate-200 transition-colors"
+                  className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-600 border border-slate-200 transition-colors cursor-pointer"
                 >
                   {topic}
                 </button>
               ))}
             </div>
           </div>
+
+          {/* Unlocked Learning Journey Milestone AI Prompts */}
+          {unlockedJourneyPrompts.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-slate-200/80">
+              <span className="text-[11px] font-bold text-[#0078D4] uppercase tracking-wider block mb-1.5">
+                Unlocked Learning Journey Milestone AI Prompts ({unlockedJourneyPrompts.length}):
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {unlockedJourneyPrompts.map((reward) => (
+                  <button
+                    key={reward.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPathId(reward.pathId);
+                      setSelectedModuleId(reward.moduleId);
+                      setDifficulty(reward.difficulty);
+                      setCustomPrompt(reward.promptText);
+                    }}
+                    className="p-2.5 rounded-xl bg-sky-50/70 hover:bg-sky-100/80 border border-sky-200 text-left transition-colors cursor-pointer"
+                  >
+                    <div className="text-xs font-bold text-slate-900">
+                      {reward.title}{' '}
+                      <span className="font-normal text-slate-500">
+                        · M{reward.moduleId} · {reward.difficulty}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-600 line-clamp-1 mt-0.5">
+                      {reward.promptText}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Status Alerts */}

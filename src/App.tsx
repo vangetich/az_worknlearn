@@ -51,6 +51,7 @@ import {
 import { auth, recordQuizSessionToFirestore } from './lib/firebase';
 import { DomainConfidenceTracker } from './components/DomainConfidenceTracker';
 import { DomainSkillRadar } from './components/DomainSkillRadar';
+import { LearningJourneyTimeline } from './components/LearningJourneyTimeline';
 import { StudyDeck } from './components/StudyDeck';
 import { MicroDrillModal } from './components/MicroDrillModal';
 import { StudyBreakModal } from './components/StudyBreakModal';
@@ -2138,6 +2139,13 @@ export default function App() {
             onOpenAccessibilitySettings={() => setShowAccessibilityModal(true)}
             unresolvedMistakesCount={unresolvedMistakesCount}
             pendingOfflineCount={pendingOfflineCount}
+            onSelectDifficultyForPractice={(diff) => {
+              setSelectedDifficultyFilter(diff);
+              setDynamicDifficulty(diff);
+              setCurrentQuestionIndex(0);
+              setShowPostSessionReview(false);
+              setActiveTab('quiz');
+            }}
           />
         )}
 
@@ -4240,6 +4248,8 @@ export default function App() {
           <div className="responsive-tab-page-shell max-w-5xl mx-auto">
             <AiScenarioGenerator
               onQuestionGenerated={handleQuestionGenerated}
+              stats={stats}
+              questions={questions}
             />
           </div>
         )}
@@ -4280,6 +4290,12 @@ export default function App() {
               stats={stats}
               onDrillDomain={handleDrillWeakAreas}
               onSelectModule={handleSelectModuleFromTracker}
+            />
+            <LearningJourneyTimeline
+              stats={stats}
+              questions={questions}
+              onLaunchAiPrompt={() => setActiveTab('ai-builder')}
+              onNavigateToPractice={() => setActiveTab('quiz')}
             />
             <BalancedPathIntensityCoach
               stats={stats}
