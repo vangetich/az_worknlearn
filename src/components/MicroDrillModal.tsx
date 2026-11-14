@@ -291,9 +291,9 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
   const [score, setScore] = useState<number>(0);
   const [isFinished, setIsFinished] = useState<boolean>(false);
 
-  // Quick-Drill Countdown Timer Overlay State (high-pressure exam simulation)
-  const [secondsPerQuestion, setSecondsPerQuestion] = useState<30 | 45 | 60>(45);
-  const [timeLeft, setTimeLeft] = useState<number>(45);
+  // 30-Second 'Quick-Drill' Countdown Timer Overlay State (high-pressure exam simulation)
+  const [secondsPerQuestion, setSecondsPerQuestion] = useState<30 | 45 | 60>(30);
+  const [timeLeft, setTimeLeft] = useState<number>(30);
   const [isTimerPaused, setIsTimerPaused] = useState<boolean>(false);
   const [isTimerOverlayVisible, setIsTimerOverlayVisible] = useState<boolean>(true);
   const [totalElapsedSeconds, setTotalElapsedSeconds] = useState<number>(0);
@@ -393,7 +393,7 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
 
   const timerPct = Math.max(0, Math.min(100, (timeLeft / secondsPerQuestion) * 100));
   const isCriticalTime = timeLeft <= 10 && !hasSubmitted;
-  const isWarningTime = timeLeft <= 20 && timeLeft > 10 && !hasSubmitted;
+  const isWarningTime = timeLeft <= 18 && timeLeft > 10 && !hasSubmitted;
 
   const isSelectedCorrect = selectedAnswer === currentQ?.correctAnswer;
   const accuracyPercent =
@@ -454,16 +454,16 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
               <button
                 type="button"
                 onClick={() => setIsTimerOverlayVisible((v) => !v)}
-                className={`px-2 py-1 rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer border ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer border ${
                   isTimerOverlayVisible
-                    ? 'bg-slate-900/75 text-amber-300 border-white/30'
+                    ? 'bg-slate-900/85 text-amber-300 border-amber-300/60 shadow-2xs'
                     : 'bg-white/15 hover:bg-white/25 text-white border-white/20'
                 }`}
-                title="Toggle Quick-Drill Exam Countdown Timer Overlay"
+                title="Toggle 30-Second Quick-Drill Exam Countdown Timer Overlay"
               >
                 <Timer className="w-3.5 h-3.5" />
                 <span className="font-mono tabular-nums">
-                  {isTimerOverlayVisible ? formatSeconds(timeLeft) : 'Timer Off'}
+                  {isTimerOverlayVisible ? `${formatSeconds(timeLeft)} (${secondsPerQuestion}s)` : '30s Timer Off'}
                 </span>
               </button>
             )}
@@ -479,52 +479,98 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
           </div>
         </div>
 
-        {/* High-Pressure Quick-Drill Timer Overlay HUD */}
+        {/* 30-Second 'Quick-Drill' Timer Overlay HUD (High-Pressure Exam Simulation) */}
         {!isFinished && currentQ && isTimerOverlayVisible && (
           <div
             role="timer"
             aria-live="polite"
-            aria-label={`Quick-Drill countdown: ${timeLeft} seconds remaining`}
-            className={`shrink-0 px-4 sm:px-6 py-2 border-b transition-colors duration-300 relative overflow-hidden ${
+            aria-label={`30-Second Quick-Drill countdown: ${timeLeft} seconds remaining`}
+            className={`shrink-0 px-4 sm:px-6 py-2.5 border-b transition-colors duration-300 relative overflow-hidden ${
               timedOut
                 ? 'bg-rose-950 text-white border-rose-700'
                 : isCriticalTime
-                ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-700 text-rose-950 dark:text-rose-100'
+                ? 'bg-rose-50 dark:bg-rose-950/75 border-rose-300 dark:border-rose-700 text-rose-950 dark:text-rose-100'
                 : isWarningTime
-                ? 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-950 dark:text-amber-100'
+                ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700 text-amber-950 dark:text-amber-100'
                 : 'bg-slate-900 text-white border-slate-800'
             }`}
           >
-            <div className="flex flex-wrap items-center justify-between gap-2 relative z-10 text-xs">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`flex items-center gap-1.5 font-mono font-black text-sm tabular-nums ${
-                    isCriticalTime ? 'text-rose-600 dark:text-rose-300 animate-pulse' : isWarningTime ? 'text-amber-700 dark:text-amber-300' : 'text-sky-300'
-                  }`}
-                >
-                  <Timer className="w-4 h-4 shrink-0" />
-                  <span>{formatSeconds(timeLeft)}</span>
+            <div className="flex flex-wrap items-center justify-between gap-2.5 relative z-10 text-xs">
+              <div className="flex items-center gap-2.5">
+                {/* Circular 30s Radial Countdown Ring */}
+                <div className="relative w-8 h-8 flex items-center justify-center shrink-0">
+                  <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
+                    <circle
+                      cx="16"
+                      cy="16"
+                      r="13"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      className="opacity-20"
+                    />
+                    <circle
+                      cx="16"
+                      cy="16"
+                      r="13"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeDasharray={2 * Math.PI * 13}
+                      strokeDashoffset={2 * Math.PI * 13 * (1 - timerPct / 100)}
+                      strokeLinecap="round"
+                      className={`transition-all duration-500 ${
+                        timedOut || isCriticalTime
+                          ? 'text-rose-500'
+                          : isWarningTime
+                          ? 'text-amber-500'
+                          : 'text-sky-400'
+                      }`}
+                    />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] font-black tabular-nums">
+                    {timeLeft}s
+                  </span>
                 </div>
-                <span className="text-[11px] font-bold opacity-85">
-                  {timedOut
-                    ? 'Time Expired — Review explanation below'
-                    : isCriticalTime
-                    ? 'Quick-Drill Alert · Final Seconds!'
-                    : isWarningTime
-                    ? 'Quick-Drill Pace · Pick Best Option'
-                    : 'Quick-Drill Exam Pressure Mode'}
-                </span>
+
+                <div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className={`font-mono font-black text-sm tabular-nums ${
+                        isCriticalTime
+                          ? 'text-rose-600 dark:text-rose-300 animate-pulse'
+                          : isWarningTime
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-sky-300'
+                      }`}
+                    >
+                      {formatSeconds(timeLeft)}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30 text-[10px] font-black uppercase tracking-wider">
+                      ⚡ {secondsPerQuestion}s Quick-Drill Overlay
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-bold opacity-85 leading-tight mt-0.5">
+                    {timedOut
+                      ? '30s Time Expired — High-pressure simulation locked; review explanation below'
+                      : isCriticalTime
+                      ? 'Critical Exam Pace · Under 10 seconds remaining!'
+                      : isWarningTime
+                      ? 'High-Pressure Pace · Eliminate distractors & lock your answer'
+                      : 'Simulating high-pressure AZ-900 exam environment (30s target pace)'}
+                  </p>
+                </div>
               </div>
 
               <div className="flex items-center gap-1.5">
-                {/* Speed Preset Switcher */}
+                {/* Speed Preset Switcher (30s Default) */}
                 <div className="inline-flex items-center p-0.5 rounded-lg bg-black/15 dark:bg-white/10 text-[10px] font-bold">
                   {([30, 45, 60] as const).map((preset) => (
                     <button
                       key={preset}
                       type="button"
                       onClick={() => handleChangePreset(preset)}
-                      className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                      className={`px-2 py-0.5 rounded transition-all cursor-pointer tabular-nums ${
                         secondsPerQuestion === preset
                           ? 'bg-[#0078D4] text-white font-black shadow-2xs'
                           : 'opacity-75 hover:opacity-100'
@@ -536,12 +582,28 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
                   ))}
                 </div>
 
+                {/* Reset 30s Timer Button */}
+                {!hasSubmitted && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTimeLeft(secondsPerQuestion);
+                      setTimedOut(false);
+                    }}
+                    className="px-2 py-1 rounded-lg bg-black/15 hover:bg-black/25 dark:bg-white/10 dark:hover:bg-white/20 text-[10px] font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
+                    title={`Reset countdown to ${secondsPerQuestion}s`}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span className="hidden sm:inline">Reset</span>
+                  </button>
+                )}
+
                 {/* Pause / Resume Countdown */}
                 {!hasSubmitted && (
                   <button
                     type="button"
                     onClick={() => setIsTimerPaused((p) => !p)}
-                    className="p-1 rounded-lg bg-black/15 hover:bg-black/25 dark:bg-white/10 dark:hover:bg-white/20 transition-colors cursor-pointer"
+                    className="p-1.5 rounded-lg bg-black/15 hover:bg-black/25 dark:bg-white/10 dark:hover:bg-white/20 transition-colors cursor-pointer"
                     title={isTimerPaused ? 'Resume Quick-Drill countdown' : 'Pause Quick-Drill countdown'}
                     aria-label={isTimerPaused ? 'Resume countdown' : 'Pause countdown'}
                   >
@@ -552,7 +614,7 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
             </div>
 
             {/* Depleting Countdown Progress Track */}
-            <div className="w-full h-1.5 rounded-full bg-black/15 dark:bg-white/10 overflow-hidden mt-1.5">
+            <div className="w-full h-1.5 rounded-full bg-black/15 dark:bg-white/10 overflow-hidden mt-2">
               <div
                 className={`h-full rounded-full transition-all duration-700 ease-linear ${
                   timedOut || isCriticalTime

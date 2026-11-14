@@ -203,6 +203,76 @@ const QUICK_QUESTIONS = [
   'What is the difference between Azure VPN Gateway and ExpressRoute?',
 ];
 
+function buildOptionDistractorBreakdownMessage(q: Question, optionLetter: string): {
+  userPrompt: string;
+  assistantBreakdown: string;
+} {
+  const optionObj = (q.options || []).find((o) => o.letter === optionLetter);
+  const optionText = optionObj?.text || `Option ${optionLetter}`;
+  const isCorrect = optionLetter === q.correctAnswer;
+  const distractorEntry = (q.distractorBreakdown || []).find((d) => d.letter === optionLetter);
+  const correctObj = (q.options || []).find((o) => o.letter === q.correctAnswer);
+  const correctText = correctObj ? `Option ${q.correctAnswer} (${correctObj.text})` : `Option ${q.correctAnswer}`;
+  const matchedDoc =
+    OFFICIAL_MICROSOFT_DOCS_INDEX.find((d) => d.moduleId === q.moduleId) ||
+    OFFICIAL_MICROSOFT_DOCS_INDEX[0];
+
+  if (isCorrect) {
+    return {
+      userPrompt: `Ask AI: Why is Option ${optionLetter} ("${optionText}") the correct answer for this Module ${q.moduleId} scenario?`,
+      assistantBreakdown: `### ✅ Contextual Breakdown: Option ${optionLetter} (${optionText}) is Correct
+
+**1. Why Option ${optionLetter} Solves the Scenario:**
+${q.whyCorrect}
+
+**2. Why the Distractors Are Eliminated:**
+${(q.distractorBreakdown || [])
+  .map((d) => {
+    const dText = q.options?.find((o) => o.letter === d.letter)?.text || '';
+    return `- **Option ${d.letter}${dText ? ` (${dText})` : ''}**: ${d.reason}`;
+  })
+  .join('\n')}
+
+**💡 AZ-900 Exam Memory Rule:**
+${q.examTip}
+
+---
+📚 **Official Microsoft Learn Citation:**
+- **${matchedDoc.title}** (${matchedDoc.service}): ${matchedDoc.url}`,
+    };
+  }
+
+  return {
+    userPrompt: `Ask AI: Why is Option ${optionLetter} ("${optionText}") incorrect in this scenario? Trigger a contextual distractor breakdown.`,
+    assistantBreakdown: `### ❌ Contextual Distractor Breakdown: Why Option ${optionLetter} (${optionText}) is Incorrect
+
+**1. Specific Distractor Trap for Option ${optionLetter}:**
+${
+  distractorEntry?.reason ||
+  `Option ${optionLetter} ("${optionText}") does not satisfy the specific architectural, governance, or SLA requirements stated in the scenario.`
+}
+
+**2. How It Contrasts with the Correct Solution (${correctText}):**
+${q.whyCorrect}
+
+**3. Other Distractors in This Question:**
+${(q.distractorBreakdown || [])
+  .filter((d) => d.letter !== optionLetter)
+  .map((d) => {
+    const dText = q.options?.find((o) => o.letter === d.letter)?.text || '';
+    return `- **Option ${d.letter}${dText ? ` (${dText})` : ''}**: ${d.reason}`;
+  })
+  .join('\n')}
+
+**💡 AZ-900 Exam Memory Rule:**
+${q.examTip}
+
+---
+📚 **Official Microsoft Learn Citation:**
+- **${matchedDoc.title}** (${matchedDoc.service}): ${matchedDoc.url}`,
+  };
+}
+
 export const KnowledgeAssistant: React.FC<KnowledgeAssistantProps> = ({
   initialQuestionContext,
   activeQuestionContext,
@@ -215,8 +285,8 @@ export const KnowledgeAssistant: React.FC<KnowledgeAssistantProps> = ({
   onToggleDrawerExpand,
 }) => {
   const isDrawer = variant === 'drawer';
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const baseWelcome: ChatMessage = {
       id: 'welcome',
       role: 'assistant',
       content: `### Karibu! Welcome to your AZ-900 Knowledge Assistant 🇰🇪 ☁️
@@ -224,12 +294,34 @@ export const KnowledgeAssistant: React.FC<KnowledgeAssistantProps> = ({
 I am your dedicated Microsoft Azure tutor, grounded in official **Microsoft Learn documentation**.
 - Use the **Official Microsoft Azure Documentation Search Bar** above to cross-reference any service or exam concept with ` + '`learn.microsoft.com`' + `
 - Clarify tricky architectural scenarios (e.g., *PaaS vs. IaaS*, *ZRS vs. GRS*, *Azure Policy vs. RBAC*)
-- Break down any question you got stuck on!
+- Click **Ask AI** on any quiz option to trigger an instant distractor breakdown!
 
 What concept would you like to master today?`,
       timestamp: Date.now(),
-    },
-  ]);
+    };
+    if (variant === 'drawer' && activeQuestionContext && selectedOptionContext) {
+      const breakdown = buildOptionDistractorBreakdownMessage(
+        activeQuestionContext,
+        selectedOptionContext
+      );
+      return [
+        baseWelcome,
+        {
+          id: `user-opt-${activeQuestionContext.id}-${selectedOptionContext}`,
+          role: 'user',
+          content: breakdown.userPrompt,
+          timestamp: Date.now() + 1,
+        },
+        {
+          id: `bot-opt-${activeQuestionContext.id}-${selectedOptionContext}`,
+          role: 'assistant',
+          content: breakdown.assistantBreakdown,
+          timestamp: Date.now() + 2,
+        },
+      ];
+    }
+    return [baseWelcome];
+  });
 
   const [inputQuery, setInputQuery] = useState<string>(() =>
     variant === 'drawer' && activeQuestionContext
@@ -250,7 +342,7 @@ What concept would you like to master today?`,
       : ''
   );
 
-  // Keep the drawer input pre-filled with the active question & distractor context whenever the question changes
+  // Keep the drawer input pre-filled with the active question & distractor context whenever the question or selected option changes
   useEffect(() => {
     if (!isDrawer || !activeQuestionContext) return;
     const contextKey = `${activeQuestionContext.id}:${selectedOptionContext || ''}`;
@@ -258,6 +350,29 @@ What concept would you like to master today?`,
       lastPrefilledContextKeyRef.current = contextKey;
       setUseActiveQuestionContext(true);
       setInputQuery(buildDrawerPrefillPrompt(activeQuestionContext, selectedOptionContext));
+
+      if (selectedOptionContext) {
+        const breakdown = buildOptionDistractorBreakdownMessage(
+          activeQuestionContext,
+          selectedOptionContext
+        );
+        const botMsgId = `bot-opt-${activeQuestionContext.id}-${selectedOptionContext}-${Date.now()}`;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `user-opt-${activeQuestionContext.id}-${selectedOptionContext}-${Date.now()}`,
+            role: 'user',
+            content: breakdown.userPrompt,
+            timestamp: Date.now(),
+          },
+          {
+            id: botMsgId,
+            role: 'assistant',
+            content: breakdown.assistantBreakdown,
+            timestamp: Date.now() + 1,
+          },
+        ]);
+      }
     }
   }, [isDrawer, activeQuestionContext, selectedOptionContext]);
 

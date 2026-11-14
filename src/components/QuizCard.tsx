@@ -522,21 +522,108 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [confidenceToast, setConfidenceToast] = useState<string | null>(null);
   const [showKnowledgeCheck, setShowKnowledgeCheck] = useState<boolean>(false);
   const [showAiTutorSidebar, setShowAiTutorSidebar] = useState<boolean>(false);
+  const [focusedAiOption, setFocusedAiOption] = useState<string | null>(null);
+  const [isAiTutorLoading, setIsAiTutorLoading] = useState<boolean>(false);
+  const [isAiContextExpanded, setIsAiContextExpanded] = useState<boolean>(true);
   const [aiTutorMessages, setAiTutorMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
     {
       role: 'assistant',
-      text: `Hello! I am your Contextual Azure AI Tutor. Ask me any clarifying question about this AZ-900 concept without navigating away.`,
+      text: `Karibu! I am your Contextual Ask AI Tutor & Knowledge Assistant.\n\nI have pre-loaded Module ${question.moduleId} (${question.moduleTitle}) and all 4 option boundaries. Click "Ask AI" on any option (A–D) for a targeted distractor breakdown, or ask for a clarification below without leaving your quiz card.`,
     },
   ]);
-  const [aiTutorInput, setAiTutorInput] = useState<string>('');
+  const [aiTutorInput, setAiTutorInput] = useState<string>(
+    `Clarify Module ${question.moduleId} (${question.moduleTitle}): "${question.question}" — what is the core Azure decision rule here?`
+  );
   const [isRecordingAiTutor, setIsRecordingAiTutor] = useState<boolean>(false);
   const aiTutorRecognitionRef = React.useRef<any>(null);
+  const aiTutorFeedBottomRef = React.useRef<HTMLDivElement>(null);
+
+  // Keep the contextual Ask AI Tutor sidebar pre-filled whenever the active question changes
+  React.useEffect(() => {
+    setFocusedAiOption(null);
+    setAiTutorInput(
+      `Clarify Module ${question.moduleId} (${question.moduleTitle}): "${question.question}" — what is the core Azure decision rule here?`
+    );
+    setAiTutorMessages([
+      {
+        role: 'assistant',
+        text: `Context updated to Module ${question.moduleId} (${question.moduleTitle} • ${question.difficulty}).\n\nScenario & options A–D are pre-filled above. Click "Ask AI" on any quiz option to see why a distractor is incorrect, or send a question below!`,
+      },
+    ]);
+  }, [question.id]);
+
+  React.useEffect(() => {
+    if (showAiTutorSidebar) {
+      aiTutorFeedBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [aiTutorMessages, isAiTutorLoading, showAiTutorSidebar]);
+
+  const handleSendAiTutorClarification = async (customPrompt?: string) => {
+    const queryText = (customPrompt ?? aiTutorInput).trim();
+    if (!queryText || isAiTutorLoading) return;
+
+    setShowAiTutorSidebar(true);
+    setAiTutorMessages((prev) => [...prev, { role: 'user', text: queryText }]);
+    if (!customPrompt) {
+      setAiTutorInput('');
+    }
+    setIsAiTutorLoading(true);
+
+    const distractorLines = (question.distractorBreakdown || [])
+      .map((d) => {
+        const optText = question.options.find((o) => o.letter === d.letter)?.text || '';
+        return `Option ${d.letter}${optText ? ` (${optText})` : ''}: ${d.reason}`;
+      })
+      .join('\n- ');
+
+    const contextPayload = `${queryText}\n\n[Active QuizCard Context — Module ${question.moduleId}: ${question.moduleTitle} | Difficulty: ${question.difficulty}]\nScenario: ${question.scenario}\nQuestion: ${question.question}\nOptions: ${question.options.map((o) => `${o.letter}. ${o.text}`).join(' | ')}\nCorrect Answer: Option ${question.correctAnswer}\nWhy Correct: ${question.whyCorrect}\nDistractors:\n- ${distractorLines}\nExam Tip: ${question.examTip}`;
+
+    try {
+      const res = await fetch('/api/ask-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: contextPayload,
+          history: aiTutorMessages.slice(-4),
+          currentContext: question.moduleTitle,
+        }),
+      });
+      if (!res.ok) throw new Error('Assistant request failed');
+      const data = await res.json();
+      setAiTutorMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text:
+            data.answer ||
+            `For Module ${question.moduleId} (${question.moduleTitle}), Option ${question.correctAnswer} is correct because: ${question.whyCorrect}\n\n💡 Exam Tip: ${question.examTip}`,
+        },
+      ]);
+    } catch {
+      const correctOptText =
+        question.options.find((o) => o.letter === question.correctAnswer)?.text || '';
+      setAiTutorMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text:
+            `💡 Contextual Clarification (${question.moduleTitle}):\n\n` +
+            `• Correct Choice — Option ${question.correctAnswer}${correctOptText ? ` (${correctOptText})` : ''}: ${question.whyCorrect}\n\n` +
+            `• Key Distractor Traps:\n${(question.distractorBreakdown || [])
+              .map((d) => `  - Option ${d.letter}: ${d.reason}`)
+              .join('\n')}\n\n` +
+            `🎯 AZ-900 Exam Rule: ${question.examTip}`,
+        },
+      ]);
+    } finally {
+      setIsAiTutorLoading(false);
+    }
+  };
 
   const handleToggleAiTutorVoice = () => {
     if (typeof window === 'undefined') return;
     const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRec) {
-      alert('Speech Recognition is not supported in this browser. Please use Chrome or Edge.');
       return;
     }
 
@@ -582,40 +669,51 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   };
 
   const handleAskAiAboutOption = (option: { letter: string; text: string }) => {
-    if (onOpenAiTutorDrawer) {
-      onOpenAiTutorDrawer(question, option.letter);
-      return;
-    }
-
     setShowAiTutorSidebar(true);
+    setFocusedAiOption(option.letter);
+
     const isCorrect = option.letter === question.correctAnswer;
     const distractor = question.distractorBreakdown?.find((d) => d.letter === option.letter);
+    const misconception = getArchitecturalMisconceptionForDistractor(
+      question,
+      option.letter,
+      distractor?.reason || ''
+    );
+    const correctOpt = question.options.find((o) => o.letter === question.correctAnswer);
 
     const userPrompt = isCorrect
-      ? `Can you explain why Option ${option.letter} ("${option.text}") is the correct Azure architectural solution for this scenario?`
-      : `Why is Option ${option.letter} ("${option.text}") incorrect? What specific Azure constraint or distractor trap does it violate?`;
+      ? `Ask AI (Option ${option.letter}): Why is "${option.text}" the correct Azure solution for this scenario?`
+      : `Ask AI (Option ${option.letter}): Why is "${option.text}" an incorrect distractor in this scenario?`;
 
     const assistantReply = isCorrect
-      ? `✅ Option ${option.letter} is the CORRECT answer!\n\n` +
-        `• Core Azure Principle: ${question.whyCorrect}\n\n` +
-        `💡 Exam Tip & Memory Anchor: ${question.examTip}`
-      : `❌ Option ${option.letter} is INCORRECT (Distractor Analysis):\n\n` +
-        `• Why Option ${option.letter} is a Distractor Trap: ${
+      ? `✅ Option ${option.letter} ("${option.text}") is the CORRECT Answer!\n\n` +
+        `• Core Azure Principle:\n${question.whyCorrect}\n\n` +
+        `• Why Distractors Fail:\n${(question.distractorBreakdown || [])
+          .map((d) => `  - Option ${d.letter}: ${d.reason}`)
+          .join('\n')}\n\n` +
+        `💡 Exam Memory Anchor: ${question.examTip}`
+      : `❌ Contextual Distractor Breakdown — Option ${option.letter} ("${option.text}"):\n\n` +
+        `• Why Option ${option.letter} is Incorrect:\n${
           distractor?.reason ||
-          'This option fails to meet the specific workload constraints, security boundary, or service tier required in this Azure scenario.'
+          'This option fails to satisfy the specific workload constraints, security boundary, or SLA tier required in this Azure scenario.'
         }\n\n` +
-        `• Correct Solution (Option ${question.correctAnswer}): ${question.whyCorrect}\n\n` +
-        `💡 Exam Memory Anchor Rule: ${question.examTip}`;
+        `• Architectural Trap (${misconception.misconceptionName}):\n${misconception.counterRule}\n\n` +
+        `• Contrast with Correct Answer — Option ${question.correctAnswer}${
+          correctOpt ? ` ("${correctOpt.text}")` : ''
+        }:\n${question.whyCorrect}\n\n` +
+        `💡 AZ-900 Exam Rule: ${question.examTip}`;
+
+    setAiTutorInput(
+      isCorrect
+        ? `Give me a real-world example of when to use Option ${option.letter} (${option.text}) on the AZ-900 exam.`
+        : `When WOULD Option ${option.letter} (${option.text}) be the right answer instead of Option ${question.correctAnswer}?`
+    );
 
     setAiTutorMessages((prev) => [
       ...prev,
       { role: 'user', text: userPrompt },
       { role: 'assistant', text: assistantReply },
     ]);
-
-    if (onAskTutorAboutQuestion) {
-      onAskTutorAboutQuestion(question);
-    }
   };
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
   const [showQuickNotes, setShowQuickNotes] = useState<boolean>(false);
@@ -649,6 +747,23 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [quickDrillHasSubmitted, setQuickDrillHasSubmitted] = useState<boolean>(false);
   const [quickDrillCorrectCount, setQuickDrillCorrectCount] = useState<number>(0);
   const [quickDrillCompleted, setQuickDrillCompleted] = useState<boolean>(false);
+  const [quickDrillTimeLeft, setQuickDrillTimeLeft] = useState<number>(30);
+  const [quickDrillTimedOut, setQuickDrillTimedOut] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (!showQuickDrillModal || quickDrillCompleted || quickDrillHasSubmitted) return;
+    const timer = setInterval(() => {
+      setQuickDrillTimeLeft((prev) => {
+        if (prev <= 1) {
+          setQuickDrillTimedOut(true);
+          setQuickDrillHasSubmitted(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [showQuickDrillModal, quickDrillCompleted, quickDrillHasSubmitted, quickDrillIndex]);
 
   const handleLaunchQuickDrill = () => {
     const missedIds = new Set((stats?.mistakesHistory || []).map((m) => m.questionId));
@@ -661,6 +776,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     setQuickDrillHasSubmitted(false);
     setQuickDrillCorrectCount(0);
     setQuickDrillCompleted(false);
+    setQuickDrillTimeLeft(30);
+    setQuickDrillTimedOut(false);
     setShowQuickDrillModal(true);
   };
 
@@ -2257,33 +2374,27 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             </div>
           )}
 
-          {/* Persistent 'Ask AI' Button: Opens AI Tutor Drawer with Question & Distractor Context Pre-filled */}
+          {/* Persistent 'Ask AI Tutor' Sidebar Button: Opens Contextual AI Tutor Sidebar Next to QuizCard */}
           <button
             id="quizcard-ask-ai-btn"
             type="button"
             onClick={() => {
-              if (onOpenAiTutorDrawer) {
-                onOpenAiTutorDrawer(question, selectedOption);
-              } else if (onAskTutorAboutQuestion) {
-                onAskTutorAboutQuestion(question);
-              } else {
-                setShowAiTutorSidebar((prev) => !prev);
-              }
+              setShowAiTutorSidebar((prev) => !prev);
             }}
-            aria-pressed={isAiTutorDrawerOpen}
-            title={`Open Ask AI Tutor drawer with Module ${question.moduleId} question and distractor context pre-filled`}
+            aria-pressed={showAiTutorSidebar || isAiTutorDrawerOpen}
+            title={`Toggle Contextual Ask AI Tutor sidebar next to QuizCard with Module ${question.moduleId} question and distractor context pre-filled`}
             className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 ${
-              isAiTutorDrawerOpen
+              showAiTutorSidebar || isAiTutorDrawerOpen
                 ? 'bg-gradient-to-r from-[#C2410C] to-[#D97706] text-white border-amber-400 ring-2 ring-amber-400/35'
                 : 'bg-gradient-to-r from-amber-50 via-white to-sky-50 hover:from-amber-100 hover:to-sky-100 text-slate-900 border-amber-300/90'
             }`}
           >
             <Sparkles
               className={`w-3.5 h-3.5 shrink-0 ${
-                isAiTutorDrawerOpen ? 'text-yellow-200' : 'text-[#C2410C]'
+                showAiTutorSidebar || isAiTutorDrawerOpen ? 'text-yellow-200' : 'text-[#C2410C]'
               }`}
             />
-            <span>Ask AI</span>
+            <span>Ask AI Tutor</span>
           </button>
 
           {/* Quick-Drill (3 Missed Questions) Button */}
@@ -4419,23 +4530,16 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 </div>
               </div>
 
-              {(onOpenAiTutorDrawer || onAskTutorAboutQuestion) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onOpenAiTutorDrawer) {
-                      onOpenAiTutorDrawer(question, selectedOption);
-                    } else if (onAskTutorAboutQuestion) {
-                      setShowAiTutorSidebar(true);
-                      onAskTutorAboutQuestion(question);
-                    }
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:border-amber-500 hover:text-amber-700 text-xs font-semibold text-slate-700 shadow-2xs flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Ask AI Tutor</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAiTutorSidebar(true);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:border-amber-500 hover:text-amber-700 text-xs font-semibold text-slate-700 shadow-2xs flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                <span>Ask AI Tutor</span>
+              </button>
             </div>
 
             {/* If Incorrect: Targeted Diagnostic Analysis & Smart Knowledge Assistant Explanation */}
@@ -4883,79 +4987,200 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
       </motion.div>
 
-        {/* Right Side-Panel: Contextual AI Tutor Sidebar or Key Concept Side Panel */}
+        {/* Right Side-Panel: Contextual 'Ask AI Tutor' & Knowledge Assistant Sidebar Next to QuizCard */}
         {(showKnowledgeCheck || showAiTutorSidebar) && (
           <div className="lg:col-span-4 sticky top-4 space-y-4">
             {showAiTutorSidebar && (
-              <div className="bg-white rounded-2xl border-2 border-orange-400 shadow-xl overflow-hidden flex flex-col h-[520px] animate-in slide-in-from-right-4 duration-200">
-                <div className="relative overflow-hidden bg-gradient-to-r from-slate-950 via-orange-950 to-slate-950 text-white p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shrink-0">
-                      🤖
+              <aside
+                aria-label="Contextual Ask AI Tutor & Knowledge Assistant Sidebar"
+                className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-amber-400/90 dark:border-amber-500/80 shadow-xl overflow-hidden flex flex-col max-h-[680px] animate-in slide-in-from-right-4 duration-200"
+              >
+                {/* Sidebar Header */}
+                <div className="relative overflow-hidden bg-gradient-to-r from-[#C2410C] via-[#D97706] to-[#0078D4] text-white px-4 py-3 flex items-center justify-between gap-2 shrink-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-xs text-yellow-200 flex items-center justify-center font-black shrink-0 border border-white/25">
+                      <Sparkles className="w-4 h-4" />
                     </div>
-                    <div>
-                      <h4 className="text-xs font-black uppercase tracking-wider text-amber-300">Knowledge Assistant • AI Tutor</h4>
-                      <p className="text-[11px] font-bold text-white truncate max-w-[200px]">{question.moduleTitle}</p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-white truncate">
+                          Ask AI Tutor · Knowledge Assistant
+                        </h4>
+                      </div>
+                      <p className="text-[11px] font-semibold text-amber-100 truncate">
+                        Pre-filled · Module {question.moduleId}: {question.moduleTitle}
+                      </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowAiTutorSidebar(false)}
-                    className="text-slate-300 hover:text-white p-1 rounded-lg bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
-                  >
-                    <XCircle className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {onOpenAiTutorDrawer && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenAiTutorDrawer(question, focusedAiOption || selectedOption)}
+                        className="px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-extrabold border border-white/25 transition-colors cursor-pointer"
+                        title="Open in expandable full-height Knowledge Assistant drawer"
+                      >
+                        Drawer
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowAiTutorSidebar(false)}
+                      className="text-white/85 hover:text-white p-1 rounded-lg bg-white/15 hover:bg-white/25 transition-colors cursor-pointer"
+                      aria-label="Close Ask AI Tutor sidebar"
+                      title="Close Ask AI Tutor sidebar"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex-1 p-3.5 overflow-y-auto space-y-3 bg-slate-50/50 text-xs">
-                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 space-y-1">
-                    <span className="font-black text-[10px] uppercase text-orange-700 block">Active Question Context</span>
-                    <p className="font-bold text-slate-900 line-clamp-2">{question.question}</p>
-                    <p className="text-[10px] text-slate-600">Correct Answer: Option {question.correctAnswer}</p>
+                {/* Pre-Filled Active Question & Option Distractor Context Box */}
+                <div className="bg-sky-50/90 dark:bg-slate-800/90 border-b border-sky-200 dark:border-slate-700 px-3.5 py-2.5 shrink-0 space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-black text-[10px] uppercase tracking-wider text-[#005A9E] dark:text-sky-300 flex items-center gap-1">
+                      <HelpCircle className="w-3.5 h-3.5 text-[#0078D4]" />
+                      <span>Pre-Filled Question Details ({question.difficulty})</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsAiContextExpanded((prev) => !prev)}
+                      className="text-[10px] font-extrabold text-[#0078D4] hover:underline cursor-pointer"
+                    >
+                      {isAiContextExpanded ? 'Collapse' : 'Expand Details'}
+                    </button>
                   </div>
 
+                  <p className="font-bold text-slate-900 dark:text-white leading-snug text-xs">
+                    {question.question}
+                  </p>
+
+                  {isAiContextExpanded && (
+                    <div className="space-y-1.5 pt-1 border-t border-sky-200/70 dark:border-slate-700">
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 italic line-clamp-2">
+                        Scenario: {question.scenario}
+                      </p>
+                      {/* Per-Option Quick Distractor Breakdown Pills inside Sidebar */}
+                      <div className="pt-0.5">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">
+                          Click an option to analyze why it is right or wrong:
+                        </span>
+                        <div className="grid grid-cols-2 gap-1">
+                          {question.options.map((opt) => {
+                            const isFocused = focusedAiOption === opt.letter;
+                            return (
+                              <button
+                                key={opt.letter}
+                                type="button"
+                                onClick={() => handleAskAiAboutOption(opt)}
+                                className={`px-2 py-1 rounded-lg border text-left text-[10.5px] font-bold transition-all cursor-pointer flex items-center justify-between gap-1 ${
+                                  isFocused
+                                    ? 'bg-amber-100 border-amber-400 text-amber-950 ring-1 ring-amber-400/50'
+                                    : 'bg-white dark:bg-slate-900 hover:bg-amber-50/70 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
+                                }`}
+                                title={`Trigger contextual breakdown for Option ${opt.letter}: ${opt.text}`}
+                              >
+                                <span className="truncate">
+                                  <strong className="text-[#005A9E] dark:text-sky-300">{opt.letter}.</strong> {opt.text}
+                                </span>
+                                <Sparkles className="w-3 h-3 text-orange-500 shrink-0" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 1-Tap Clarification Chips */}
+                  <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                    <button
+                      type="button"
+                      disabled={isAiTutorLoading}
+                      onClick={() =>
+                        handleSendAiTutorClarification(
+                          `Clarify the key Azure concept in this Module ${question.moduleId} question and how to spot the right answer quickly.`
+                        )
+                      }
+                      className="px-2 py-0.5 rounded-md bg-[#0078D4] hover:bg-[#005A9E] text-white text-[10px] font-extrabold cursor-pointer disabled:opacity-40"
+                    >
+                      Clarify Concept
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isAiTutorLoading}
+                      onClick={() =>
+                        handleSendAiTutorClarification(
+                          `Break down why each distractor in this question is incorrect and what exam trap it represents.`
+                        )
+                      }
+                      className="px-2 py-0.5 rounded-md bg-white hover:bg-amber-50 text-slate-800 border border-slate-300 text-[10px] font-extrabold cursor-pointer disabled:opacity-40"
+                    >
+                      All Distractors
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isAiTutorLoading}
+                      onClick={() =>
+                        handleSendAiTutorClarification(
+                          `Give me a simple analogy and memory rule for this AZ-900 scenario.`
+                        )
+                      }
+                      className="px-2 py-0.5 rounded-md bg-white hover:bg-sky-50 text-[#005A9E] border border-sky-200 text-[10px] font-extrabold cursor-pointer disabled:opacity-40"
+                    >
+                      Memory Analogy
+                    </button>
+                  </div>
+                </div>
+
+                {/* Messages Feed */}
+                <div className="flex-1 p-3.5 overflow-y-auto space-y-3 bg-slate-50/60 dark:bg-slate-950/50 text-xs min-h-[220px]">
                   {aiTutorMessages.map((msg, idx) => (
                     <div
                       key={idx}
-                      className={`p-2.5 rounded-xl leading-relaxed whitespace-pre-line ${
+                      className={`p-3 rounded-xl leading-relaxed whitespace-pre-line ${
                         msg.role === 'assistant'
-                          ? 'bg-white border border-slate-200 text-slate-800 shadow-2xs'
-                          : 'bg-[#0078D4] text-white ml-6 shadow-2xs'
+                          ? 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-2xs'
+                          : 'bg-[#0078D4] text-white ml-5 shadow-2xs'
                       }`}
                     >
-                      <span className="font-black block text-[10px] mb-0.5 opacity-80">
-                        {msg.role === 'assistant' ? 'Knowledge Assistant' : 'You'}
+                      <span className="font-black block text-[10px] uppercase tracking-wider mb-1 opacity-80">
+                        {msg.role === 'assistant' ? 'Knowledge Assistant • AI Tutor' : 'You'}
                       </span>
                       {msg.text}
                     </div>
                   ))}
+                  {isAiTutorLoading && (
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-spin" />
+                      <span>Analyzing scenario &amp; Microsoft Learn grounding...</span>
+                    </div>
+                  )}
+                  <div ref={aiTutorFeedBottomRef} />
                 </div>
 
-                <div className="p-3 bg-white border-t border-slate-200 flex gap-2 items-center">
+                {/* Clarification Input Form */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSendAiTutorClarification();
+                  }}
+                  className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex gap-2 items-center shrink-0"
+                >
                   <div className="relative flex-1 flex items-center">
                     <input
                       type="text"
                       value={aiTutorInput}
                       onChange={(e) => setAiTutorInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && aiTutorInput.trim()) {
-                          const userQ = aiTutorInput.trim();
-                          setAiTutorMessages((prev) => [
-                            ...prev,
-                            { role: 'user', text: userQ },
-                            {
-                              role: 'assistant',
-                              text: `Regarding "${userQ}" for ${question.moduleTitle}: The correct answer is Option ${question.correctAnswer}. ${question.whyCorrect}`,
-                            },
-                          ]);
-                          setAiTutorInput('');
-                        }
-                      }}
-                      placeholder={isRecordingAiTutor ? 'Listening to your voice...' : 'Ask for clarification...'}
-                      className={`w-full px-3 py-1.5 pr-8 rounded-xl border text-xs focus:outline-none focus:ring-2 ${
+                      placeholder={
+                        isRecordingAiTutor
+                          ? 'Listening to your voice...'
+                          : 'Ask for clarification on this question...'
+                      }
+                      className={`w-full px-3 py-2 pr-8 rounded-xl border text-xs focus:outline-none focus:ring-2 dark:bg-slate-800 dark:text-white ${
                         isRecordingAiTutor
                           ? 'border-rose-500 bg-rose-50/50 focus:ring-rose-400'
-                          : 'border-slate-300 focus:ring-amber-400'
+                          : 'border-slate-300 dark:border-slate-700 focus:ring-[#0078D4]'
                       }`}
                     />
                     <button
@@ -4966,34 +5191,29 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                           ? 'text-rose-600 bg-rose-100 animate-pulse'
                           : 'text-slate-400 hover:text-orange-600'
                       }`}
-                      title={isRecordingAiTutor ? 'Stop voice recording' : 'Speak your question (Web Speech API)'}
+                      title={
+                        isRecordingAiTutor
+                          ? 'Stop voice recording'
+                          : 'Speak your question (Web Speech API)'
+                      }
                       aria-label="Toggle microphone voice input for AI tutor"
                     >
-                      {isRecordingAiTutor ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                      {isRecordingAiTutor ? (
+                        <MicOff className="w-3.5 h-3.5" />
+                      ) : (
+                        <Mic className="w-3.5 h-3.5" />
+                      )}
                     </button>
                   </div>
                   <button
-                    type="button"
-                    onClick={() => {
-                      if (aiTutorInput.trim()) {
-                        const userQ = aiTutorInput.trim();
-                        setAiTutorMessages((prev) => [
-                          ...prev,
-                          { role: 'user', text: userQ },
-                          {
-                            role: 'assistant',
-                            text: `Regarding "${userQ}" for ${question.moduleTitle}: The correct answer is Option ${question.correctAnswer}. ${question.whyCorrect}`,
-                          },
-                        ]);
-                        setAiTutorInput('');
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-black text-xs shadow-xs cursor-pointer shrink-0"
+                    type="submit"
+                    disabled={!aiTutorInput.trim() || isAiTutorLoading}
+                    className="px-3.5 py-2 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] disabled:opacity-40 text-white font-black text-xs shadow-xs cursor-pointer shrink-0"
                   >
-                    Send
+                    Ask
                   </button>
-                </div>
-              </div>
+                </form>
+              </aside>
             )}
 
             {showKnowledgeCheck && (
@@ -5004,12 +5224,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 selectedConceptId={selectedConceptId}
                 onSelectConceptId={setSelectedConceptId}
                 onAskTutor={(q) => {
-                  if (onOpenAiTutorDrawer) {
-                    onOpenAiTutorDrawer(q, selectedOption);
-                  } else {
-                    setShowAiTutorSidebar(true);
-                    if (onAskTutorAboutQuestion) onAskTutorAboutQuestion(q);
-                  }
+                  setShowAiTutorSidebar(true);
+                  if (onAskTutorAboutQuestion) onAskTutorAboutQuestion(q);
                 }}
               />
             )}
@@ -5108,18 +5324,34 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 </div>
               ) : quickDrillQuestions[quickDrillIndex] ? (
                 <div className="space-y-4">
-                  {/* Progress Bar */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-600">
-                      <span>Progress</span>
-                      <span>{quickDrillIndex + 1} / {quickDrillQuestions.length}</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
-                      <div
-                        className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-300"
-                        style={{ width: `${((quickDrillIndex + 1) / quickDrillQuestions.length) * 100}%` }}
+                  {/* 30-Second Quick-Drill Timer Overlay HUD */}
+                  <div
+                    role="timer"
+                    aria-live="polite"
+                    className={`p-3 rounded-xl border flex items-center justify-between gap-2 text-xs ${
+                      quickDrillTimedOut || quickDrillTimeLeft <= 10
+                        ? 'bg-rose-950 text-white border-rose-600'
+                        : 'bg-slate-900 text-white border-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Timer
+                        className={`w-4 h-4 shrink-0 ${
+                          quickDrillTimeLeft <= 10 ? 'text-rose-400 animate-pulse' : 'text-amber-300'
+                        }`}
                       />
+                      <span className="font-mono font-black text-sm tabular-nums">
+                        00:{String(quickDrillTimeLeft).padStart(2, '0')}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30 text-[10px] font-black uppercase">
+                        30s Quick-Drill Timer
+                      </span>
                     </div>
+                    <span className="text-[11px] font-bold text-slate-300">
+                      {quickDrillTimedOut
+                        ? 'Time Expired!'
+                        : `Question ${quickDrillIndex + 1} / ${quickDrillQuestions.length}`}
+                    </span>
                   </div>
 
                   <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
@@ -5184,13 +5416,15 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                             setQuickDrillIndex((prev) => prev + 1);
                             setQuickDrillSelectedOption(null);
                             setQuickDrillHasSubmitted(false);
+                            setQuickDrillTimeLeft(30);
+                            setQuickDrillTimedOut(false);
                           } else {
                             setQuickDrillCompleted(true);
                           }
                         }}
                         className="w-full py-2 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white font-black flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                       >
-                        <span>{quickDrillIndex + 1 < quickDrillQuestions.length ? 'Next Drill Question' : 'View Drill Summary'}</span>
+                        <span>{quickDrillIndex + 1 < quickDrillQuestions.length ? 'Next Drill Question (30s)' : 'View Drill Summary'}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </div>

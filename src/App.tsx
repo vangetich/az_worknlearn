@@ -73,6 +73,7 @@ import { AzureThemesView } from './components/AzureThemesView';
 import { ReviewHistoryView } from './components/ReviewHistoryView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { DailyGoalMilestoneOverlay } from './components/DailyGoalMilestoneOverlay';
+import { TopLeftRollingAccuracyWidget } from './components/TopLeftRollingAccuracyWidget';
 import { MobileBottomNavBar } from './components/MobileBottomNavBar';
 import { GlassyStudyHubDropdown } from './components/GlassyStudyHubDropdown';
 import { ResetModuleModal } from './components/ResetModuleModal';
@@ -2170,81 +2171,131 @@ export default function App() {
           dailyGoal={stats.dailyGoal || 10}
         />
 
-        {/* Global Notifications Stack: Payment, All-Time High, Focus Mode & Fundamentals Reset Alert */}
+        {/* Persistent Top-Most Rolling Accuracy Widget (Always sits top-most on any page & opens on the left side) */}
+        <TopLeftRollingAccuracyWidget
+          rollingAverageAccuracy={rollingAverageAccuracy}
+          rolling20AccuracySeries={rolling20AccuracySeries}
+          sessionRollingOutcomes={sessionRollingOutcomes}
+          rolling20Trend={rolling20Trend}
+          last5QuestionsImpact={last5QuestionsImpact}
+          effectiveDynamicDifficulty={effectiveDynamicDifficulty}
+          isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
+          lockedDifficulty={lockedDifficulty}
+          onToggleDynamicDifficulty={() =>
+            setIsDynamicDifficultyEnabled((prev) => !prev)
+          }
+          showFundamentalsResetAlert={showFundamentalsResetAlert}
+          consecutiveLowAccuracyModulesAlert={
+            consecutiveLowAccuracyModulesAlert
+              ? {
+                  pairKey: consecutiveLowAccuracyModulesAlert.pairKey,
+                  prevMod: {
+                    moduleId: consecutiveLowAccuracyModulesAlert.prevMod.moduleId,
+                    moduleTitle: consecutiveLowAccuracyModulesAlert.prevMod.title,
+                    rollingAccuracy:
+                      consecutiveLowAccuracyModulesAlert.prevMod.rollingAccuracy,
+                  },
+                  currMod: {
+                    moduleId: consecutiveLowAccuracyModulesAlert.currMod.moduleId,
+                    moduleTitle: consecutiveLowAccuracyModulesAlert.currMod.title,
+                    rollingAccuracy:
+                      consecutiveLowAccuracyModulesAlert.currMod.rollingAccuracy,
+                  },
+                }
+              : null
+          }
+          onStartFundamentalsResetDrill={(targetIds, pairKey) => {
+            setFundamentalsResetModules(targetIds);
+            setMicroDrillTargetModuleId(targetIds[0]);
+            setShowMicroDrill(targetIds[0]);
+            setDismissedFundamentalsPairKey(pairKey);
+          }}
+          onDismissFundamentalsResetAlert={(pairKey) =>
+            setDismissedFundamentalsPairKey(pairKey)
+          }
+          onNavigateToPractice={() => setActiveTab('quiz')}
+        />
+
+        {/* Top-Left Rolling Accuracy Alert Banner (Opens on the Left Side below the Top-Left Rolling Accuracy Widget) */}
+        {showFundamentalsResetAlert && consecutiveLowAccuracyModulesAlert && (
+          <div
+            className="fixed top-12 left-2 sm:left-3 z-[135] flex flex-col gap-2 max-w-md w-[min(92vw,380px)] pointer-events-none"
+            aria-live="polite"
+          >
+            <div
+              role="alert"
+              className="pointer-events-auto p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-rose-950 to-amber-950 text-white border-2 border-amber-400 shadow-2xl space-y-2.5 animate-in slide-in-from-left-3 duration-200"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-400 text-slate-950 shrink-0">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs sm:text-sm font-black text-amber-300 leading-snug">
+                      Rolling Accuracy Below 60% (2 Consecutive Modules)
+                    </div>
+                    <p className="text-[11px] text-slate-200 mt-1 leading-relaxed">
+                      Your rolling accuracy dipped below 60% in{' '}
+                      <strong className="text-rose-300">
+                        M{consecutiveLowAccuracyModulesAlert.prevMod.moduleId} (
+                        {consecutiveLowAccuracyModulesAlert.prevMod.rollingAccuracy}%)
+                      </strong>{' '}
+                      and{' '}
+                      <strong className="text-rose-300">
+                        M{consecutiveLowAccuracyModulesAlert.currMod.moduleId} (
+                        {consecutiveLowAccuracyModulesAlert.currMod.rollingAccuracy}%)
+                      </strong>
+                      . Rebuild core concepts with a <strong>Fundamentals Reset</strong> drill.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDismissedFundamentalsPairKey(
+                      consecutiveLowAccuracyModulesAlert.pairKey
+                    )
+                  }
+                  className="text-[11px] font-bold text-slate-300 hover:text-white cursor-pointer shrink-0"
+                >
+                  Dismiss
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetIds = [
+                      consecutiveLowAccuracyModulesAlert.currMod.moduleId,
+                      consecutiveLowAccuracyModulesAlert.prevMod.moduleId,
+                    ];
+                    setFundamentalsResetModules(targetIds);
+                    setMicroDrillTargetModuleId(targetIds[0]);
+                    setShowMicroDrill(targetIds[0]);
+                    setDismissedFundamentalsPairKey(
+                      consecutiveLowAccuracyModulesAlert.pairKey
+                    );
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black inline-flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Start Fundamentals Reset Drill</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Global Notifications Stack: Payment, All-Time High & Focus Mode */}
         {(paymentSuccessToast ||
           allTimeHighToast ||
-          focusModeToast ||
-          showFundamentalsResetAlert) && (
+          focusModeToast) && (
           <div
             className="fixed top-16 right-4 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none px-2 sm:px-0"
             aria-live="polite"
           >
-            {showFundamentalsResetAlert && consecutiveLowAccuracyModulesAlert && (
-              <div
-                role="alert"
-                className="pointer-events-auto p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-rose-950 to-amber-950 text-white border-2 border-amber-400 shadow-2xl space-y-2.5 animate-in slide-in-from-top-3 duration-200"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-2.5">
-                    <div className="p-2 rounded-xl bg-amber-400 text-slate-950 shrink-0">
-                      <AlertTriangle className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs sm:text-sm font-black text-amber-300 leading-snug">
-                        Rolling Accuracy Below 60% (2 Consecutive Modules)
-                      </div>
-                      <p className="text-[11px] text-slate-200 mt-1 leading-relaxed">
-                        Your rolling accuracy dipped below 60% in{' '}
-                        <strong className="text-rose-300">
-                          M{consecutiveLowAccuracyModulesAlert.prevMod.moduleId} (
-                          {consecutiveLowAccuracyModulesAlert.prevMod.rollingAccuracy}%)
-                        </strong>{' '}
-                        and{' '}
-                        <strong className="text-rose-300">
-                          M{consecutiveLowAccuracyModulesAlert.currMod.moduleId} (
-                          {consecutiveLowAccuracyModulesAlert.currMod.rollingAccuracy}%)
-                        </strong>
-                        . Rebuild core concepts with a <strong>Fundamentals Reset</strong> drill.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDismissedFundamentalsPairKey(
-                        consecutiveLowAccuracyModulesAlert.pairKey
-                      )
-                    }
-                    className="text-[11px] font-bold text-slate-300 hover:text-white cursor-pointer shrink-0"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-end gap-2 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const targetIds = [
-                        consecutiveLowAccuracyModulesAlert.currMod.moduleId,
-                        consecutiveLowAccuracyModulesAlert.prevMod.moduleId,
-                      ];
-                      setFundamentalsResetModules(targetIds);
-                      setMicroDrillTargetModuleId(targetIds[0]);
-                      setShowMicroDrill(targetIds[0]);
-                      setDismissedFundamentalsPairKey(
-                        consecutiveLowAccuracyModulesAlert.pairKey
-                      );
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black inline-flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Start Fundamentals Reset Drill</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
             {paymentSuccessToast && (
               <div
                 role="status"

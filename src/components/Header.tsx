@@ -62,6 +62,48 @@ import {
 } from './KeyboardShortcutGuide';
 import { formatShortcutCombo } from '../utils/keyboardShortcuts';
 import { DifficultyStreakTracker } from './DifficultyStreakTracker';
+import { AnimatePresence, motion } from 'motion/react';
+import { fireDailyGoalCompletionConfetti } from '../utils/confetti';
+
+const HARAMBEE_STREAK_MILESTONES: Record<
+  7 | 14 | 30,
+  {
+    days: 7 | 14 | 30;
+    swahiliTitle: string;
+    englishTitle: string;
+    badgeName: string;
+    cohortRankNote: string;
+    gradientClass: string;
+  }
+> = {
+  7: {
+    days: 7,
+    swahiliTitle: 'Wiki ya Kwanza · Harambee Flame!',
+    englishTitle: '7-Day Continuous Study Streak Unlocked',
+    badgeName: 'Moran 7-Day Consistency Shield',
+    cohortRankNote:
+      'You have completed a full 7-day continuous study week — placing you in the Top 35% of the Global Harambee Azure Cohort!',
+    gradientClass: 'from-amber-600 via-orange-600 to-[#0078D4]',
+  },
+  14: {
+    days: 14,
+    swahiliTitle: 'Ngome ya Wingu · Fortnight Surge!',
+    englishTitle: '14-Day Continuous Study Streak Unlocked',
+    badgeName: '14-Day Cloud Fortress Medallion',
+    cohortRankNote:
+      'Two unbroken weeks of AZ-900 scenarios! You are now in the Top 18% of the Global Harambee Azure Cohort.',
+    gradientClass: 'from-orange-600 via-rose-600 to-indigo-700',
+  },
+  30: {
+    days: 30,
+    swahiliTitle: 'Bingwa wa Harambee · 30-Day Legend!',
+    englishTitle: '30-Day Continuous Study Streak Unlocked',
+    badgeName: '30-Day Golden Spear Sovereign Crest',
+    cohortRankNote:
+      '30 straight days of Azure Fundamentals mastery! You have entered the Top 5% Elite Harambee Azure Cohort.',
+    gradientClass: 'from-amber-500 via-red-600 to-purple-800',
+  },
+};
 
 /**
  * Animated Daily Study Goal Circular Progress Ring
@@ -790,6 +832,42 @@ export const Header: React.FC<HeaderProps> = ({
   const [showGoalAlertsModal, setShowGoalAlertsModal] = useState<boolean>(false);
   const [showDailyGoalCelebrationModal, setShowDailyGoalCelebrationModal] = useState<boolean>(false);
   const [showLocalAccessibilityModal, setShowLocalAccessibilityModal] = useState<boolean>(false);
+  const [activeHarambeeMilestonePopup, setActiveHarambeeMilestonePopup] = useState<7 | 14 | 30 | null>(null);
+  const prevStreakDaysRef = useRef<number>(stats.streakDays || 0);
+
+  const triggerHarambeeMilestoneCelebration = useCallback((milestone: 7 | 14 | 30) => {
+    setActiveHarambeeMilestonePopup(milestone);
+    try {
+      fireDailyGoalCompletionConfetti(milestone);
+    } catch {
+      // ignore confetti errors in headless environments
+    }
+  }, []);
+
+  // Automatically trigger the Harambee Streak Celebration pop-up when the user reaches a 7, 14, or 30-day continuous study streak
+  useEffect(() => {
+    const currentStreak = stats.streakDays || 0;
+    const isTargetMilestone = currentStreak === 7 || currentStreak === 14 || currentStreak === 30;
+    if (isTargetMilestone) {
+      const storageKey = `az900_harambee_milestone_celebrated_${currentStreak}`;
+      let alreadyCelebrated = false;
+      try {
+        alreadyCelebrated = sessionStorage.getItem(storageKey) === 'true';
+      } catch {
+        // ignore storage errors
+      }
+      if (!alreadyCelebrated || prevStreakDaysRef.current !== currentStreak) {
+        try {
+          sessionStorage.setItem(storageKey, 'true');
+        } catch {
+          // ignore
+        }
+        triggerHarambeeMilestoneCelebration(currentStreak as 7 | 14 | 30);
+      }
+    }
+    prevStreakDaysRef.current = currentStreak;
+  }, [stats.streakDays, triggerHarambeeMilestoneCelebration]);
+
   const { config: shortcutConfig, platform: detectedPlatform } = useKeyboardShortcutsConfig();
   const openAccessibilityModal = () => {
     if (onOpenAccessibilitySettings) {
@@ -1403,21 +1481,34 @@ export const Header: React.FC<HeaderProps> = ({
                 compact={true}
               />
 
-              {/* Harambee Streak Milestone Indicator (7, 14, 30+ days) */}
+              {/* Harambee Streak Milestone Celebration Pop-up Trigger (7, 14, 30 days) */}
               {(() => {
                 const streak = stats.streakDays || 0;
-                const isMilestone = streak === 7 || streak === 14 || streak === 30 || streak >= 50;
-                if (!isMilestone) return null;
+                const targetMilestone: 7 | 14 | 30 =
+                  streak >= 30 ? 30 : streak >= 14 ? 14 : 7;
+                const isExactMilestone = streak === 7 || streak === 14 || streak === 30;
                 return (
                   <button
                     type="button"
-                    onClick={() => setShowDailyGoalCelebrationModal(true)}
-                    className="inline-block align-middle px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white text-xs font-black shadow-md animate-goal-celebrate cursor-pointer border border-amber-300 whitespace-nowrap"
-                    title={`Harambee Milestone Reached: ${streak}-Day Continuous Study Streak! Click to celebrate & share.`}
-                    aria-label={`Harambee Streak Milestone: ${streak} days`}
+                    onClick={() => triggerHarambeeMilestoneCelebration(targetMilestone)}
+                    className={`inline-block align-middle px-2.5 py-1.5 rounded-xl text-xs font-black shadow-2xs transition-all cursor-pointer border whitespace-nowrap ${
+                      isExactMilestone || activeHarambeeMilestonePopup !== null
+                        ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white border-amber-300 animate-goal-celebrate shadow-md'
+                        : 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 hover:from-amber-100 hover:to-orange-100 text-amber-950 border-amber-300/90'
+                    }`}
+                    title={`Harambee Streak Celebration (7, 14 & 30-Day Milestones) • Current Streak: ${streak}d • Click to open visual milestone pop-up`}
+                    aria-label={`Harambee Streak Celebration Milestone: ${streak} days`}
                   >
-                    <Flame className="w-3.5 h-3.5 text-amber-200 fill-amber-300 animate-bounce inline-block align-middle mr-1" />
-                    <span className="inline-block align-middle">🔥 {streak}d Milestone</span>
+                    <Flame
+                      className={`w-3.5 h-3.5 inline-block align-middle mr-1 ${
+                        isExactMilestone
+                          ? 'text-amber-200 fill-amber-300 animate-bounce'
+                          : 'text-orange-600 fill-amber-400'
+                      }`}
+                    />
+                    <span className="inline-block align-middle tabular-nums">
+                      {isExactMilestone ? `🔥 ${streak}d Harambee!` : `Harambee ${streak}d/${targetMilestone}d`}
+                    </span>
                   </button>
                 );
               })()}
@@ -2405,6 +2496,138 @@ export const Header: React.FC<HeaderProps> = ({
           onClose={() => setShowLocalAccessibilityModal(false)}
         />
       )}
+
+      {/* Visual Milestone Pop-up Animation: 'Harambee Streak Celebration' (7, 14 & 30-Day Continuous Study Streaks) */}
+      <AnimatePresence>
+        {activeHarambeeMilestonePopup !== null && (() => {
+          const meta = HARAMBEE_STREAK_MILESTONES[activeHarambeeMilestonePopup];
+          const currentStreak = stats.streakDays || 0;
+          return (
+            <motion.div
+              key={`harambee-milestone-${activeHarambeeMilestonePopup}`}
+              role="dialog"
+              aria-label={`Harambee Streak Celebration: ${meta.days}-Day Milestone`}
+              initial={{ opacity: 0, y: -18, scale: 0.94 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -14, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 360, damping: 26 }}
+              className="relative z-50 max-w-2xl mx-auto px-3 sm:px-6 my-2"
+            >
+              <div className="relative overflow-hidden rounded-2xl border-2 border-amber-300 dark:border-amber-500/80 bg-white dark:bg-slate-900 shadow-2xl">
+                {/* Celebratory Top Banner */}
+                <div
+                  className={`relative px-4 sm:px-5 py-3.5 bg-gradient-to-r ${meta.gradientClass} text-white flex flex-wrap items-center justify-between gap-3`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <motion.div
+                      initial={{ rotate: -12, scale: 0.8 }}
+                      animate={{ rotate: [0, -8, 8, 0], scale: [1, 1.12, 1] }}
+                      transition={{ duration: 0.8, ease: 'easeInOut' }}
+                      className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs border border-white/30 flex items-center justify-center shrink-0 shadow-md"
+                    >
+                      <Flame className="w-6 h-6 text-amber-200 fill-yellow-300" />
+                    </motion.div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-md bg-black/25 border border-white/25 text-[10px] font-black uppercase tracking-wider text-amber-200">
+                          Harambee Streak Celebration · {meta.days} Days
+                        </span>
+                        <span className="text-[11px] font-extrabold text-white/90 tabular-nums">
+                          Active Streak: {currentStreak}d
+                        </span>
+                      </div>
+                      <h3 className="text-sm sm:text-base font-black text-white leading-tight mt-0.5 truncate">
+                        {meta.swahiliTitle}
+                      </h3>
+                      <p className="text-[11px] text-amber-100 font-semibold truncate">
+                        {meta.englishTitle}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Interactive 7d / 14d / 30d Milestone Switcher + Close */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="inline-flex items-center p-0.5 rounded-xl bg-black/25 border border-white/20 text-[10px] font-black">
+                      {([7, 14, 30] as const).map((mDay) => (
+                        <button
+                          key={mDay}
+                          type="button"
+                          onClick={() => triggerHarambeeMilestoneCelebration(mDay)}
+                          className={`px-2 py-1 rounded-lg transition-all cursor-pointer tabular-nums ${
+                            activeHarambeeMilestonePopup === mDay
+                              ? 'bg-amber-300 text-slate-950 shadow-2xs'
+                              : 'text-white/85 hover:text-white'
+                          }`}
+                          title={`Preview ${mDay}-Day Harambee Streak Celebration`}
+                        >
+                          {mDay}d
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveHarambeeMilestonePopup(null)}
+                      className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors cursor-pointer"
+                      aria-label="Close Harambee Streak Celebration pop-up"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Milestone Pop-up Body */}
+                <div className="p-4 sm:p-5 bg-gradient-to-b from-amber-50/60 via-white to-sky-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-black text-[11px]">
+                        <Award className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>{meta.badgeName}</span>
+                      </span>
+                      <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>Continuous Momentum Verified</span>
+                      </span>
+                    </div>
+                    <p className="text-slate-700 dark:text-slate-200 font-medium leading-relaxed">
+                      {meta.cohortRankNote}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {onUpdateStats && currentStreak !== meta.days && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateStats({
+                            ...stats,
+                            streakDays: meta.days,
+                          });
+                          triggerHarambeeMilestoneCelebration(meta.days);
+                        }}
+                        className="px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/70 text-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-extrabold text-xs transition-colors cursor-pointer"
+                        title={`Simulate reaching ${meta.days}-day continuous streak`}
+                      >
+                        Test {meta.days}d Streak
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('leaderboard');
+                        setActiveHarambeeMilestonePopup(null);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white font-black text-xs shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Award className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Streak Leaderboard</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
 
       {/* Daily Questions Goal Bar directly follows without overlapping Review Now */}
 
