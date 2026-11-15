@@ -2781,6 +2781,98 @@ Include:
   }
 });
 
+// API: AI Concept Refinement (Simpler Analogy & Real-World Mapping for Active Question Domain)
+app.post('/api/ai/refine-concept', async (req, res) => {
+  try {
+    const {
+      question,
+      scenario,
+      correctAnswer,
+      correctAnswerText,
+      whyCorrect,
+      moduleId,
+      moduleTitle,
+      learningPathTitle,
+      refinementType = 'both',
+    } = req.body || {};
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({
+        error: 'GEMINI_API_KEY is not configured on the server.',
+      });
+    }
+
+    const systemInstruction = `You are the AZ-900 AI Concept Refinement Engine & Knowledge Assistant, an elite Microsoft Certified Azure Architect tutor.
+Your mission is to take an Azure Fundamentals (AZ-900) question and its core architectural concept, and translate it into:
+1. A vivid, intuitive, jargon-free Simpler Analogy from everyday life that anyone can instantly picture and understand.
+2. A concrete Real-World Mapping showing how an IT administrator, DevOps engineer, or cloud architect actually applies this service in a real enterprise production environment.
+3. An AZ-900 Exam Memory Anchor: a punchy 1-sentence mnemonic or key rule of thumb for passing with 700+.
+Keep tone encouraging, insightful, and pedagogical, blending Microsoft Azure architectural precision with relatable, everyday clarity.`;
+
+    const promptText = `Analyze this AZ-900 question and generate a conceptual refinement:
+- Module: Module ${moduleId || 'Core'}: ${moduleTitle || 'Azure Services'} (${learningPathTitle || 'AZ-900'})
+- Scenario: "${scenario || ''}"
+- Question: "${question || ''}"
+- Correct Azure Answer: Option ${correctAnswer || ''}: "${correctAnswerText || ''}"
+- Architectural Explanation: "${whyCorrect || ''}"
+- Refinement Focus: ${refinementType}
+
+Provide:
+1. conceptName: The specific Azure service or architectural principle being tested (e.g., "Azure ExpressRoute", "Management Groups", "Spot VMs", "Availability Zones").
+2. analogyTitle: A catchy, creative title for the everyday analogy (e.g., "The Private Bullet Train vs. Highway", "The City Power Substations").
+3. simplerAnalogy: 2-3 sentences explaining the concept with a relatable everyday analogy (e.g. airport security, restaurants, utility grids, rental housing, toolboxes).
+4. analogyCoreTakeaway: The 1 key insight that makes the analogy stick.
+5. realWorldRole: The job role (e.g., "Lead Cloud Infrastructure Architect", "DevOps Engineer").
+6. realWorldMapping: 2-3 sentences demonstrating how this exact Azure service is deployed in enterprise production.
+7. businessValue: The primary business benefit (e.g., "Zero public internet exposure", "99.99% uptime guarantee", "60% cost reduction").
+8. examMemoryAnchor: A 1-sentence punchy exam shortcut or memory hook.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: promptText,
+      config: {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            conceptName: { type: Type.STRING },
+            analogyTitle: { type: Type.STRING },
+            simplerAnalogy: { type: Type.STRING },
+            analogyCoreTakeaway: { type: Type.STRING },
+            realWorldRole: { type: Type.STRING },
+            realWorldMapping: { type: Type.STRING },
+            businessValue: { type: Type.STRING },
+            examMemoryAnchor: { type: Type.STRING },
+          },
+          required: [
+            'conceptName',
+            'analogyTitle',
+            'simplerAnalogy',
+            'analogyCoreTakeaway',
+            'realWorldRole',
+            'realWorldMapping',
+            'businessValue',
+            'examMemoryAnchor',
+          ],
+        },
+      },
+    });
+
+    const parsed = JSON.parse(response.text?.trim() || '{}');
+    res.json({
+      success: true,
+      refinement: parsed,
+      isAiGenerated: true,
+    });
+  } catch (error: any) {
+    console.error('Error in AI Concept Refinement:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to generate AI concept refinement.',
+    });
+  }
+});
+
 // API: AI-driven study hours remaining projection based on past session pace & per-module progress
 app.post('/api/ai/study-pace-projection', async (req, res) => {
   try {

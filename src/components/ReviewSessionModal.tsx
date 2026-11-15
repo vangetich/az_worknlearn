@@ -25,7 +25,7 @@ import {
 import confetti from 'canvas-confetti';
 import { Question, UserStats } from '../types/quiz';
 import { getUnresolvedMistakesMap } from '../utils/storage';
-import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
+import { KitengeRibbon, MaasaiMedallion, KitengeCardWatermark } from './MotifDecorations';
 import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 
 interface ReviewSessionModalProps {
@@ -55,6 +55,8 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
 }) => {
   // Presentation mode: 'step' (1-by-1 Personalized Review Session) or 'list' (All Wrong Questions)
   const [presentationMode, setPresentationMode] = useState<'step' | 'list'>('step');
+  // Review System: 'self-paced' vs 'standardised' (timed verification re-test required)
+  const [reviewSystem, setReviewSystem] = useState<'self-paced' | 'standardised'>('self-paced');
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
 
   // Track inline re-testing state per questionId
@@ -346,7 +348,7 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
 
   const renderQuestionReviewCard = (item: QuestionReviewItem, index: number) => {
     const q = item.question;
-    const isRetestOpen = activeRetestId === q.id;
+    const isRetestOpen = reviewSystem === 'standardised' ? !item.isResolved : activeRetestId === q.id;
     const isResolved = item.isResolved;
     const selectedChoice = selectedChoices[q.id];
     const result = retestResults[q.id];
@@ -360,12 +362,14 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
     return (
       <div
         key={q.id}
-        className={`rounded-2xl border transition-all shadow-2xs overflow-hidden ${
+        className={`relative rounded-2xl border transition-all shadow-2xs overflow-hidden ${
           isResolved
             ? 'border-emerald-300 bg-emerald-50/25'
             : 'border-slate-200/90 bg-white'
         }`}
       >
+        <KitengeCardWatermark opacity={0.05} />
+        <div className="relative z-10">
         {/* Card Top Header */}
         <div className="px-5 py-3.5 bg-slate-50/90 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex items-center gap-2 flex-wrap">
@@ -643,6 +647,7 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
             </div>
           )}
         </div>
+        </div>
       </div>
     );
   };
@@ -707,7 +712,47 @@ export const ReviewSessionModal: React.FC<ReviewSessionModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Self-Paced vs Standardised Review System Toggle */}
+            <div
+              data-testid="review-modal-system-toggle"
+              className="flex items-center p-0.5 rounded-xl bg-white/10 border border-white/15 text-xs font-bold"
+            >
+              <button
+                type="button"
+                data-testid="review-modal-self-paced-btn"
+                onClick={() => {
+                  setReviewSystem('self-paced');
+                  setIsTimerPaused(true);
+                }}
+                className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                  reviewSystem === 'self-paced'
+                    ? 'bg-emerald-500 text-slate-950 font-black shadow-2xs'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Self-Paced</span>
+              </button>
+              <button
+                type="button"
+                data-testid="review-modal-standardised-btn"
+                onClick={() => {
+                  setReviewSystem('standardised');
+                  setPresentationMode('step');
+                  setIsTimerPaused(false);
+                }}
+                className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                  reviewSystem === 'standardised'
+                    ? 'bg-amber-400 text-slate-950 font-black shadow-2xs'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <Gauge className="w-3.5 h-3.5" />
+                <span>Standardised</span>
+              </button>
+            </div>
+
             {totalMissedCount > 0 && !showCompletionSummary && (
               <div className="flex items-center p-0.5 rounded-xl bg-white/10 border border-white/15 text-xs font-bold">
                 <button

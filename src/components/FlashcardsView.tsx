@@ -21,8 +21,11 @@ import {
   Target,
   RotateCcw,
   TrendingUp,
+  GitBranch,
+  Gauge,
 } from 'lucide-react';
 import { AZ900_FLASHCARDS, Flashcard, FlashcardType } from '../data/flashcardsData';
+import { AZURE_THEME_THREADS } from '../data/azureThemesData';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { UserStats } from '../types/quiz';
 import { KitengeRibbon, MaasaiMedallion } from './MotifDecorations';
@@ -32,6 +35,70 @@ interface FlashcardsViewProps {
   initialModuleId?: number | 'all';
   onPracticeModule?: (moduleId: number) => void;
 }
+
+export type ReviewSystemMode = 'self-paced' | 'standardised';
+export type LeitnerBoxGrade = 'again' | 'hard' | 'good' | 'easy';
+
+/**
+ * Transform Azure Theme Thread bridge questions from AZURE_THEME_THREADS into
+ * Flashcards with interactive thread-question testing in the Flashcards section.
+ */
+const AZURE_THREAD_FLASHCARDS: Array<
+  Flashcard & {
+    threadId: string;
+    threadNumberLabel: string;
+    threadTitle: string;
+    threadAccentHex: string;
+  }
+> = AZURE_THEME_THREADS.flatMap((thread) =>
+  thread.bridgeQuizzes.map((bq, idx) => {
+    const primaryConn =
+      thread.moduleConnections[idx % thread.moduleConnections.length] ||
+      thread.moduleConnections[0];
+    const correctAnswerText = bq.options[bq.correctIndex] || bq.options[0];
+    return {
+      id: `thread-fc-${bq.id}`,
+      term: `${thread.numberLabel}: ${thread.shortTitle} (Q${idx + 1})`,
+      acronym: thread.numberLabel,
+      category:
+        primaryConn?.pathId === 1
+          ? 'Cloud Concepts'
+          : primaryConn?.pathId === 3
+          ? 'Governance & Cost'
+          : 'Architecture & Compute',
+      pathId: (primaryConn?.pathId || 2) as 1 | 2 | 3,
+      pathTitle:
+        primaryConn?.pathId === 1
+          ? 'Path 1: Describe Cloud Concepts'
+          : primaryConn?.pathId === 3
+          ? 'Path 3: Describe Azure Management and Governance'
+          : 'Path 2: Describe Azure Architecture and Services',
+      moduleId: primaryConn?.moduleId || 4,
+      moduleTitle: primaryConn?.moduleTitle || 'Core Azure Architectural Components',
+      cardType: 'Exam Trap & Distinction' as FlashcardType,
+      difficulty: 'Intermediate',
+      frontPrompt: bq.prompt,
+      officialDefinition: `Correct Thread Synthesis: ${correctAnswerText}. ${bq.threadInsight}`,
+      examTrap:
+        primaryConn?.examTrapGuard ||
+        `Thread Trap: Failing to connect ${thread.shortTitle} across Path 1, Path 2, and Path 3 modules.`,
+      memoryRule: thread.examPayoffSummary,
+      keyUnits: primaryConn?.azureServices?.slice(0, 3) || [thread.shortTitle],
+      quickFireOptions: bq.options,
+      quickFireCorrectIndex: bq.correctIndex,
+      mistakeDiagnostic: bq.threadInsight,
+      threadId: thread.id,
+      threadNumberLabel: thread.numberLabel,
+      threadTitle: thread.title,
+      threadAccentHex: thread.accentHex,
+    };
+  })
+);
+
+const COMBINED_FLASHCARDS_POOL: Flashcard[] = [
+  ...AZ900_FLASHCARDS,
+  ...AZURE_THREAD_FLASHCARDS,
+];
 
 interface ShuffledQuickFireQuestion {
   card: Flashcard;
@@ -54,8 +121,22 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
 }) => {
   // Primary mode: 'study' (Front/Back Flip Cards) vs 'quickfire' (15-20 Card Rapid Knowledge Drill)
   const [practiceMode, setPracticeMode] = useState<'study' | 'quickfire'>('study');
+  // Review System: 'self-paced' (untimed free exploration) vs 'standardised' (timed 45s Leitner/SM-2 spaced-repetition benchmark)
+  const [reviewSystem, setReviewSystem] = useState<ReviewSystemMode>('self-paced');
+  const [selectedThreadId, setSelectedThreadId] = useState<string | 'all'>('all');
+  const [threadSelectedOptionMap, setThreadSelectedOptionMap] = useState<Record<string, number>>({});
+  const [leitnerBoxMap, setLeitnerBoxMap] = useState<Record<string, number>>(() => {
+    try {
+      const raw = localStorage.getItem('az900_leitner_boxes_v1');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [standardisedCardSeconds, setStandardisedCardSeconds] = useState<number>(45);
+
   const [activeFilter, setActiveFilter] = useState<
-    'missed' | 'all' | 1 | 2 | 3 | 'starred'
+    'missed' | 'all' | 1 | 2 | 3 | 'starred' | 'azure-threads'
   >('all');
   const [selectedModuleFilter, setSelectedModuleFilter] = useState<number | 'all'>(initialModuleId);
   const [selectedCardType, setSelectedCardType] = useState<FlashcardType | 'all'>('all');
@@ -194,11 +275,16 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
     return LEARNING_PATHS.flatMap((p) => p.modules);
   }, []);
 
-  // Filtered list of cards
+  // Filtered list of cards (includes both core AZ-900 cards and Azure Thread synthesis questions)
   const cardList = useMemo(() => {
-    let list: Flashcard[] = [...AZ900_FLASHCARDS];
+    let list: Flashcard[] =
+      activeFilter === 'azure-threads'
+        ? [...AZURE_THREAD_FLASHCARDS]
+        : [...COMBINED_FLASHCARDS_POOL];
 
-    if (activeFilter === 'missed') {
+    if (activeFilter === 'azure-threads' && selectedThreadId !== 'all') {
+      list = list.filter((c) => (c as any).threadId === selectedThreadId);
+    } else if (activeFilter === 'missed') {
       const filteredMissed = list.filter(
         (c) => missedModuleIds.has(c.moduleId) || needsReviewCards.includes(c.id)
       );
@@ -218,14 +304,26 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
       list = list.filter((c) => c.cardType === selectedCardType);
     }
 
+    // In Standardised Review mode, prioritize lower Leitner boxes (Box 1 & unrated cards first)
+    if (reviewSystem === 'standardised') {
+      list = [...list].sort((a, b) => {
+        const boxA = leitnerBoxMap[a.id] ?? 1;
+        const boxB = leitnerBoxMap[b.id] ?? 1;
+        return boxA - boxB;
+      });
+    }
+
     return list;
   }, [
     activeFilter,
+    selectedThreadId,
     selectedModuleFilter,
     selectedCardType,
     missedModuleIds,
     starredCards,
     needsReviewCards,
+    reviewSystem,
+    leitnerBoxMap,
   ]);
 
   // Build a Quick-Fire 15 or 20 Card Deck with deterministically shuffled options
@@ -315,7 +413,44 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
   useEffect(() => {
     setCurrentIndex(0);
     setIsFlipped(false);
-  }, [activeFilter, selectedModuleFilter, selectedCardType]);
+    setStandardisedCardSeconds(45);
+  }, [activeFilter, selectedThreadId, selectedModuleFilter, selectedCardType, reviewSystem]);
+
+  // 45-second per-card countdown timer when in Standardised Review Mode
+  useEffect(() => {
+    if (practiceMode !== 'study' || reviewSystem !== 'standardised') return;
+    setStandardisedCardSeconds(45);
+    const interval = setInterval(() => {
+      setStandardisedCardSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [practiceMode, reviewSystem, currentIndex]);
+
+  const handleGradeStandardisedCard = (cardId: string, grade: LeitnerBoxGrade) => {
+    const nextBox =
+      grade === 'again' ? 1 : grade === 'hard' ? 2 : grade === 'good' ? 3 : 4;
+    setLeitnerBoxMap((prev) => {
+      const updated = { ...prev, [cardId]: nextBox };
+      try {
+        localStorage.setItem('az900_leitner_boxes_v1', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+
+    if (grade === 'good' || grade === 'easy') {
+      if (!masteredCards.includes(cardId)) {
+        setMasteredCards((prev) => [...prev, cardId]);
+      }
+      setNeedsReviewCards((prev) => prev.filter((id) => id !== cardId));
+    } else {
+      markCardNeedsReview(cardId);
+    }
+
+    // Advance to next card automatically in Standardised Review
+    handleNext();
+  };
 
   const currentCard: Flashcard | undefined = cardList[currentIndex];
   const currentQuickFireItem: ShuffledQuickFireQuestion | undefined =
@@ -701,6 +836,143 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
             <Star className="w-3.5 h-3.5 text-amber-400" />
             <span>Starred ({starredCards.length})</span>
           </button>
+
+          {/* NEW: Azure Thread Questions Filter Tab in Flashcards */}
+          <button
+            type="button"
+            data-testid="flashcards-azure-thread-questions-tab"
+            onClick={() => {
+              setPracticeMode('study');
+              setActiveFilter('azure-threads');
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+              activeFilter === 'azure-threads'
+                ? 'bg-gradient-to-r from-[#0078D4] to-indigo-700 text-white shadow-sm ring-1 ring-sky-300'
+                : 'bg-sky-50 text-[#005A9E] hover:bg-sky-100 border border-sky-200'
+            }`}
+          >
+            <GitBranch className="w-3.5 h-3.5" />
+            <span>Azure Thread Questions ({AZURE_THREAD_FLASHCARDS.length})</span>
+          </button>
+        </div>
+
+        {/* Sub-bar when Azure Thread Questions is selected: Filter by specific Azure Theme Thread */}
+        {activeFilter === 'azure-threads' && (
+          <div
+            data-testid="azure-thread-flashcards-subbar"
+            className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2"
+          >
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-black uppercase tracking-wider text-[#0078D4] flex items-center gap-1">
+                <GitBranch className="w-3.5 h-3.5" />
+                <span>Select Thread Knowledge Area:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedThreadId('all')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer ${
+                  selectedThreadId === 'all'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                All {AZURE_THEME_THREADS.length} Threads ({AZURE_THREAD_FLASHCARDS.length} Qs)
+              </button>
+              {AZURE_THEME_THREADS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setSelectedThreadId(t.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
+                    selectedThreadId === t.id
+                      ? 'bg-[#0078D4] text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {t.numberLabel}: {t.shortTitle}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => startQuickFireSession(15, AZURE_THREAD_FLASHCARDS)}
+              className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11px] font-black inline-flex items-center gap-1 cursor-pointer"
+            >
+              <Zap className="w-3 h-3" />
+              <span>Quick-Fire Thread Questions</span>
+            </button>
+          </div>
+        )}
+
+        {/* NEW: Self-Paced vs. Standardised Review System Bar */}
+        <div
+          data-testid="flashcards-review-system-bar"
+          className="pt-2.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+              <Gauge className="w-3.5 h-3.5 text-[#0078D4]" />
+              <span>Review System:</span>
+            </span>
+
+            <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200">
+              <button
+                type="button"
+                data-testid="review-system-self-paced"
+                onClick={() => setReviewSystem('self-paced')}
+                className={`px-3 py-1 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  reviewSystem === 'self-paced'
+                    ? 'bg-white text-[#0078D4] shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Self-Paced Review</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="review-system-standardised"
+                onClick={() => setReviewSystem('standardised')}
+                className={`px-3 py-1 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  reviewSystem === 'standardised'
+                    ? 'bg-slate-900 text-amber-300 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Standardised Review (Leitner SM-2 · 45s Pace)</span>
+              </button>
+            </div>
+          </div>
+
+          {reviewSystem === 'standardised' ? (
+            <div className="flex items-center gap-3 text-xs font-bold">
+              <span
+                data-testid="standardised-pace-timer"
+                className={`px-2.5 py-1 rounded-lg font-mono font-black tabular-nums inline-flex items-center gap-1 border ${
+                  standardisedCardSeconds <= 10
+                    ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
+                    : 'bg-amber-50 text-amber-900 border-amber-200'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Target Pace: {standardisedCardSeconds}s</span>
+              </span>
+              <span className="text-[11px] text-slate-600 font-semibold">
+                Box 3–4 Mastered:{' '}
+                <strong className="font-mono tabular-nums text-emerald-700">
+                  {Object.values(leitnerBoxMap).filter((b) => b >= 3).length}
+                </strong>{' '}
+                cards
+              </span>
+            </div>
+          ) : (
+            <span className="text-[11px] text-slate-500 font-medium">
+              Untimed exploration • Flip &amp; navigate freely or test Azure Thread questions inline
+            </span>
+          )}
         </div>
       </div>
 
@@ -1251,10 +1523,82 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
 
                           <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 text-amber-950 text-sm font-medium leading-relaxed">
                             <span className="font-bold text-amber-900 block mb-1">
-                              Exam Scenario Trigger:
+                              {(currentCard as any).threadId
+                                ? 'Azure Thread Knowledge Question:'
+                                : 'Exam Scenario Trigger:'}
                             </span>
                             {currentCard.frontPrompt}
                           </div>
+
+                          {/* Interactive 4-Option Thread Question Check directly on the Flashcard! */}
+                          {currentCard.quickFireOptions &&
+                            currentCard.quickFireOptions.length === 4 && (
+                              <div
+                                data-testid="flashcard-inline-thread-question"
+                                className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center justify-between text-[11px] font-extrabold uppercase tracking-wider text-[#0078D4]">
+                                  <span className="inline-flex items-center gap-1">
+                                    <GitBranch className="w-3.5 h-3.5" />
+                                    Test Your Recall Before Flipping
+                                  </span>
+                                  {threadSelectedOptionMap[currentCard.id] !== undefined && (
+                                    <span
+                                      className={
+                                        threadSelectedOptionMap[currentCard.id] ===
+                                        (currentCard.quickFireCorrectIndex ?? 0)
+                                          ? 'text-emerald-700'
+                                          : 'text-rose-700'
+                                      }
+                                    >
+                                      {threadSelectedOptionMap[currentCard.id] ===
+                                      (currentCard.quickFireCorrectIndex ?? 0)
+                                        ? 'Correct! ✓'
+                                        : 'Try Again or Flip Card'}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {currentCard.quickFireOptions.map((optText, optIdx) => {
+                                    const picked = threadSelectedOptionMap[currentCard.id];
+                                    const correctIdx = currentCard.quickFireCorrectIndex ?? 0;
+                                    const isPicked = picked === optIdx;
+                                    const isRight = optIdx === correctIdx;
+
+                                    let cls =
+                                      'bg-white hover:bg-sky-50 border-slate-200 text-slate-800';
+                                    if (picked !== undefined) {
+                                      if (isRight) {
+                                        cls =
+                                          'bg-emerald-50 border-emerald-500 text-emerald-950 font-bold';
+                                      } else if (isPicked) {
+                                        cls = 'bg-rose-50 border-rose-400 text-rose-900';
+                                      }
+                                    }
+
+                                    return (
+                                      <button
+                                        key={optIdx}
+                                        type="button"
+                                        onClick={() =>
+                                          setThreadSelectedOptionMap((prev) => ({
+                                            ...prev,
+                                            [currentCard.id]: optIdx,
+                                          }))
+                                        }
+                                        className={`p-2.5 rounded-lg border text-left text-xs transition-all cursor-pointer flex items-start gap-2 ${cls}`}
+                                      >
+                                        <span className="w-5 h-5 rounded bg-slate-100 border border-slate-300 flex items-center justify-center text-[10px] font-black shrink-0">
+                                          {String.fromCharCode(65 + optIdx)}
+                                        </span>
+                                        <span className="leading-snug">{optText}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
 
                           <div className="flex items-center gap-2 pt-2 text-xs text-slate-400 font-medium">
                             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
@@ -1315,44 +1659,87 @@ export const FlashcardsView: React.FC<FlashcardsViewProps> = ({
                   )}
                 </div>
 
-                {/* Bottom Bar: Self-Assessment Confidence & Module Practice */}
+                {/* Bottom Bar: Self-Paced vs Standardised Spaced-Repetition Grading */}
                 <div
                   className="pt-4 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => toggleMastered(currentCard.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
-                        isCurrentMastered
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300'
-                      }`}
+                  {reviewSystem === 'standardised' ? (
+                    <div
+                      data-testid="standardised-leitner-grading-bar"
+                      className="flex items-center gap-1.5 flex-wrap"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>
-                        {isCurrentMastered ? 'Mastered ✓' : 'Mark as Mastered'}
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 mr-1">
+                        Standardised Recall Grade (Box {leitnerBoxMap[currentCard.id] ?? 1}/4):
                       </span>
-                    </button>
+                      <button
+                        type="button"
+                        data-testid="leitner-grade-again"
+                        onClick={() => handleGradeStandardisedCard(currentCard.id, 'again')}
+                        className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-xs font-extrabold cursor-pointer"
+                      >
+                        1 · Again (&lt;1m)
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="leitner-grade-hard"
+                        onClick={() => handleGradeStandardisedCard(currentCard.id, 'hard')}
+                        className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-extrabold cursor-pointer"
+                      >
+                        2 · Hard (10m)
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="leitner-grade-good"
+                        onClick={() => handleGradeStandardisedCard(currentCard.id, 'good')}
+                        className="px-2.5 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-[#005A9E] border border-sky-200 text-xs font-extrabold cursor-pointer"
+                      >
+                        3 · Good (1d)
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="leitner-grade-easy"
+                        onClick={() => handleGradeStandardisedCard(currentCard.id, 'easy')}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold cursor-pointer"
+                      >
+                        4 · Easy (4d)
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => toggleMastered(currentCard.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                          isCurrentMastered
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>
+                          {isCurrentMastered ? 'Mastered ✓' : 'Mark as Mastered'}
+                        </span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => markCardNeedsReview(currentCard.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
-                        needsReviewCards.includes(currentCard.id)
-                          ? 'bg-amber-500 text-slate-950 border-amber-600 font-extrabold'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-amber-50 hover:text-amber-900'
-                      }`}
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>
-                        {needsReviewCards.includes(currentCard.id)
-                          ? 'In Focus Queue'
-                          : 'Needs More Drill'}
-                      </span>
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => markCardNeedsReview(currentCard.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                          needsReviewCards.includes(currentCard.id)
+                            ? 'bg-amber-500 text-slate-950 border-amber-600 font-extrabold'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-amber-50 hover:text-amber-900'
+                        }`}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>
+                          {needsReviewCards.includes(currentCard.id)
+                            ? 'In Focus Queue'
+                            : 'Needs More Drill'}
+                        </span>
+                      </button>
+                    </div>
+                  )}
 
                   {onPracticeModule && (
                     <button

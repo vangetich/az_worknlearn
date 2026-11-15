@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   BookOpen,
   Award,
@@ -74,7 +74,9 @@ import { ReviewHistoryView } from './components/ReviewHistoryView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { DailyGoalMilestoneOverlay } from './components/DailyGoalMilestoneOverlay';
 import { TopLeftRollingAccuracyWidget } from './components/TopLeftRollingAccuracyWidget';
-import { MobileBottomNavBar } from './components/MobileBottomNavBar';
+import { QuickRetrySessionHud } from './components/QuickRetrySessionHud';
+import { useHudSnooze, areNotificationsSuppressedNow } from './utils/hudSnooze';
+import { MobileBottomNavBar, UserStatsProvider } from './components/MobileBottomNavBar';
 import { GlassyStudyHubDropdown } from './components/GlassyStudyHubDropdown';
 import { ResetModuleModal } from './components/ResetModuleModal';
 import { LearningPathOverview } from './components/LearningPathOverview';
@@ -86,6 +88,7 @@ import { ProfileView } from './components/ProfileView';
 import { AzureGlossaryView } from './components/AzureGlossaryView';
 import { AchievementOverlay } from './components/AchievementOverlay';
 import { PostSessionWeakAreaReview } from './components/PostSessionWeakAreaReview';
+import { WeakestAreasReviewView } from './components/WeakestAreasReviewView';
 import { AzureCloudExplorer } from './components/AzureCloudExplorer';
 import { LearningPathProgressMap } from './components/LearningPathProgressMap';
 import { WeeklyExamReadiness } from './components/WeeklyExamReadiness';
@@ -103,7 +106,13 @@ import { ExitStudySessionModal } from './components/ExitStudySessionModal';
 import { ProtectedRoute, AuthenticatedSupabaseUser } from './components/ProtectedRoute';
 import { PaymentGatekeeper } from './components/PaymentGatekeeper';
 import { SubscriptionTierSelection } from './components/SubscriptionTierSelection';
-import { PeerChallengeModal } from './components/PeerChallengeModal';
+import {
+  PeerChallengeModal,
+  PeerChallengeInviteToast,
+  PeerChallengeInvitation,
+  createCohortPeerChallengeInvitation,
+  PEER_CHALLENGE_INVITE_EVENT,
+} from './components/PeerChallengeModal';
 import { PracticeControlOverflowMenu } from './components/PracticeControlOverflowMenu';
 import { ThreadMultiSelectDropdown } from './components/ThreadMultiSelectDropdown';
 import { ThreadTagId, getThreadTagsForQuestion } from './data/azureThemesData';
@@ -137,6 +146,8 @@ import { LEARNING_PATHS, getModuleComplexityLevel } from './data/curriculum';
 import { CURRICULUM_STUDY_MODULES } from './data/studyNotes';
 import { Question, UserStats, QuestionAttempt, ModuleComplexityLevel } from './types/quiz';
 import { FloatingFocusModeButton } from './components/FloatingFocusModeButton';
+import { FocusModeSuggestionBanner } from './components/FocusModeSuggestionBanner';
+import { recordFocusSession } from './utils/focusSessionTracker';
 import {
   getInitialStats,
   saveUserAttempt,
@@ -157,6 +168,10 @@ import {
 } from './utils/storage';
 import { HoverInfoFeedback } from './components/HoverInfoFeedback';
 import { fireModuleCompletionConfetti, fireDailyGoalCompletionConfetti } from './utils/confetti';
+import {
+  computeNextConfidenceStreakState,
+  ConfidenceStreakState,
+} from './utils/studyConsolidation';
 import { AdaptiveLearningPathDashboard } from './components/AdaptiveLearningPathDashboard';
 import { ResponsiveModalContainer } from './components/ResponsiveModalContainer';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -168,6 +183,7 @@ import {
   AccessibilitySettingsModal,
   useKeyboardShortcutsConfig,
 } from './components/KeyboardShortcutGuide';
+import { KeyboardShortcutHUD } from './components/KeyboardShortcutHUD';
 import {
   matchesShortcutEvent,
   formatShortcutCombo,
@@ -406,6 +422,7 @@ export default function App() {
     }
     return { all: 82, '1': 84, '2': 80, '3': 81 };
   });
+  const { areNotificationsSuppressed } = useHudSnooze();
   const [allTimeHighToast, setAllTimeHighToast] = useState<string | null>(null);
   const [showCurriculumReadinessModal, setShowCurriculumReadinessModal] = useState<boolean>(false);
   const [showAdminBackOfficeModal, setShowAdminBackOfficeModal] = useState<boolean>(false);
@@ -855,7 +872,58 @@ export default function App() {
       : 0
   );
   const [sessionAttempts, setSessionAttempts] = useState<QuestionAttempt[]>([]);
+  const CONFIDENCE_STREAK_STORAGE_KEY = 'az900_confidence_streak_v1';
+  const [confidenceStreakState, setConfidenceStreakState] = useState<ConfidenceStreakState>(() => {
+    try {
+      const raw = localStorage.getItem('az900_confidence_streak_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.currentStreak === 'number') {
+          return {
+            currentStreak: parsed.currentStreak,
+            bestStreak:
+              typeof parsed.bestStreak === 'number'
+                ? parsed.bestStreak
+                : parsed.currentStreak,
+            lastRatedQuestionId:
+              typeof parsed.lastRatedQuestionId === 'string'
+                ? parsed.lastRatedQuestionId
+                : null,
+            lastConfidenceLevel:
+              typeof parsed.lastConfidenceLevel === 'number'
+                ? parsed.lastConfidenceLevel
+                : null,
+          };
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return {
+      currentStreak: 0,
+      bestStreak: 0,
+      lastRatedQuestionId: null,
+      lastConfidenceLevel: null,
+    };
+  });
   const [showPostSessionReview, setShowPostSessionReview] = useState<boolean>(false);
+  const [weakestReviewSourceLabel, setWeakestReviewSourceLabel] =
+    useState<string>('Recent Quiz Session');
+  const [weakestReviewAttemptsOverride, setWeakestReviewAttemptsOverride] = useState<
+    QuestionAttempt[] | null
+  >(null);
+
+  const launchWeakestAreasReviewMode = useCallback(
+    (attempts: QuestionAttempt[], sourceLabel: string) => {
+      setWeakestReviewAttemptsOverride(attempts.length > 0 ? attempts : null);
+      setWeakestReviewSourceLabel(sourceLabel);
+      setShowPostSessionReview(false);
+      setShowMockExam(false);
+      setActiveTab('weakest-review');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    []
+  );
   const [showStudyBreak, setShowStudyBreak] = useState<boolean>(false);
   const [showMicroDrill, setShowMicroDrill] = useState<number | false>(false);
   const [microDrillTargetModuleId, setMicroDrillTargetModuleId] = useState<number>(5);
@@ -882,6 +950,38 @@ export default function App() {
       return null;
     }
   });
+  const [peerChallengeInvite, setPeerChallengeInvite] = useState<PeerChallengeInvitation | null>(() => {
+    try {
+      if (sessionStorage.getItem('az900_peer_invite_dismissed') === '1') {
+        return null;
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return createCohortPeerChallengeInvitation(5);
+  });
+
+  useEffect(() => {
+    const handlePeerChallengeInvite = (event: Event) => {
+      if (areNotificationsSuppressedNow()) {
+        return;
+      }
+      const customEvent = event as CustomEvent<Partial<PeerChallengeInvitation> | undefined>;
+      const detail = customEvent.detail;
+      const defaultInvite = createCohortPeerChallengeInvitation(
+        typeof detail?.moduleId === 'number' || detail?.moduleId === 'all' ? detail.moduleId : 5
+      );
+      setPeerChallengeInvite({
+        ...defaultInvite,
+        ...detail,
+      });
+    };
+
+    window.addEventListener(PEER_CHALLENGE_INVITE_EVENT, handlePeerChallengeInvite);
+    return () => {
+      window.removeEventListener(PEER_CHALLENGE_INVITE_EVENT, handlePeerChallengeInvite);
+    };
+  }, []);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showUserGuideModal, setShowUserGuideModal] = useState<boolean>(false);
   const [showExitSessionModal, setShowExitSessionModal] = useState<boolean>(false);
@@ -909,8 +1009,38 @@ export default function App() {
     }
   }, [isFocusMode]);
 
+  // Focus Mode tracking for Focus Session History D3 Analytics
+  const focusSessionStartTimeRef = useRef<number | null>(null);
+  const focusSessionQuestionsCountRef = useRef<number>(0);
+  const focusSessionSourceRef = useRef<'manual' | 'prolonged_prompt' | 'floating_toggle'>('manual');
+
+  // Track Focus Mode session durations
+  useEffect(() => {
+    if (isFocusMode) {
+      focusSessionStartTimeRef.current = Date.now();
+      focusSessionQuestionsCountRef.current = 0;
+    } else {
+      if (focusSessionStartTimeRef.current) {
+        const elapsedSec = Math.round((Date.now() - focusSessionStartTimeRef.current) / 1000);
+        if (elapsedSec >= 10) {
+          recordFocusSession(
+            elapsedSec,
+            focusSessionQuestionsCountRef.current,
+            focusSessionSourceRef.current
+          );
+        }
+        focusSessionStartTimeRef.current = null;
+        focusSessionQuestionsCountRef.current = 0;
+        focusSessionSourceRef.current = 'manual';
+      }
+    }
+  }, [isFocusMode]);
+
   const toggleFocusMode = useCallback(
-    (_source?: 'shortcut' | 'button') => {
+    (source?: 'shortcut' | 'button' | 'prolonged_prompt') => {
+      if (source === 'prolonged_prompt') {
+        focusSessionSourceRef.current = 'prolonged_prompt';
+      }
       const comboLabel = formatShortcutCombo(activeShortcuts.focusMode, detectedPlatform);
       setIsFocusMode((prev) => {
         const next = !prev;
@@ -924,6 +1054,57 @@ export default function App() {
     },
     [activeShortcuts.focusMode, detectedPlatform]
   );
+
+  // Prolonged user interaction without question completion detection
+  const [showFocusModeSuggestion, setShowFocusModeSuggestion] = useState<boolean>(false);
+  const lastInteractionTimeRef = useRef<number>(Date.now());
+  const lastQuestionCompletedTimeRef = useRef<number>(Date.now());
+  const focusSuggestionDismissedUntilRef = useRef<number>(0);
+
+  // Track active user interaction
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      lastInteractionTimeRef.current = Date.now();
+    };
+
+    window.addEventListener('pointerdown', handleUserInteraction, { passive: true });
+    window.addEventListener('keydown', handleUserInteraction, { passive: true });
+    window.addEventListener('scroll', handleUserInteraction, { passive: true });
+
+    const handleTestTrigger = () => {
+      setShowFocusModeSuggestion(true);
+    };
+    window.addEventListener('az900-trigger-focus-suggestion', handleTestTrigger);
+
+    return () => {
+      window.removeEventListener('pointerdown', handleUserInteraction);
+      window.removeEventListener('keydown', handleUserInteraction);
+      window.removeEventListener('scroll', handleUserInteraction);
+      window.removeEventListener('az900-trigger-focus-suggestion', handleTestTrigger);
+    };
+  }, []);
+
+  // Periodic check for prolonged interaction without question completion (suggest Focus Mode)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isFocusMode) return;
+      if (areNotificationsSuppressed) return;
+      if (Date.now() < focusSuggestionDismissedUntilRef.current) return;
+      if (activeTab !== 'quiz' && activeTab !== 'adaptive') return;
+
+      const now = Date.now();
+      const timeSinceInteraction = now - lastInteractionTimeRef.current;
+      const timeSinceQuestion = now - lastQuestionCompletedTimeRef.current;
+
+      // If user has interacted within the last 60s (active user)
+      // and has spent >= 120 seconds (2 minutes) without answering a question:
+      if (timeSinceInteraction < 60000 && timeSinceQuestion >= 120000) {
+        setShowFocusModeSuggestion(true);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isFocusMode, areNotificationsSuppressed, activeTab]);
 
   // Subtle Audio Feedback Mute state (persisted in localStorage, controlled in footer settings)
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(() => {
@@ -1646,6 +1827,7 @@ export default function App() {
   // Global Daily Study Reminder scheduler (fires browser Notification at user-defined time if not yet fired today)
   useEffect(() => {
     const checkGlobalReminder = async () => {
+      if (areNotificationsSuppressed) return;
       const settings = getStoredReminderSettings();
       if (!settings.enabled) return;
 
@@ -1679,7 +1861,7 @@ export default function App() {
 
     const timer = setInterval(checkGlobalReminder, 20000);
     return () => clearInterval(timer);
-  }, [stats]);
+  }, [stats, areNotificationsSuppressed]);
 
   // Count questions per module
   const questionCountByModule = useMemo(() => {
@@ -1709,6 +1891,12 @@ export default function App() {
       timestamp: Date.now(),
     };
 
+    lastQuestionCompletedTimeRef.current = Date.now();
+    setShowFocusModeSuggestion(false);
+    if (isFocusMode) {
+      focusSessionQuestionsCountRef.current += 1;
+    }
+
     const prevTodayCount = getTodaySolvedQuestionsCount(stats);
     const updatedStats = saveUserAttempt(stats, attempt);
     const nextTodayCount = getTodaySolvedQuestionsCount(updatedStats);
@@ -1733,6 +1921,10 @@ export default function App() {
       fireDailyGoalCompletionConfetti(goalTarget);
       setAllTimeHighToast(
         `🎉 Hongera! 100% Daily Study Goal Achieved (${nextTodayCount}/${goalTarget} questions today)! Active study streak ignited 🔥`
+      );
+    } else if (isCorrect && !crossedStreakMilestone) {
+      setAllTimeHighToast(
+        `🎯 Correct! +100 Points (Total Score: ${(updatedStats.points || 0).toLocaleString()} pts)`
       );
     }
 
@@ -1880,6 +2072,24 @@ export default function App() {
   const handleRateConfidence = (questionId: string, confidence: number) => {
     const updated = saveQuestionConfidence(stats, questionId, confidence);
     setStats(updated);
+
+    setConfidenceStreakState((prev) => {
+      const next = computeNextConfidenceStreakState(prev, questionId, confidence);
+      try {
+        localStorage.setItem(CONFIDENCE_STREAK_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // ignore storage errors
+      }
+      if (
+        next.currentStreak > prev.currentStreak &&
+        (next.currentStreak === 3 || next.currentStreak === 5 || next.currentStreak % 5 === 0)
+      ) {
+        setAllTimeHighToast(
+          `🧠 ${next.currentStreak}-Question Confidence Streak! Strong self-awareness & exam calibration.`
+        );
+      }
+      return next;
+    });
   };
 
   // Mark a missed question as reviewed successfully to remove from future review sessions
@@ -2158,6 +2368,11 @@ export default function App() {
 
   return (
     <ProtectedRoute onUserChange={setAuthenticatedUser}>
+      <UserStatsProvider
+        stats={stats}
+        todayAnsweredCount={todayAnsweredCount}
+        dailyGoal={stats.dailyGoal || 10}
+      >
       <div className="min-h-screen w-[100vw] max-w-[100vw] overflow-x-hidden bg-[var(--theme-bg-body)] text-[var(--theme-text-primary)] transition-colors duration-300 relative flex flex-col font-sans">
         {/* Subtle African Kitenge Watermark Background */}
         <AfricanWatermarkPattern opacity={0.04} />
@@ -2184,6 +2399,9 @@ export default function App() {
           onToggleDynamicDifficulty={() =>
             setIsDynamicDifficultyEnabled((prev) => !prev)
           }
+          confidenceStreak={confidenceStreakState.currentStreak}
+          bestConfidenceStreak={confidenceStreakState.bestStreak}
+          lastConfidenceLevel={confidenceStreakState.lastConfidenceLevel}
           showFundamentalsResetAlert={showFundamentalsResetAlert}
           consecutiveLowAccuracyModulesAlert={
             consecutiveLowAccuracyModulesAlert
@@ -2214,6 +2432,59 @@ export default function App() {
             setDismissedFundamentalsPairKey(pairKey)
           }
           onNavigateToPractice={() => setActiveTab('quiz')}
+        />
+
+        {/* Persistent On-Screen HUD Element for the Active 5-Minute 'Quick-Retry' Session */}
+        <QuickRetrySessionHud
+          retryQueueQuestionIds={retryQueueQuestionIds}
+          retryQueueSecondsLeft={retryQueueSecondsLeft}
+          onlyRetryQueue={onlyRetryQueue}
+          unresolvedMistakeIds={Array.from(getUnresolvedMistakesMap(stats).keys())}
+          questions={questions}
+          activeTab={activeTab}
+          onActivateRetryDrill={() => {
+            setOnlyRetryQueue(true);
+            setOnlyBookmarks(false);
+            setOnlySavedNotes(false);
+            setOnlyAiGenerated(false);
+            setOnlyUnresolvedMistakes(false);
+            setOnlyLowConfidence(false);
+            setRetryIncorrectPathId(null);
+            setRetryIncorrectSnapshotIds([]);
+            setSelectedPathId('all');
+            setSelectedModuleId('all');
+            setCurrentQuestionIndex(0);
+            setActiveTab('quiz');
+          }}
+          onToggleRetryFilter={() => {
+            setOnlyRetryQueue((prev) => !prev);
+            setCurrentQuestionIndex(0);
+          }}
+          onStartQuickRetrySession={(questionsToQueue) => {
+            handleQuickRetrySessionQuestions(questionsToQueue);
+          }}
+          onResetTimer={() => {
+            setRetryQueueExpiresAt(Date.now() + 5 * 60 * 1000);
+            setRetryQueueSecondsLeft(300);
+          }}
+          onClearQueue={() => {
+            setRetryQueueExpiresAt(null);
+            setRetryQueueQuestionIds([]);
+            setOnlyRetryQueue(false);
+            setCurrentQuestionIndex(0);
+          }}
+          onJumpToQuestion={(questionId) => {
+            setOnlyRetryQueue(true);
+            setOnlyBookmarks(false);
+            setOnlySavedNotes(false);
+            setOnlyAiGenerated(false);
+            setOnlyUnresolvedMistakes(false);
+            setOnlyLowConfidence(false);
+            setSelectedPathId('all');
+            setSelectedModuleId('all');
+            setPendingJumpQuestionId(questionId);
+            setActiveTab('quiz');
+          }}
         />
 
         {/* Top-Left Rolling Accuracy Alert Banner (Opens on the Left Side below the Top-Left Rolling Accuracy Widget) */}
@@ -2289,9 +2560,10 @@ export default function App() {
         )}
 
         {/* Global Notifications Stack: Payment, All-Time High & Focus Mode */}
-        {(paymentSuccessToast ||
-          allTimeHighToast ||
-          focusModeToast) && (
+        {!areNotificationsSuppressed &&
+          (paymentSuccessToast ||
+            allTimeHighToast ||
+            focusModeToast) && (
           <div
             className="fixed top-16 right-4 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none px-2 sm:px-0"
             aria-live="polite"
@@ -3421,6 +3693,7 @@ export default function App() {
                 sessionAttempts={sessionAttempts}
                 allQuestions={questions}
                 selectedPathId={selectedPathId}
+                sourceLabel="Practice Quiz Session"
                 onAnswerReviewQuestion={handleAnswerQuestion}
                 onAddGeneratedQuestionsToBank={(newQs) => {
                   setQuestions((prev) => {
@@ -3444,6 +3717,7 @@ export default function App() {
                 }}
                 onStartPersonalizedReview={() => setShowReviewSession(true)}
                 onQuickRetrySessionQuestions={handleQuickRetrySessionQuestions}
+                onAskTutorAboutQuestion={handleOpenAiTutorDrawerForQuestion}
                 unresolvedMistakesCount={unresolvedMistakesCount}
                 onClose={() => setShowPostSessionReview(false)}
               />
@@ -4458,7 +4732,7 @@ export default function App() {
                               missedQuestions: [],
                             });
                           }
-                          setShowPostSessionReview(true);
+                          launchWeakestAreasReviewMode(sessionAttempts, 'Practice Quiz Session');
                         }}
                         onOpenPersonalizedReview={() => setShowReviewSession(true)}
                         unresolvedMistakesCount={unresolvedMistakesCount}
@@ -4517,6 +4791,9 @@ export default function App() {
                       }}
                       onOpenFullDrawer={() =>
                         setExternalOpenNotesDrawerTrigger((prev) => prev + 1)
+                      }
+                      onOpenKnowledgeAssistant={() =>
+                        handleOpenAiTutorDrawerForQuestion(currentQ, null)
                       }
                     />
                   </div>
@@ -4600,9 +4877,53 @@ export default function App() {
               onNavigateToHistory={() => setActiveTab('history')}
               onNavigateToPractice={() => setActiveTab('quiz')}
               onOpenPersonalizedReview={() => setShowReviewSession(true)}
+              onOpenWeakestAreasReview={(attempts) =>
+                launchWeakestAreasReviewMode(attempts, 'Adaptive Quiz Sprint')
+              }
               onSelectModuleForPractice={handleSelectModuleFromTracker}
               initialFocusPathId={adaptiveFocusPathId}
               initialFocusModuleId={adaptiveFocusModuleId}
+            />
+          </div>
+        )}
+
+        {/* TAB: WEAKEST AREAS REVIEW MODE (POST-QUIZ MODULE ANALYSIS & TARGETED REMEDIATION) */}
+        {activeTab === 'weakest-review' && (
+          <div className="responsive-tab-page-shell w-full max-w-full mx-auto">
+            <WeakestAreasReviewView
+              stats={stats}
+              sessionAttempts={weakestReviewAttemptsOverride ?? sessionAttempts}
+              allQuestions={questions}
+              selectedPathId={
+                selectedPathId === 1 || selectedPathId === 2 || selectedPathId === 3
+                  ? selectedPathId
+                  : 'all'
+              }
+              sourceLabel={weakestReviewSourceLabel}
+              onAnswerReviewQuestion={handleAnswerQuestion}
+              onAddGeneratedQuestionsToBank={(newQs) => {
+                setQuestions((prev) => {
+                  const existingIds = new Set(prev.map((q) => q.id));
+                  const uniqueNew = newQs.filter((q) => !existingIds.has(q.id));
+                  const updated = [...uniqueNew, ...prev];
+                  try {
+                    const customOnly = updated.filter((q) => q.isAiGenerated);
+                    localStorage.setItem('az900_custom_questions_v1', JSON.stringify(customOnly));
+                  } catch (e) {
+                    console.error(e);
+                  }
+                  return updated;
+                });
+              }}
+              onSelectModuleForPractice={(modId, pathId) => {
+                setSelectedPathId(pathId);
+                setSelectedModuleId(modId);
+                setCurrentQuestionIndex(0);
+                setActiveTab('quiz');
+              }}
+              onQuickRetrySessionQuestions={handleQuickRetrySessionQuestions}
+              onAskTutorAboutQuestion={handleOpenAiTutorDrawerForQuestion}
+              onClose={() => setActiveTab('quiz')}
             />
           </div>
         )}
@@ -4699,6 +5020,24 @@ export default function App() {
                 setCurrentQuestionIndex(0);
                 setActiveTab('quiz');
               }}
+            />
+
+            {/* Persistent, Toggleable Keyboard Shortcut HUD (Bottom-Right During Active Practice) */}
+            <KeyboardShortcutHUD
+              isFocusMode={isFocusMode}
+              onToggleFocusMode={toggleFocusMode}
+              onRetryQuestion={() => {
+                if (currentQ) {
+                  setCurrentQuestionIndex((prev) => prev);
+                }
+              }}
+              onToggleBookmark={() => {
+                if (currentQ) {
+                  handleToggleBookmark(currentQ.id);
+                }
+              }}
+              onOpenNotes={() => setExternalOpenNotesDrawerTrigger((prev) => prev + 1)}
+              onOpenShortcutGuide={() => setShowAccessibilityModal(true)}
             />
           </div>
         )}
@@ -4987,6 +5326,8 @@ export default function App() {
               unresolvedMistakesCount={unresolvedMistakesCount}
               questionCountByModule={questionCountByModule}
               onOpenUserGuide={() => setShowUserGuideModal(true)}
+              onEnterFocusMode={toggleFocusMode}
+              isFocusModeActive={isFocusMode}
             />
           </div>
         )}
@@ -5079,6 +5420,9 @@ export default function App() {
             setShowMockExam(false);
             setActiveTab('planner');
           }}
+          onOpenWeakestAreasReview={(attempts) =>
+            launchWeakestAreasReviewMode(attempts, 'Timed Mock Exam')
+          }
           onClose={() => setShowMockExam(false)}
         />
       )}
@@ -5087,10 +5431,14 @@ export default function App() {
       {showStudyBreak && (
         <StudyBreakModal
           questionsAnsweredCount={sessionAnswerCount}
+          recentBlockAttempts={sessionAttempts.slice(-6)}
+          stats={stats}
           onTakeBreak={() => setShowStudyBreak(false)}
-          onStartMicroDrill={() => {
+          onStartMicroDrill={(targetModuleId) => {
             setShowStudyBreak(false);
-            setShowMicroDrill(microDrillTargetModuleId || 5);
+            const modToDrill = targetModuleId || microDrillTargetModuleId || 5;
+            setMicroDrillTargetModuleId(modToDrill);
+            setShowMicroDrill(modToDrill);
           }}
           onDismiss={() => setShowStudyBreak(false)}
         />
@@ -5187,6 +5535,47 @@ export default function App() {
           />
         );
       })()}
+
+      {/* Non-intrusive Peer Challenge Invitation Toast Notification */}
+      {!areNotificationsSuppressed && !showPeerChallengeModal && (
+        <PeerChallengeInviteToast
+          invitation={peerChallengeInvite}
+          onDismiss={() => {
+            setPeerChallengeInvite(null);
+            try {
+              sessionStorage.setItem('az900_peer_invite_dismissed', '1');
+            } catch {
+              // ignore storage errors
+            }
+          }}
+          onJoinChallenge={(invitation) => {
+            setPeerChallengeModuleId(invitation.moduleId);
+            setPeerChallengeInitialCode(invitation.challengeCode);
+            setPeerChallengeInvite(null);
+            setShowPeerChallengeModal(true);
+          }}
+        />
+      )}
+
+      {/* Prolonged User Interaction Focus Mode Suggestion Banner */}
+      {!areNotificationsSuppressed && (
+        <FocusModeSuggestionBanner
+          isOpen={showFocusModeSuggestion}
+          onEnterFocusMode={() => {
+            focusSessionSourceRef.current = 'prolonged_prompt';
+            toggleFocusMode('prolonged_prompt');
+            setShowFocusModeSuggestion(false);
+          }}
+          onDismiss={() => {
+            focusSuggestionDismissedUntilRef.current = Date.now() + 10 * 60 * 1000;
+            setShowFocusModeSuggestion(false);
+          }}
+          elapsedInteractionMinutes={Math.max(
+            2,
+            Math.round((Date.now() - lastQuestionCompletedTimeRef.current) / 60000)
+          )}
+        />
+      )}
 
       {/* Peer Challenge 5-Question Cohort Speed Micro-Drill Modal */}
       {showPeerChallengeModal && (
@@ -5665,6 +6054,7 @@ export default function App() {
       <MobileBottomNavBar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        stats={stats}
         todayAnsweredCount={todayAnsweredCount}
         dailyGoal={stats.dailyGoal || 10}
         streakDays={stats.streakDays || 1}
@@ -5708,6 +6098,7 @@ export default function App() {
         }}
       />
       </div>
+      </UserStatsProvider>
     </ProtectedRoute>
   );
 }

@@ -1,17 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Coffee,
   Zap,
   ArrowRight,
   X,
   Play,
+  Pause,
   RotateCcw,
   ShieldCheck,
   AlertTriangle,
   CheckCircle2,
+  Brain,
+  Clock,
 } from 'lucide-react';
 import { KitengeRibbon } from './MotifDecorations';
 import { ResponsiveModalContainer } from './ResponsiveModalContainer';
+import { QuestionAttempt, UserStats } from '../types/quiz';
 import {
   evaluateStudyOverwork,
   getTodayBreaksCount,
@@ -19,11 +23,14 @@ import {
   incrementTodayBreaksCount,
   STUDY_BREAKS_UPDATED_EVENT,
 } from '../utils/studyBreakTracker';
+import { getMostIncorrectModulesInBlock } from '../utils/studyConsolidation';
 
 interface StudyBreakModalProps {
   questionsAnsweredCount: number;
+  recentBlockAttempts?: QuestionAttempt[];
+  stats?: UserStats;
   onTakeBreak: () => void;
-  onStartMicroDrill: () => void;
+  onStartMicroDrill: (targetModuleId?: number) => void;
   onDismiss: () => void;
 }
 
@@ -120,7 +127,6 @@ const KenyaBigFiveAzureScene: React.FC = () => {
             d="M2 5 C6 2, 14 2, 18 4 C20 5, 22 4, 23 3 C24 3, 25 5, 24 6 C22 7, 19 7, 18 8 L17 12 L15 12 L15 8 L8 8 L7 12 L5 12 L5 7 C3 7, 1 6, 2 5 Z"
             fill="url(#bigFiveBodyGrad)"
           />
-          {/* Gently swaying spotted tail */}
           <path
             className="animate-bigfive-tail"
             d="M3 6 C-3 7, -6 12, -3 15 C-1 17, 1 16, 0 14"
@@ -137,7 +143,6 @@ const KenyaBigFiveAzureScene: React.FC = () => {
             d="M8 28 L8 17 C6 15, 6 10, 9 7 C11 5, 16 5, 18 8 C20 9, 24 11, 29 12 C34 12, 37 15, 37 19 L37 28 L34 28 L34 21 L30 21 L30 28 L27 28 L27 20 C23 20, 19 20, 17 20 L16 28 L13 28 L14 20 L11 28 Z"
             fill="url(#bigFiveBodyGrad)"
           />
-          {/* Lion Head + Mane Profile */}
           <path
             d="M6 12 C4 8, 7 3, 13 3 C17 3, 20 6, 19 10 C19 13, 16 16, 12 16 C9 16, 7 14, 6 12 Z"
             fill="#0284C7"
@@ -155,18 +160,15 @@ const KenyaBigFiveAzureScene: React.FC = () => {
 
         {/* 3. AFRICAN BUSH ELEPHANT — Centerpiece majestic profile with swaying trunk */}
         <g className="animate-bigfive-elephant" transform="translate(148, 43)">
-          {/* Elephant body + arched back + legs */}
           <path
             d="M6 20 C7 9, 17 3, 29 4 C38 4, 45 9, 47 16 L47 41 L41 41 L41 28 L35 28 L35 41 L29 41 L29 27 C24 27, 20 27, 17 27 L17 41 L11 41 L11 28 L6 41 L2 41 L4 26 C3 24, 4 21, 6 20 Z"
             fill="url(#bigFiveBodyGrad)"
           />
-          {/* Iconic Large Savannah Ear */}
           <path
             d="M16 8 C22 7, 26 12, 24 19 C22 24, 15 23, 13 18 C11 13, 12 9, 16 8 Z"
             fill="#7DD3FC"
             opacity="0.72"
           />
-          {/* Gently swaying trunk */}
           <path
             className="animate-bigfive-trunk"
             d="M7 15 C3 21, 2 29, 4 33 C5 35, 8 34, 8 31 C8 29, 7 28, 7 25"
@@ -175,7 +177,6 @@ const KenyaBigFiveAzureScene: React.FC = () => {
             strokeWidth="3.2"
             strokeLinecap="round"
           />
-          {/* Ivory Tusk in Pure Pale Azure Highlight */}
           <path
             d="M6 21 Q0 22 -2 18"
             fill="none"
@@ -191,15 +192,8 @@ const KenyaBigFiveAzureScene: React.FC = () => {
             d="M6 12 C9 7, 19 6, 28 7 C35 8, 39 11, 39 16 L39 26 L34 26 L34 19 L29 19 L29 26 L24 26 L24 19 L16 19 L15 26 L10 26 L10 18 L6 16 Z"
             fill="url(#bigFiveBodyGrad)"
           />
-          {/* Twin Curved Rhino Horns */}
-          <path
-            d="M7 13 Q3 7 6 3 Q8 7 10 11 Z"
-            fill="#7DD3FC"
-          />
-          <path
-            d="M11 11 Q10 8 12 6 Q13 8 13 11 Z"
-            fill="#BAE6FD"
-          />
+          <path d="M7 13 Q3 7 6 3 Q8 7 10 11 Z" fill="#7DD3FC" />
+          <path d="M11 11 Q10 8 12 6 Q13 8 13 11 Z" fill="#BAE6FD" />
         </g>
 
         {/* 5. CAPE BUFFALO — Strong sweeping boss horns on right rise */}
@@ -208,15 +202,8 @@ const KenyaBigFiveAzureScene: React.FC = () => {
             d="M6 12 C9 7, 18 6, 29 7 C37 7, 42 11, 42 17 L42 30 L37 30 L37 21 L32 21 L32 30 L27 30 L27 20 C22 20, 17 20, 15 20 L14 30 L9 30 L9 18 C5 17, 4 14, 6 12 Z"
             fill="url(#bigFiveBodyGrad)"
           />
-          {/* Signature Curved Boss Horns */}
-          <path
-            d="M11 8 C8 3, 3 4, 2 7 C4 6, 7 6, 9 9 Z"
-            fill="#BAE6FD"
-          />
-          <path
-            d="M12 8 C15 3, 19 4, 20 7 C18 6, 15 6, 13 9 Z"
-            fill="#7DD3FC"
-          />
+          <path d="M11 8 C8 3, 3 4, 2 7 C4 6, 7 6, 9 9 Z" fill="#BAE6FD" />
+          <path d="M12 8 C15 3, 19 4, 20 7 C18 6, 15 6, 13 9 Z" fill="#7DD3FC" />
           <path
             className="animate-bigfive-tail"
             d="M41 14 Q45 18 44 23"
@@ -240,6 +227,8 @@ const KenyaBigFiveAzureScene: React.FC = () => {
 
 export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
   questionsAnsweredCount,
+  recentBlockAttempts = [],
+  stats,
   onStartMicroDrill,
   onDismiss,
 }) => {
@@ -247,6 +236,22 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
   const [timerRunning, setTimerRunning] = useState<boolean>(false);
   const [breaksTakenToday, setBreaksTakenToday] = useState<number>(() => getTodayBreaksCount());
   const [justConfirmedBreak, setJustConfirmedBreak] = useState<boolean>(false);
+
+  // 2-Minute Knowledge Consolidation Exercise State
+  const [consolidationSeconds, setConsolidationSeconds] = useState<number>(120);
+  const [consolidationRunning, setConsolidationRunning] = useState<boolean>(false);
+  const [selectedWeakIdx, setSelectedWeakIdx] = useState<number>(0);
+
+  const blockAnalysis = useMemo(
+    () => getMostIncorrectModulesInBlock(recentBlockAttempts, stats),
+    [recentBlockAttempts, stats]
+  );
+
+  const activeWeakModule =
+    blockAnalysis.weakModulesInBlock[selectedWeakIdx] || blockAnalysis.weakModulesInBlock[0];
+
+  const elapsedConsolidation = 120 - consolidationSeconds;
+  const activeStepIndex = Math.min(2, Math.floor(elapsedConsolidation / 40));
 
   const savedPomodoroMins = (() => {
     try {
@@ -287,6 +292,19 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
     };
   }, [timerRunning, timerSeconds]);
 
+  useEffect(() => {
+    if (!consolidationRunning || consolidationSeconds <= 0) {
+      if (consolidationSeconds === 0 && consolidationRunning) {
+        setConsolidationRunning(false);
+      }
+      return;
+    }
+    const interval = setInterval(() => {
+      setConsolidationSeconds((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [consolidationRunning, consolidationSeconds]);
+
   const handleConfirmBreakHere = () => {
     const next = incrementTodayBreaksCount(1);
     setBreaksTakenToday(next);
@@ -294,37 +312,47 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
     setTimeout(() => setJustConfirmedBreak(false), 2600);
   };
 
+  const formatMmSs = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+
   return (
     <ResponsiveModalContainer
       isOpen={true}
       onClose={onDismiss}
-      maxWidth="sm"
+      maxWidth="md"
       closeOnBackdropClick={true}
-      ariaLabel="Mindful Study Rhythm — Quick Kahawa Breather"
+      ariaLabel="Mindful Study Rhythm — Knowledge Consolidation & Kahawa Breather"
     >
       <div className="shrink-0">
         <KitengeRibbon height={3} />
       </div>
 
-      {/* Compact Modal Header (Zero static pills — crisp typographic hierarchy) */}
-      <div className="shrink-0 px-3.5 py-2.5 bg-gradient-to-r from-sky-50/90 via-white to-amber-50/70 dark:from-[#0b1b32] dark:via-[#0d2038] dark:to-[#132238] border-b border-sky-200/70 dark:border-sky-800/60 flex items-center justify-between gap-2">
+      {/* Compact Modal Header */}
+      <div className="shrink-0 px-4 py-3 bg-gradient-to-r from-sky-50/90 via-white to-amber-50/70 dark:from-[#0b1b32] dark:via-[#0d2038] dark:to-[#132238] border-b border-sky-200/70 dark:border-sky-800/60 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#0078D4] to-[#0284C7] text-white flex items-center justify-center shrink-0 shadow-2xs">
             <Coffee className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#0284C7] dark:text-sky-300">
-              <span>Mindful Study Rhythm ☕</span>
+              <span>Mindful Study Rhythm · 6-Question Block Complete</span>
             </div>
-            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight truncate">
-              Time for a Quick Kahawa Breather!
+            <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white leading-tight truncate">
+              2-Min Knowledge Consolidation &amp; Kahawa Breather
             </h3>
-            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight mt-0.5">
-              You&apos;ve solved{' '}
-              <strong className="text-slate-900 dark:text-white tabular-nums">
-                {questionsAnsweredCount} scenario{questionsAnsweredCount === 1 ? '' : 's'}
-              </strong>{' '}
-              in this session.
+            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight mt-0.5 tabular-nums">
+              Solved {questionsAnsweredCount} scenario{questionsAnsweredCount === 1 ? '' : 's'}
+              {blockAnalysis.blockTotalQuestions > 0 && (
+                <>
+                  {' · '}
+                  {blockAnalysis.blockIncorrectCount === 0
+                    ? '6/6 Perfect Last Block'
+                    : `${blockAnalysis.blockIncorrectCount} missed in last ${blockAnalysis.blockTotalQuestions} questions`}
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -339,46 +367,166 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
         </button>
       </div>
 
-      {/* Compact Modal Body */}
-      <div className="p-3 sm:p-3.5 space-y-2.5 overflow-y-auto overscroll-contain flex-1 min-h-0">
+      {/* Modal Body */}
+      <div className="p-3.5 sm:p-4 space-y-3 overflow-y-auto overscroll-contain flex-1 min-h-0">
         {/* Sophisticated Light-Azure Animated Kenyan Big Five Wildlife Panorama */}
         <KenyaBigFiveAzureScene />
 
-        {/* Compact Proverb Line */}
-        <div className="px-3 py-2 rounded-xl bg-slate-50/90 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 text-[11px] text-slate-700 dark:text-slate-300 leading-snug">
-          <span className="font-bold text-[#0078D4] dark:text-sky-300">Hekima · </span>
-          <span className="italic">
-            &ldquo;Haraka haraka haina baraka.&rdquo;
-          </span>{' '}
-          <span className="text-slate-500 dark:text-slate-400">
-            (Steady progress builds lasting mastery.)
-          </span>
-        </div>
+        {/* Tailored 2-Minute Knowledge Consolidation Exercise Based on Most-Missed Modules in Previous 6-Question Block */}
+        {activeWeakModule && (
+          <div
+            data-testid="study-break-consolidation-card"
+            className="p-3.5 rounded-xl border border-amber-300/80 dark:border-amber-700/70 bg-amber-50/50 dark:bg-amber-950/25 space-y-3"
+          >
+            <div className="flex items-start justify-between gap-2.5 flex-wrap">
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-amber-900 dark:text-amber-300">
+                  <Brain className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>2-Min Knowledge Consolidation</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="tabular-nums text-rose-700 dark:text-rose-300">
+                    {activeWeakModule.incorrectCount > 0
+                      ? `M${activeWeakModule.moduleId}: ${activeWeakModule.incorrectCount} incorrect in last block`
+                      : `Proactive Recall: Module ${activeWeakModule.moduleId}`}
+                  </span>
+                </div>
+                <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white leading-snug">
+                  {activeWeakModule.exercise.exerciseTitle} (Module {activeWeakModule.moduleId})
+                </h4>
+              </div>
+
+              {/* Interactive 2:00 (120s) Countdown Timer */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="font-mono text-xs font-black text-slate-900 dark:text-white bg-white dark:bg-slate-900 px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-700 tabular-nums inline-flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                  {formatMmSs(consolidationSeconds)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (consolidationSeconds === 0) setConsolidationSeconds(120);
+                    setConsolidationRunning((prev) => !prev);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 text-[11px] font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  {consolidationRunning ? (
+                    <>
+                      <Pause className="w-3 h-3" />
+                      <span>Pause</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3 h-3" />
+                      <span>{consolidationSeconds < 120 ? 'Resume' : 'Start 2m'}</span>
+                    </>
+                  )}
+                </button>
+                {consolidationSeconds < 120 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConsolidationRunning(false);
+                      setConsolidationSeconds(120);
+                    }}
+                    className="p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 cursor-pointer"
+                    title="Reset 2-minute consolidation timer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Switcher if multiple modules had incorrect answers in the previous 6Q block */}
+            {blockAnalysis.weakModulesInBlock.length > 1 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {blockAnalysis.weakModulesInBlock.slice(0, 3).map((wm, idx) => (
+                  <button
+                    key={wm.moduleId}
+                    type="button"
+                    onClick={() => {
+                      setSelectedWeakIdx(idx);
+                      setConsolidationRunning(false);
+                      setConsolidationSeconds(120);
+                    }}
+                    className={`px-2 py-1 rounded-md text-[11px] font-bold border transition-colors cursor-pointer tabular-nums ${
+                      idx === selectedWeakIdx
+                        ? 'bg-slate-900 dark:bg-amber-400 text-white dark:text-slate-950 border-slate-900 dark:border-amber-400'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    M{wm.moduleId} ({wm.incorrectCount} wrong)
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Core Rule Anchor */}
+            <p className="text-[11px] text-slate-700 dark:text-slate-200 bg-white/80 dark:bg-slate-900/70 px-2.5 py-2 rounded-lg border border-amber-200/70 dark:border-slate-700 leading-snug">
+              <strong className="text-amber-900 dark:text-amber-300">Key Distinction: </strong>
+              {activeWeakModule.exercise.focusTrap}
+            </p>
+
+            {/* 3 Timed 40-Second Knowledge Consolidation Steps */}
+            <div className="space-y-1.5">
+              {activeWeakModule.exercise.steps.map((step, sIdx) => {
+                const isActive = consolidationRunning && activeStepIndex === sIdx;
+                const isDone =
+                  consolidationSeconds === 0 ||
+                  (elapsedConsolidation >= (sIdx + 1) * 40 && consolidationSeconds < 120);
+                return (
+                  <div
+                    key={step.phase}
+                    className={`px-2.5 py-2 rounded-lg border text-[11px] leading-snug transition-colors ${
+                      isActive
+                        ? 'bg-white dark:bg-slate-900 border-[#0078D4] ring-1 ring-[#0078D4]/30 text-slate-900 dark:text-white'
+                        : isDone
+                        ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200'
+                        : 'bg-white/70 dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 font-bold">
+                      <span>
+                        0{sIdx + 1}. {step.phase}
+                      </span>
+                      {isDone && (
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
+                          Consolidated ✓
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-slate-600 dark:text-slate-300">{step.prompt}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Daily Break Confirmation & Overwork Check */}
         <div
           className={`px-3 py-2 rounded-xl border flex items-center justify-between gap-2 text-[11px] ${
             overworkAssessment.status === 'overworking'
-              ? 'bg-rose-50/90 border-rose-300 text-rose-950'
+              ? 'bg-rose-50/90 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-950 dark:text-rose-200'
               : overworkAssessment.status === 'break-due'
-              ? 'bg-amber-50/90 border-amber-300 text-amber-950'
-              : 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+              ? 'bg-amber-50/90 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-200'
+              : 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200'
           }`}
         >
           <div className="flex items-start gap-2 min-w-0">
             {overworkAssessment.status === 'overworking' ? (
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
             ) : (
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
             )}
             <div className="min-w-0">
-              <div className="font-extrabold leading-tight">
+              <div className="font-extrabold leading-tight tabular-nums">
                 {breaksTakenToday} Break{breaksTakenToday === 1 ? '' : 's'} Today ·{' '}
                 {overworkAssessment.status === 'overworking'
                   ? 'Overworking Check: Take Rest'
                   : 'Balanced Pace'}
               </div>
-              <div className="text-[10px] opacity-85 truncate">
+              <div className="text-[10px] opacity-85 truncate tabular-nums">
                 {Math.floor(totalDailySeconds / 60)}m studied today · {savedPomodoroMins}m blocks
               </div>
             </div>
@@ -387,9 +535,9 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
           <button
             type="button"
             onClick={handleConfirmBreakHere}
-            className="px-2.5 py-1 rounded-lg bg-white hover:bg-sky-50 text-[#005A9E] border border-sky-200 font-extrabold text-[10.5px] flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
+            className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 text-[#005A9E] dark:text-sky-300 border border-sky-200 dark:border-slate-700 font-extrabold text-[10.5px] flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
           >
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
             <span>{justConfirmedBreak ? 'Confirmed!' : 'Log Break'}</span>
           </button>
         </div>
@@ -402,7 +550,7 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
             </div>
             <div className="min-w-0">
               <div className="text-[11px] font-extrabold text-sky-950 dark:text-sky-100 leading-tight">
-                60-Second Reset
+                60-Second Breathing Reset
               </div>
               <div className="text-[10px] text-slate-600 dark:text-slate-400 leading-tight truncate">
                 Inhale 4s · Hold 4s · Exhale slowly
@@ -434,16 +582,20 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
           )}
         </div>
 
-        {/* Compact Choice of Actions */}
+        {/* Choice of Actions */}
         <div className="grid grid-cols-1 gap-1.5 pt-0.5">
           <button
             type="button"
-            onClick={onStartMicroDrill}
-            className="w-full px-3 py-2 rounded-xl bg-gradient-to-r from-[#0284C7] to-[#005A9E] hover:from-[#0078D4] hover:to-[#004578] text-white font-bold text-xs flex items-center justify-between shadow-xs transition-all cursor-pointer"
+            onClick={() => onStartMicroDrill(activeWeakModule?.moduleId)}
+            className="w-full px-3 py-2.5 rounded-xl bg-gradient-to-r from-[#0284C7] to-[#005A9E] hover:from-[#0078D4] hover:to-[#004578] text-white font-bold text-xs flex items-center justify-between shadow-xs transition-all cursor-pointer"
           >
             <span className="flex items-center gap-1.5">
               <Zap className="w-3.5 h-3.5 text-amber-300" />
-              <span>3-Question Weak-Spot Drill</span>
+              <span>
+                {activeWeakModule
+                  ? `Drill Module ${activeWeakModule.moduleId} Weak Spots`
+                  : '3-Question Weak-Spot Drill'}
+              </span>
             </span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
@@ -451,7 +603,7 @@ export const StudyBreakModal: React.FC<StudyBreakModalProps> = ({
           <button
             type="button"
             onClick={onDismiss}
-            className="w-full py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-semibold transition-colors cursor-pointer"
+            className="w-full py-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-semibold transition-colors cursor-pointer"
           >
             I feel refreshed — resume study
           </button>

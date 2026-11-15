@@ -973,4 +973,164 @@ export const PATH1_EXPANSION_QUESTIONS: Question[] = [
       correctivePrescription: 'Identify serverless Consumption plans by per-action/per-execution metering and $0 idle compute cost.',
     },
   },
+
+  // =========================================================================
+  // LEARNING PATH 1: ADDITIONAL SCENARIO SET (Modules 1, 2, & 3)
+  // =========================================================================
+  {
+    id: 'az900-mod1-q16',
+    learningPathId: 1,
+    learningPathTitle: 'Describe Cloud Concepts',
+    moduleId: 1,
+    moduleTitle: 'Fundamental Cloud Concepts',
+    difficulty: 'Intermediate',
+    scenario:
+      'A national defense research institute stores classified aerospace telemetry governed by strict sovereignty laws. Security regulations mandate dedicated, single-tenant physical compute hosts, storage arrays, and hypervisors owned and operated inside the institute’s own secure facility, with zero hardware shared with external organizations.',
+    question: 'Which cloud deployment model satisfies this strict single-tenant, organization-hosted requirement?',
+    options: [
+      { letter: 'A', text: 'Public Cloud' },
+      { letter: 'B', text: 'Private Cloud' },
+      { letter: 'C', text: 'Multi-tenant Community SaaS' },
+      { letter: 'D', text: 'Consumption Serverless Cloud' },
+    ],
+    correctAnswer: 'B',
+    whyCorrect:
+      'A Private Cloud is used exclusively by a single organization, providing total physical isolation and granular control over security, compliance, and dedicated hardware hosted either in an on-premises datacenter or a dedicated single-tenant facility.',
+    distractorBreakdown: [
+      { letter: 'A', reason: 'Public Cloud shares underlying physical datacenter infrastructure across multiple external customer tenants.' },
+      { letter: 'C', reason: 'Multi-tenant SaaS shares software and provider hardware across multiple subscribers.' },
+      { letter: 'D', reason: 'Consumption serverless executes on shared multi-tenant public cloud hosts.' },
+    ],
+    examTip:
+      'Single-tenant isolation + dedicated organization-controlled hardware (no shared public host) = Private Cloud!',
+    errorDiagnostic: {
+      trapType: 'Model Boundary (IaaS/PaaS/SaaS)',
+      correctivePrescription: 'Differentiate single-tenant Private Cloud isolation from multi-tenant Public Cloud and Hybrid Cloud.',
+    },
+  },
+  {
+    id: 'az900-mod1-q17',
+    learningPathId: 1,
+    learningPathTitle: 'Describe Cloud Concepts',
+    moduleId: 1,
+    moduleTitle: 'Fundamental Cloud Concepts',
+    difficulty: 'Fundamental',
+    scenario:
+      'A software engineering team hosts a custom customer-facing portal on Azure App Service (Platform as a Service) backed by Azure SQL Database. A severe zero-day security vulnerability is disclosed affecting the underlying Windows host operating system.',
+    question:
+      'Under the Microsoft Shared Responsibility Model for PaaS, who is responsible for patching the underlying host operating system and maintaining physical server racks?',
+    options: [
+      { letter: 'A', text: 'The customer’s internal DevOps engineering team' },
+      { letter: 'B', text: 'Both the customer and Microsoft must co-patch the host OS manually via RDP' },
+      { letter: 'C', text: 'Microsoft (the cloud provider)' },
+      { letter: 'D', text: 'The third-party public DNS domain registrar' },
+    ],
+    correctAnswer: 'C',
+    whyCorrect:
+      'In a Platform as a Service (PaaS) model such as Azure App Service or Azure SQL Database, Microsoft manages all physical infrastructure, networking fabric, and underlying host operating system patching, freeing the customer to focus purely on their application code, database schema, and data governance.',
+    distractorBreakdown: [
+      { letter: 'A', reason: 'Customer DevOps engineers only manage host OS patching in IaaS (Virtual Machines), not in managed PaaS.' },
+      { letter: 'B', reason: 'PaaS abstracts host OS access completely—customers do not log into or patch App Service host VMs.' },
+      { letter: 'D', reason: 'A DNS registrar only manages domain name registration and records, never OS security patches.' },
+    ],
+    examTip:
+      'Shared Responsibility Boundary Check: IaaS = Customer patches guest OS. PaaS = Microsoft patches OS, customer manages app code & data!',
+    errorDiagnostic: {
+      trapType: 'Model Boundary (IaaS/PaaS/SaaS)',
+      correctivePrescription: 'Map OS patching responsibility strictly to Customer in IaaS vs. Microsoft in PaaS and SaaS.',
+    },
+  },
+  {
+    id: 'az900-mod2-q16',
+    learningPathId: 1,
+    learningPathTitle: 'Describe Cloud Concepts',
+    moduleId: 2,
+    moduleTitle: 'Cloud Benefits',
+    difficulty: 'Intermediate',
+    scenario:
+      'A mobile payments company processes 12,000 transactions per second on Friday evenings after payroll deposits, then drops to 400 transactions per second every Tuesday morning. Rather than paying for servers sized for peak Friday traffic all week, the platform automatically expands compute during surges and contracts afterward while benefiting from Microsoft’s massive global purchasing scale for lower per-unit resource costs.',
+    question: 'Which pair of cloud computing benefits is the organization realizing in this scenario?',
+    options: [
+      { letter: 'A', text: 'Elasticity and Economies of Scale' },
+      { letter: 'B', text: 'Capital Depreciation and Vertical Hardware Lock-in' },
+      { letter: 'C', text: 'Static Provisioning and Single-Tenant CapEx' },
+      { letter: 'D', text: 'Manual Capacity Forecasting and Geo-Sovereignty' },
+    ],
+    correctAnswer: 'A',
+    whyCorrect:
+      'Elasticity enables resources to automatically scale out during peak Friday surges and scale back in during quiet Tuesday mornings so you never pay for idle servers, while Economies of Scale allow Microsoft to buy hardware and power at massive volume and pass lower unit prices on to cloud customers.',
+    distractorBreakdown: [
+      { letter: 'B', reason: 'Capital depreciation applies to purchased on-premises CapEx hardware, not dynamic cloud elasticity.' },
+      { letter: 'C', reason: 'Static provisioning wastes money on idle capacity and contradicts automatic scaling.' },
+      { letter: 'D', reason: 'Manual forecasting and geo-sovereignty do not describe automatic scaling or lower cloud unit costs.' },
+    ],
+    examTip:
+      'Auto-expand + auto-shrink to match real-time traffic = Elasticity. Lower unit costs from cloud providers buying at global scale = Economies of Scale!',
+    errorDiagnostic: {
+      trapType: 'Conceptual Gap',
+      correctivePrescription: 'Connect dynamic auto-scaling out/in to Elasticity and hyperscale bulk cost efficiency to Economies of Scale.',
+    },
+  },
+  {
+    id: 'az900-mod2-q17',
+    learningPathId: 1,
+    learningPathTitle: 'Describe Cloud Concepts',
+    moduleId: 2,
+    moduleTitle: 'Cloud Benefits',
+    difficulty: 'Advanced',
+    scenario:
+      'A regional hospital network hosts its patient Electronic Medical Record (EMR) platform in Azure East US. Healthcare continuity auditors require a validated recovery strategy guaranteeing that if a catastrophic regional power grid failure takes all East US datacenters offline, encrypted data replicas and standby compute in Central US can restore full clinical operations within 90 minutes.',
+    question: 'Which cloud reliability capability specifically addresses restoring workloads after a catastrophic regional failure?',
+    options: [
+      { letter: 'A', text: 'Vertical Scaling (Scaling Up CPU/RAM)' },
+      { letter: 'B', text: 'Disaster Recovery (DR)' },
+      { letter: 'C', text: 'Single-Datacenter Caching' },
+      { letter: 'D', text: 'CapEx Hardware Refresh Cycles' },
+    ],
+    correctAnswer: 'B',
+    whyCorrect:
+      'Disaster Recovery (DR) encompasses geo-replicated backups, cross-region failover plans, and recovery time objectives (RTO) designed to restore mission-critical applications and data in a secondary location when a major regional catastrophe strikes.',
+    distractorBreakdown: [
+      { letter: 'A', reason: 'Vertical scaling upgrades CPU or memory on one VM and provides zero protection if an entire region goes offline.' },
+      { letter: 'C', reason: 'Single-datacenter caching improves read latency locally and fails if that region suffers an outage.' },
+      { letter: 'D', reason: 'Replacing physical hardware on a 3-year cycle is an on-premises maintenance practice, not cloud regional DR.' },
+    ],
+    examTip:
+      'Surviving local component hiccups continuously = High Availability (HA). Restoring systems in a secondary region after catastrophe within an RTO = Disaster Recovery (DR)!',
+    errorDiagnostic: {
+      trapType: 'Cost & Redundancy Trap',
+      correctivePrescription: 'Distinguish regional catastrophic restoration plans (Disaster Recovery) from local scaling and caching.',
+    },
+  },
+  {
+    id: 'az900-mod3-q16',
+    learningPathId: 1,
+    learningPathTitle: 'Describe Cloud Concepts',
+    moduleId: 3,
+    moduleTitle: 'Cloud Pricing & Consumption Models',
+    difficulty: 'Intermediate',
+    scenario:
+      'A supply-chain startup previously paid $120,000 upfront every three years for physical on-premises servers that sat at only 15% average CPU utilization. After migrating to Azure, the startup eliminates upfront hardware capital purchases and instead receives a variable monthly bill covering only the exact compute hours, storage gigabytes, and serverless function runs used each month.',
+    question: 'Which financial and cloud pricing concepts best characterize this new Azure cost structure?',
+    options: [
+      { letter: 'A', text: 'Capital Expenditure (CapEx) and Multi-Year Hardware Depreciation' },
+      { letter: 'B', text: 'Operational Expenditure (OpEx) and Consumption-Based Pricing' },
+      { letter: 'C', text: 'Fixed Asset Amortization and Unmetered Dedicated Hosting' },
+      { letter: 'D', text: 'On-Premises Server Ownership and Upfront Site Licensing' },
+    ],
+    correctAnswer: 'B',
+    whyCorrect:
+      'Cloud computing shifts IT spending from upfront Capital Expenditure (CapEx) to Operational Expenditure (OpEx), where expenses are billed monthly as services are used under a consumption-based (pay-as-you-go) model—eliminating stranded capacity costs.',
+    distractorBreakdown: [
+      { letter: 'A', reason: 'CapEx and hardware depreciation describe buying physical servers upfront, which the startup eliminated.' },
+      { letter: 'C', reason: 'Asset amortization applies to capital hardware investments rather than metered cloud usage.' },
+      { letter: 'D', reason: 'On-premises ownership requires purchasing and maintaining physical machines rather than pay-per-use billing.' },
+    ],
+    examTip:
+      'Zero upfront hardware bill + monthly invoice strictly matching actual metered usage = OpEx + Consumption-Based Pricing!',
+    errorDiagnostic: {
+      trapType: 'Cost & Redundancy Trap',
+      correctivePrescription: 'Always pair monthly metered cloud billing with OpEx and Consumption-Based pricing models.',
+    },
+  },
 ];

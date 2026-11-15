@@ -1,4 +1,5 @@
 import confetti from 'canvas-confetti';
+import { getStoredStreakCelebrationsEnabled } from './highContrast';
 
 export type CelebrationIntensityMode = 'minimalist' | 'standard' | 'showstopping';
 
@@ -54,6 +55,9 @@ export function fireModuleCompletionConfetti(
   overrideIntensity?: CelebrationIntensityMode
 ): void {
   try {
+    if (!getStoredStreakCelebrationsEnabled()) {
+      return;
+    }
     const intensity = resolveIntensityArg(moduleTitleOrIntensity, overrideIntensity);
     const colors = ['#0078D4', '#38BDF8', '#10B981', '#F59E0B', '#D97706', '#6366F1'];
 
@@ -171,6 +175,9 @@ export function fireDailyGoalCompletionConfetti(
   overrideIntensity?: CelebrationIntensityMode
 ): void {
   try {
+    if (!getStoredStreakCelebrationsEnabled()) {
+      return;
+    }
     const intensity = resolveIntensityArg(goalOrIntensity, overrideIntensity);
     const palette = ['#10B981', '#34D399', '#F59E0B', '#FBBF24', '#0078D4', '#38BDF8'];
 
@@ -313,6 +320,9 @@ export function fireMilestoneTierConfetti(
   overrideIntensity?: CelebrationIntensityMode
 ): void {
   try {
+    if (!getStoredStreakCelebrationsEnabled()) {
+      return;
+    }
     const intensity = overrideIntensity || getStoredCelebrationIntensity();
     const colors =
       tier === 100

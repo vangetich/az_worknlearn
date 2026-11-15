@@ -49,9 +49,11 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
+  Copy,
+  Flame,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
-import { MaasaiMedallion, KitengeRibbon } from './MotifDecorations';
+import { MaasaiMedallion, KitengeRibbon, KitengeCardWatermark } from './MotifDecorations';
 import { KeyConceptSidePanel, extractScenarioTerminology } from './KeyConceptSidePanel';
 import { ScenarioTextWithTooltips } from './ScenarioTextWithTooltips';
 import { QuickNotesDrawer } from './QuickNotesDrawer';
@@ -74,9 +76,20 @@ import {
   isMemoryAnchorSaved,
 } from '../utils/exportNotesMarkdown';
 import { KeyboardShortcutGuidePopover } from './KeyboardShortcutGuide';
-import { getThreadTagsForQuestion, ThreadTagMeta } from '../data/azureThemesData';
+import {
+  getThreadTagsForQuestion,
+  getThreadContextForModule,
+  ThreadTagMeta,
+} from '../data/azureThemesData';
 import { ThreadTagBadge } from './ThreadTagBadge';
 import { ThreadContextModal } from './ThreadContextModal';
+import { ConceptRefinementOverlay } from './ConceptRefinementOverlay';
+import { RecallSprintModal } from './RecallSprintModal';
+import { formatQuestionContextMarkdown } from '../utils/studyConsolidation';
+import {
+  getStoredQuizAnimationsEnabled,
+  QUIZ_ANIMATIONS_CHANGED_EVENT,
+} from '../utils/highContrast';
 
 interface QuizCardProps {
   question: Question;
@@ -514,6 +527,11 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     () => getThreadTagsForQuestion(question, 3),
     [question]
   );
+  const primaryThreadContext = React.useMemo(() => {
+    if (questionThreadTags.length === 0) return null;
+    return getThreadContextForModule(questionThreadTags[0].themeId, question.moduleId);
+  }, [questionThreadTags, question.moduleId]);
+  const [isThreadContextPreviewOpen, setIsThreadContextPreviewOpen] = useState<boolean>(false);
   const [activeThreadModalTag, setActiveThreadModalTag] = useState<ThreadTagMeta | null>(null);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
@@ -521,7 +539,45 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [userConfidence, setUserConfidence] = useState<number | null>(() => stats?.confidenceScores?.[question.id] || null);
   const [confidenceToast, setConfidenceToast] = useState<string | null>(null);
   const [showKnowledgeCheck, setShowKnowledgeCheck] = useState<boolean>(false);
-  const [showAiTutorSidebar, setShowAiTutorSidebar] = useState<boolean>(false);
+  const [localFocusMode, setLocalFocusMode] = useState<boolean>(isFocusMode);
+  React.useEffect(() => {
+    setLocalFocusMode(isFocusMode);
+  }, [isFocusMode]);
+  const effectiveFocusMode = onToggleFocusMode ? isFocusMode : localFocusMode;
+  const handleToggleCardFocusMode = () => {
+    if (onToggleFocusMode) {
+      onToggleFocusMode();
+    } else {
+      setLocalFocusMode((prev) => {
+        const next = !prev;
+        if (typeof document !== 'undefined') {
+          document.documentElement.setAttribute('data-focus-mode', next ? 'true' : 'false');
+          document.body.setAttribute('data-focus-mode', next ? 'true' : 'false');
+        }
+        return next;
+      });
+    }
+  };
+  const [showAiTutorSidebar, setShowAiTutorSidebar] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('az900_ask_ai_sidebar_open') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const handleToggleAiTutorSidebar = (nextState?: boolean) => {
+    setShowAiTutorSidebar((prev) => {
+      const next = typeof nextState === 'boolean' ? nextState : !prev;
+      try {
+        localStorage.setItem('az900_ask_ai_sidebar_open', String(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
+  const [copiedContext, setCopiedContext] = useState<boolean>(false);
+  const [isConceptRefinementOpen, setIsConceptRefinementOpen] = useState<boolean>(false);
   const [focusedAiOption, setFocusedAiOption] = useState<string | null>(null);
   const [isAiTutorLoading, setIsAiTutorLoading] = useState<boolean>(false);
   const [isAiContextExpanded, setIsAiContextExpanded] = useState<boolean>(true);
@@ -538,8 +594,41 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const aiTutorRecognitionRef = React.useRef<any>(null);
   const aiTutorFeedBottomRef = React.useRef<HTMLDivElement>(null);
 
+  const handleCopyQuestionContext = async () => {
+    const markdown = formatQuestionContextMarkdown(question, selectedOption, hasSubmitted);
+    let copied = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(markdown);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+    if (!copied) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = markdown;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        copied = false;
+      }
+    }
+    if (copied) {
+      setCopiedContext(true);
+      window.setTimeout(() => setCopiedContext(false), 2500);
+    }
+  };
+
   // Keep the contextual Ask AI Tutor sidebar pre-filled whenever the active question changes
   React.useEffect(() => {
+    setCopiedContext(false);
     setFocusedAiOption(null);
     setAiTutorInput(
       `Clarify Module ${question.moduleId} (${question.moduleTitle}): "${question.question}" — what is the core Azure decision rule here?`
@@ -779,6 +868,54 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     setQuickDrillTimeLeft(30);
     setQuickDrillTimedOut(false);
     setShowQuickDrillModal(true);
+  };
+
+  // 30-Second Recall Sprint State (Rapid-fire low confidence memory consolidation)
+  const [showRecallSprintModal, setShowRecallSprintModal] = useState<boolean>(false);
+  const [recallSprintQuestions, setRecallSprintQuestions] = useState<Question[]>([]);
+
+  const handleLaunchRecallSprint = () => {
+    // 1. Collect low confidence questions (user self-rated 1 or 2)
+    const lowConfIds = new Set(
+      Object.entries(stats?.confidenceScores || {})
+        .filter(([_, score]) => score <= 2)
+        .map(([id]) => id)
+    );
+
+    // 2. Also collect missed questions from mistakesHistory
+    const missedIds = new Set((stats?.mistakesHistory || []).map((m) => m.questionId));
+
+    // Filter questions prioritizing low confidence & missed from current module/path
+    const moduleLowConf = BUILTIN_QUESTIONS.filter(
+      (q) => q.moduleId === question.moduleId && (lowConfIds.has(q.id) || missedIds.has(q.id))
+    );
+    const pathLowConf = BUILTIN_QUESTIONS.filter(
+      (q) => q.learningPathId === question.learningPathId && (lowConfIds.has(q.id) || missedIds.has(q.id))
+    );
+    const anyLowConf = BUILTIN_QUESTIONS.filter((q) => lowConfIds.has(q.id) || missedIds.has(q.id));
+    const fallbackCurriculum = BUILTIN_QUESTIONS.filter((q) => q.moduleId === question.moduleId);
+
+    // Pick 5 questions for a focused sprint
+    const sprintSet = [
+      ...moduleLowConf,
+      ...pathLowConf,
+      ...anyLowConf,
+      ...fallbackCurriculum,
+      ...BUILTIN_QUESTIONS,
+    ];
+
+    const seen = new Set<string>();
+    const uniqueSprint: Question[] = [];
+    for (const q of sprintSet) {
+      if (!seen.has(q.id)) {
+        seen.add(q.id);
+        uniqueSprint.push(q);
+      }
+      if (uniqueSprint.length >= 5) break;
+    }
+
+    setRecallSprintQuestions(uniqueSprint);
+    setShowRecallSprintModal(true);
   };
 
   // Floating Scenario Pace Timer & Target Pace State
@@ -1352,8 +1489,29 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
   const scenarioConcepts = React.useMemo(() => extractScenarioTerminology(question), [question]);
 
+  // Conditional Slide-and-Fade Question Transition Animation state (controlled via Accessibility Settings)
+  const [areQuizAnimationsEnabled, setAreQuizAnimationsEnabled] = useState<boolean>(
+    getStoredQuizAnimationsEnabled
+  );
+  const [slideFadeTriggerKey, setSlideFadeTriggerKey] = useState<number>(0);
+
+  React.useEffect(() => {
+    const handleAnimationsToggle = (e: Event) => {
+      const customEvent = e as CustomEvent<{ enabled?: boolean }>;
+      if (typeof customEvent.detail?.enabled === 'boolean') {
+        setAreQuizAnimationsEnabled(customEvent.detail.enabled);
+      } else {
+        setAreQuizAnimationsEnabled(getStoredQuizAnimationsEnabled());
+      }
+    };
+    window.addEventListener(QUIZ_ANIMATIONS_CHANGED_EVENT, handleAnimationsToggle);
+    return () =>
+      window.removeEventListener(QUIZ_ANIMATIONS_CHANGED_EVENT, handleAnimationsToggle);
+  }, []);
+
   // Reset state, question timer, study note & cancel audio when question changes
   React.useEffect(() => {
+    setSlideFadeTriggerKey((prev) => prev + 1);
     setSelectedOption(null);
     setHasSubmitted(false);
     setShowAnalyzeDistractorsPanel(false);
@@ -1984,23 +2142,76 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   return (
     <motion.div
       ref={cardRootRef}
-      layout
-      initial={{ opacity: 0, y: 14, scale: 0.992 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -10, scale: 0.992 }}
-      transition={{
-        duration: 0.24,
-        ease: [0.22, 1, 0.36, 1],
-        layout: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
-      }}
+      key={`quizcard-motion-${question.id}-${slideFadeTriggerKey}`}
+      data-testid="quizcard-container"
+      data-transition-animation={areQuizAnimationsEnabled ? 'slide-and-fade' : 'disabled'}
+      layout={areQuizAnimationsEnabled}
+      initial={
+        areQuizAnimationsEnabled
+          ? { opacity: 0, x: 28, y: 12, scale: 0.992 }
+          : false
+      }
+      animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+      exit={
+        areQuizAnimationsEnabled
+          ? { opacity: 0, x: -24, y: -8, scale: 0.992 }
+          : undefined
+      }
+      transition={
+        areQuizAnimationsEnabled
+          ? {
+              duration: 0.24,
+              ease: [0.16, 1, 0.3, 1],
+              layout: { duration: 0.26, ease: [0.16, 1, 0.3, 1] },
+            }
+          : { duration: 0 }
+      }
       onTouchStart={handleCardTouchStart}
       onTouchEnd={handleCardTouchEnd}
-      className="w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden"
+      className={`relative w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden ${
+        areQuizAnimationsEnabled ? 'animate-quizcard-slide-fade' : ''
+      }`}
     >
-      {/* Mobile-Responsive 'Quick Switcher' Swipe Gesture Bar (Toggle Active Filtered Lists Without Opening Menu) */}
+      {/* Floating Focus Mode Toggle Icon in Top-Right Corner of QuizCard (Enter/Exit Focus Mode Without Navigating to Main Header) */}
+      <button
+        id="quizcard-floating-focus-toggle"
+        data-testid="quizcard-floating-focus-toggle"
+        type="button"
+        onClick={handleToggleCardFocusMode}
+        aria-pressed={effectiveFocusMode}
+        aria-label={
+          effectiveFocusMode
+            ? 'Exit Focus Mode'
+            : 'Enter Focus Mode'
+        }
+        title={
+          effectiveFocusMode
+            ? 'Exit Focus Mode directly from QuizCard (restore Header & Navigation)'
+            : 'Enter Focus Mode directly from QuizCard (hide Header & distractions)'
+        }
+        className={`absolute top-2 right-2.5 z-30 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-black shadow-md backdrop-blur-md transition-all cursor-pointer active:scale-95 ${
+          effectiveFocusMode
+            ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-400 ring-2 ring-emerald-400/35'
+            : 'bg-slate-900/95 hover:bg-[#0078D4] text-amber-300 hover:text-white border-slate-700'
+        }`}
+      >
+        {effectiveFocusMode ? (
+          <Minimize2 className="w-3.5 h-3.5 text-amber-200 shrink-0" />
+        ) : (
+          <Maximize2 className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+        )}
+        <span className="whitespace-nowrap">
+          {effectiveFocusMode ? 'Exit Focus' : 'Focus Mode'}
+        </span>
+      </button>
+
+      {/* Mobile-Responsive 'Quick Switcher' Swipe Gesture Bar (Single-File Horizontal Scroll) */}
       {onSelectQuickFilter && (
-        <div className="px-3 sm:px-5 py-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border-b border-slate-700/80 flex flex-wrap items-center justify-between gap-2 rounded-t-xl min-w-0 w-full">
-          <div className="flex flex-wrap items-center gap-1.5 py-0.5 min-w-0 max-w-full">
+        <div
+          data-testid="quizcard-quick-switcher-bar"
+          className="pl-3 pr-28 sm:pl-5 sm:pr-32 py-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border-b border-slate-700/80 flex flex-nowrap items-center justify-between gap-2 rounded-t-xl min-w-0 w-full overflow-x-auto overscroll-x-contain whitespace-nowrap"
+        >
+          <div className="flex flex-nowrap items-center gap-1.5 py-0.5 shrink-0">
             <span className="text-[10px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1 shrink-0 mr-1">
               <Layers className="w-3 h-3 text-amber-400" />
               <span>Quick Switcher:</span>
@@ -2037,7 +2248,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   <button
                     type="button"
                     onClick={() => onSelectQuickFilter(item.id)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer ${
                       isActive
                         ? item.id === 'retry-queue'
                           ? 'bg-amber-400 text-slate-950 font-black shadow-2xs'
@@ -2048,7 +2259,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                     <span>{item.shortLabel}</span>
                     {item.count !== undefined && (
                       <span
-                        className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                        className={`px-1.5 py-0.2 rounded-full text-[10px] font-black tabular-nums ${
                           isActive ? 'bg-black/20 text-current' : 'bg-white/15 text-slate-300'
                         }`}
                       >
@@ -2061,7 +2272,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             })}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex flex-nowrap items-center gap-1.5 shrink-0">
             {swipeFeedbackToast ? (
               <span className="text-[10px] font-extrabold text-amber-300 bg-white/10 px-2 py-0.5 rounded-md animate-pulse">
                 {swipeFeedbackToast}
@@ -2071,7 +2282,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 Swipe ⇄ on card to switch lists
               </span>
             )}
-            <div className="inline-flex items-center rounded-lg bg-white/10 border border-white/15 p-0.5">
+            <div className="inline-flex items-center rounded-lg bg-white/10 border border-white/15 p-0.5 shrink-0">
               <button
                 type="button"
                 onClick={() => handleCycleQuickFilter('prev')}
@@ -2095,21 +2306,22 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
       )}
 
-      {/* Uncluttered, Neatly Ordered Top Header Bar with Persistent Difficulty Dropdown & Study Zone Menu */}
+      {/* Single-File Horizontally Scrollable 'Path: Module' Quick Switcher & Action Bar */}
       <div
-        className={`relative px-3.5 sm:px-6 py-2.5 bg-slate-50/80 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2 min-w-0 w-full ${
-          !onSelectQuickFilter ? 'rounded-t-xl' : ''
+        data-testid="quizcard-path-module-scroll-bar"
+        className={`relative px-3.5 sm:px-6 py-2.5 bg-slate-50/80 border-b border-slate-200/80 flex flex-nowrap items-center justify-between gap-2 min-w-0 w-full overflow-x-auto overscroll-x-contain whitespace-nowrap ${
+          !onSelectQuickFilter ? 'rounded-t-xl pr-28 sm:pr-32' : ''
         }`}
       >
         {/* Left Group: Path/Module Identity + Persistent Difficulty Level Dropdown Selector + Active Mode Indicators */}
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
+        <div className="flex flex-nowrap items-center gap-1.5 sm:gap-2 shrink-0">
           <span
-            className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${pathColor}`}
+            className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border shrink-0 whitespace-nowrap ${pathColor}`}
           >
             Path {question.learningPathId}: Module {question.moduleId}
           </span>
 
-          <span className="text-xs font-semibold text-slate-700 hidden md:inline max-w-[200px] truncate">
+          <span className="text-xs font-semibold text-slate-700 max-w-[200px] truncate shrink-0">
             {question.moduleTitle}
           </span>
 
@@ -2117,7 +2329,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           <button
             type="button"
             onClick={handleCycleDifficultyBadgeFilter}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-2xs ${difficultyBadgeConfig.pillClass}`}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold border transition-all cursor-pointer shadow-2xs shrink-0 whitespace-nowrap ${difficultyBadgeConfig.pillClass}`}
             title={`Current Question Difficulty: ${difficultyBadgeConfig.label} (${difficultyBadgeConfig.subLabel}). Click to cycle difficulty filter.`}
           >
             <span className={`w-2 h-2 rounded-full shrink-0 ${difficultyBadgeConfig.dotClass}`} />
@@ -2131,7 +2343,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
           {/* Small '+/-' Trend Percentage Indicator Highlighting Last 5 Questions Impact on Dynamic Difficulty */}
           <span
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black border tabular-nums shadow-2xs select-none ${
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black border tabular-nums shadow-2xs select-none shrink-0 whitespace-nowrap ${
               last5DifficultyImpactDelta > 0
                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                 : last5DifficultyImpactDelta < 0
@@ -2160,16 +2372,16 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 ? `${last5DifficultyImpactDelta}%`
                 : '+0%'}
             </span>
-            <span className="text-[9.5px] font-bold opacity-75 hidden sm:inline">(5Q)</span>
+            <span className="text-[9.5px] font-bold opacity-75">(5Q)</span>
           </span>
 
           {/* Persistent Difficulty Level Dropdown Selector in Practice Workspace Toolbar (Overrides Dynamic Difficulty) */}
           {onSelectDifficultyFilter && (
-            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-slate-300 shadow-2xs">
+            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-slate-300 shadow-2xs shrink-0 whitespace-nowrap">
               <Filter className="w-3 h-3 text-[#0078D4] shrink-0" />
               <label
                 htmlFor="quizcard-difficulty-dropdown"
-                className="text-[10px] font-black uppercase tracking-wider text-slate-600 hidden sm:inline"
+                className="text-[10px] font-black uppercase tracking-wider text-slate-600"
               >
                 Level:
               </label>
@@ -2199,7 +2411,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
           {isQuestionSkipped && !hasSubmitted && (
             <span
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-orange-100 text-orange-900 border border-orange-300"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-orange-100 text-orange-900 border border-orange-300 shrink-0 whitespace-nowrap"
               title="Previously skipped without penalty — marked for review in Weak Areas"
             >
               <SkipForward className="w-3 h-3 text-orange-600" />
@@ -2208,7 +2420,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           )}
 
           {question.isAiGenerated && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-300">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-300 shrink-0 whitespace-nowrap">
               <Sparkles className="w-3 h-3 text-amber-600" />
               <span>AI</span>
             </span>
@@ -2217,14 +2429,14 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           {/* Exam Simulation Live Countdown Pill (Only shown when Exam Mode is active) */}
           {isExamMode && (
             <div
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-extrabold shadow-2xs ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-extrabold shadow-2xs shrink-0 whitespace-nowrap ${
                 examTimeRemaining <= 180
                   ? 'bg-rose-950 text-rose-200 border-rose-500 animate-pulse'
                   : 'bg-slate-900 text-amber-300 border-slate-700'
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-mono text-white">
+              <span className="font-mono text-white tabular-nums">
                 {examTimeRemaining > 0 ? formatTimer(examTimeRemaining) : '0:00'}
               </span>
               <button
@@ -2243,7 +2455,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             <button
               type="button"
               onClick={handleToggleEli5}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-amber-100 text-amber-950 border border-amber-300 cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-amber-100 text-amber-950 border border-amber-300 cursor-pointer shrink-0 whitespace-nowrap"
               title="ELI5 Child-Friendly Analogy active. Click to hide."
             >
               <Sparkles className="w-3 h-3 text-amber-600" />
@@ -2253,9 +2465,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
 
         {/* Right Group: Scenario Pace Timer + Question Timer + Question X of Y + Study Zone Dropdown + Bookmark */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-nowrap items-center gap-2 shrink-0">
           {/* Compact Target Pace Trigger synced with PersistentExamTimer */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => setShowPaceSettingsPopover((prev) => !prev)}
@@ -2287,103 +2499,114 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               </span>
             </button>
 
-            {/* Target Pace Selection Popover */}
-            {showPaceSettingsPopover && (
-              <div className="absolute right-0 mt-2 w-60 rounded-2xl bg-white border border-slate-200 shadow-xl p-3 z-50 text-left space-y-2 animate-in fade-in zoom-in-95 duration-150">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                  <span className="text-xs font-black uppercase text-slate-900">Target Pace / Question</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowPaceSettingsPopover(false)}
-                    className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer"
+            {/* Target Pace Selection Popover (Portaled so single-file overflow-x scroll never clips it) */}
+            {showPaceSettingsPopover &&
+              typeof document !== 'undefined' &&
+              createPortal(
+                <div
+                  className="fixed inset-0 z-[120] flex items-center justify-center p-3 bg-slate-950/40 backdrop-blur-xs animate-in fade-in duration-150"
+                  onClick={() => setShowPaceSettingsPopover(false)}
+                >
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-64 rounded-2xl bg-white border border-slate-200 shadow-2xl p-3.5 text-left space-y-2.5 animate-in zoom-in-95 duration-150"
                   >
-                    ✕
-                  </button>
-                </div>
-                <div className="grid grid-cols-5 gap-1">
-                  {TARGET_PACE_OPTIONS.map((secs) => {
-                    const isSelected = targetPaceSeconds === secs;
-                    return (
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                      <span className="text-xs font-black uppercase text-slate-900">
+                        Target Pace / Question
+                      </span>
                       <button
-                        key={secs}
                         type="button"
-                        onClick={() => {
-                          handleChangeTargetPace(secs);
-                          setShowPaceSettingsPopover(false);
-                        }}
-                        className={`py-1.5 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
-                          isSelected ? 'bg-[#0078D4] text-white shadow-2xs' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                        }`}
+                        onClick={() => setShowPaceSettingsPopover(false)}
+                        className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer"
                       >
-                        {secs}s
+                        ✕
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                    </div>
+                    <div className="grid grid-cols-5 gap-1">
+                      {TARGET_PACE_OPTIONS.map((secs) => {
+                        const isSelected = targetPaceSeconds === secs;
+                        return (
+                          <button
+                            key={secs}
+                            type="button"
+                            onClick={() => {
+                              handleChangeTargetPace(secs);
+                              setShowPaceSettingsPopover(false);
+                            }}
+                            className={`py-1.5 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer tabular-nums ${
+                              isSelected
+                                ? 'bg-[#0078D4] text-white shadow-2xs'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {secs}s
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )}
           </div>
           {/* Compact Color-Coded Question Timer Pill */}
           <div
-            className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs ${timerColorConfig.badge}`}
+            className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs shrink-0 whitespace-nowrap ${timerColorConfig.badge}`}
             title={`Question Timer: ${formatTimer(elapsedSeconds)} spent vs. ${formatTimer(
               avgCompletionSeconds
             )} avg (${timerColorConfig.label})`}
           >
             <Timer className={`w-3.5 h-3.5 ${timerColorConfig.icon}`} />
-            <span className="font-mono tracking-tight">{formatTimer(elapsedSeconds)}</span>
+            <span className="font-mono tabular-nums tracking-tight">{formatTimer(elapsedSeconds)}</span>
             <span className={`w-1.5 h-1.5 rounded-full ${timerColorConfig.dot}`} />
           </div>
 
           {/* Question Counter */}
-          <span className="text-xs font-bold text-slate-600 whitespace-nowrap px-1">
+          <span className="text-xs font-bold text-slate-600 whitespace-nowrap px-1 shrink-0 tabular-nums">
             Q {questionIndex + 1}/{totalQuestions}
           </span>
 
           {/* Focus Mode Indicator in Quiz Header with Hover-Only On-Screen Keyboard Shortcut Guide */}
-          {onToggleFocusMode && (
-            <div className="relative group/cardfocusguide">
-              <button
-                type="button"
-                onClick={onToggleFocusMode}
-                className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
-                  isFocusMode
-                    ? 'bg-emerald-600 text-white border-emerald-700'
-                    : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
-                }`}
-                aria-label="Focus Mode indicator — hover for keyboard shortcut guide"
-              >
-                {isFocusMode ? (
-                  <Minimize2 className="w-3.5 h-3.5 text-amber-300" />
-                ) : (
-                  <Maximize2 className="w-3.5 h-3.5 text-[#0078D4]" />
-                )}
-                <span className="hidden sm:inline">
-                  {isFocusMode ? 'Focus ON' : 'Focus Mode'}
-                </span>
-              </button>
+          <div className="relative group/cardfocusguide shrink-0">
+            <button
+              type="button"
+              onClick={handleToggleCardFocusMode}
+              className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs whitespace-nowrap shrink-0 ${
+                effectiveFocusMode
+                  ? 'bg-emerald-600 text-white border-emerald-700'
+                  : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
+              }`}
+              aria-label="Focus Mode indicator — hover for keyboard shortcut guide"
+            >
+              {effectiveFocusMode ? (
+                <Minimize2 className="w-3.5 h-3.5 text-amber-300" />
+              ) : (
+                <Maximize2 className="w-3.5 h-3.5 text-[#0078D4]" />
+              )}
+              <span>{effectiveFocusMode ? 'Focus ON' : 'Focus Mode'}</span>
+            </button>
 
-              {/* Hover-Only Dynamic Platform-Aware Keyboard Shortcut Guide */}
-              <KeyboardShortcutGuidePopover
-                isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
-                effectiveDynamicDifficulty={dynamicDifficulty || 'Intermediate'}
-                onToggleDynamicDifficulty={onToggleDynamicDifficulty}
-                onOpenAccessibilitySettings={() => onOpenAccessibilitySettings?.()}
-                align="right"
-              />
-            </div>
-          )}
+            {/* Hover-Only Dynamic Platform-Aware Keyboard Shortcut Guide */}
+            <KeyboardShortcutGuidePopover
+              isDynamicDifficultyEnabled={isDynamicDifficultyEnabled}
+              effectiveDynamicDifficulty={dynamicDifficulty || 'Intermediate'}
+              onToggleDynamicDifficulty={onToggleDynamicDifficulty}
+              onOpenAccessibilitySettings={() => onOpenAccessibilitySettings?.()}
+              align="right"
+            />
+          </div>
 
           {/* Persistent 'Ask AI Tutor' Sidebar Button: Opens Contextual AI Tutor Sidebar Next to QuizCard */}
           <button
             id="quizcard-ask-ai-btn"
             type="button"
             onClick={() => {
-              setShowAiTutorSidebar((prev) => !prev);
+              handleToggleAiTutorSidebar();
             }}
             aria-pressed={showAiTutorSidebar || isAiTutorDrawerOpen}
             title={`Toggle Contextual Ask AI Tutor sidebar next to QuizCard with Module ${question.moduleId} question and distractor context pre-filled`}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 ${
+            className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               showAiTutorSidebar || isAiTutorDrawerOpen
                 ? 'bg-gradient-to-r from-[#C2410C] to-[#D97706] text-white border-amber-400 ring-2 ring-amber-400/35'
                 : 'bg-gradient-to-r from-amber-50 via-white to-sky-50 hover:from-amber-100 hover:to-sky-100 text-slate-900 border-amber-300/90'
@@ -2397,25 +2620,92 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             <span>Ask AI Tutor</span>
           </button>
 
+          {/* Copy Question Context (Markdown Snippet for AI Knowledge Assistant) */}
+          <button
+            id="quizcard-copy-context-btn"
+            data-testid="copy-question-context-btn"
+            type="button"
+            onClick={handleCopyQuestionContext}
+            title="Copy current question, explanation, and selected distractor as formatted Markdown for AI Knowledge Assistant prompting"
+            className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              copiedContext
+                ? 'bg-emerald-600 text-white border-emerald-500 ring-2 ring-emerald-400/30'
+                : 'bg-white dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border-slate-300 dark:border-slate-600 hover:border-sky-400'
+            }`}
+          >
+            {copiedContext ? (
+              <Check className="w-3.5 h-3.5 text-white shrink-0" />
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-400 shrink-0" />
+            )}
+            <span>{copiedContext ? 'Copied Markdown!' : 'Copy Question Context'}</span>
+          </button>
+
+          {/* AI Concept Refinement Button: Generates Simpler Analogy & Real-World Mapping for Active Question */}
+          <button
+            id="quizcard-ai-refine-btn"
+            data-testid="ai-concept-refine-btn"
+            type="button"
+            onClick={() => setIsConceptRefinementOpen(true)}
+            title="Generate a Simpler Analogy or Real-World Enterprise Mapping for this Azure domain using AI Assistant"
+            className="px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 whitespace-nowrap bg-gradient-to-r from-amber-50 via-white to-orange-50 hover:from-amber-100 hover:to-orange-100 text-slate-900 border-amber-300 dark:bg-slate-800 dark:text-slate-100 dark:border-amber-600/60"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-600 fill-amber-200 shrink-0" />
+            <span>💡 AI Concept Refinement</span>
+          </button>
+
+          {/* Share Question Button (Copies Deep Link to Current Question for Peer Sharing) */}
+          <button
+            id="quizcard-share-question-btn"
+            data-testid="share-question-btn"
+            type="button"
+            onClick={handleShareDeepLinkCopy}
+            title={`Copy a direct deep link to Question ${question.id} (Path ${question.learningPathId}, Module ${question.moduleId}) to your clipboard for peer sharing`}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              shareCopiedToast
+                ? 'bg-emerald-600 text-white border-emerald-500 ring-2 ring-emerald-400/30'
+                : 'bg-white dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border-slate-300 dark:border-slate-600 hover:border-sky-400'
+            }`}
+          >
+            {shareCopiedToast ? (
+              <Check className="w-3.5 h-3.5 text-white shrink-0" />
+            ) : (
+              <Share2 className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-400 shrink-0" />
+            )}
+            <span>{shareCopiedToast ? 'Deep Link Copied!' : 'Share Question'}</span>
+          </button>
+
           {/* Quick-Drill (3 Missed Questions) Button */}
           <button
             type="button"
             onClick={handleLaunchQuickDrill}
-            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0"
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0 whitespace-nowrap"
             title="Launch a rapid 3-question Quick-Drill of previously missed questions without leaving your flow"
           >
-            <Zap className="w-3.5 h-3.5 fill-slate-950" />
-            <span className="hidden sm:inline">⚡ Quick-Drill (3 Missed)</span>
-            <span className="sm:hidden">⚡ Quick-Drill</span>
+            <Zap className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
+            <span>⚡ Quick-Drill (3 Missed)</span>
+          </button>
+
+          {/* 30-Second Recall Sprint (Rapid-Fire Low Confidence Set) Button */}
+          <button
+            id="quizcard-30s-recall-sprint-btn"
+            data-testid="30s-recall-sprint-btn"
+            type="button"
+            onClick={handleLaunchRecallSprint}
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-500 via-amber-500 to-orange-500 hover:from-rose-600 hover:to-orange-600 text-white font-black text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0 whitespace-nowrap"
+            title="Launch a 30-Second Recall Sprint drilling questions from your Low Confidence set"
+          >
+            <Flame className="w-3.5 h-3.5 fill-current shrink-0" />
+            <span>⚡ 30s Recall Sprint</span>
           </button>
 
           {/* STUDY ZONE ACCORDION MENU (Centered Popup Modal in Middle of Page) */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               ref={studyZoneButtonRef}
               type="button"
               onClick={() => setShowStudyZoneMenu((prev) => !prev)}
-              className={`px-3.5 py-1.5 rounded-xl border text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+              className={`px-3.5 py-1.5 rounded-xl border text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs whitespace-nowrap shrink-0 ${
                 showStudyZoneMenu
                   ? 'bg-[#0078D4] text-white border-[#0078D4] ring-2 ring-[#0078D4]/25'
                   : 'bg-gradient-to-r from-sky-50 via-white to-blue-50 hover:from-sky-100 hover:to-blue-100 text-slate-900 border-sky-300'
@@ -3352,7 +3642,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         onPausedStateChange={setIsExamTimerPaused}
       />
 
-      <div className="p-4 sm:p-6 lg:p-8 min-w-0 w-full">
+      <div className="relative p-4 sm:p-6 lg:p-8 min-w-0 w-full overflow-hidden">
+        <KitengeCardWatermark opacity={0.055} />
+        <div className="relative z-10">
         {/* Optional Deep Work Timer Widget */}
         <DeepWorkTimerWidget
           moduleId={question.moduleId}
@@ -3484,35 +3776,214 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               onSpeakingChange={setIsSpeaking}
             />
 
-            {/* Interconnecting AZ-900 Thread Tags Bar */}
+            {/* Active Question Thread Tags & Peer Deep-Link Share Section */}
             {questionThreadTags.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50/90 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
-                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 mr-0.5 whitespace-nowrap">
-                    <GitBranch className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-400 shrink-0" />
-                    <span>Woven Threads:</span>
-                  </span>
-                  {questionThreadTags.map((tag) => (
-                    <ThreadTagBadge
-                      key={tag.id}
-                      tag={tag}
-                      size="sm"
-                      animateOnHover
-                      customTooltip={`${tag.label} — Click to view how ${tag.label} applies fundamentally in Module ${question.moduleId}`}
-                      onClick={(clickedTag) => setActiveThreadModalTag(clickedTag)}
-                    />
-                  ))}
-                </div>
-                {onOpenAzureTheme && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onOpenAzureTheme(questionThreadTags[0].themeId, question.moduleId)
-                    }
-                    className="text-[11px] font-semibold text-[#0078D4] dark:text-sky-400 hover:underline whitespace-nowrap cursor-pointer"
+              <div
+                data-testid="quizcard-thread-tags-section"
+                className="rounded-xl bg-gradient-to-r from-slate-50/95 via-sky-50/40 to-slate-50/95 dark:from-slate-800/70 dark:via-slate-800/50 dark:to-slate-800/70 border border-slate-200/90 dark:border-slate-700/80 p-3 space-y-2.5 shadow-2xs"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {/* Associated Question Thread Tags */}
+                  <div
+                    data-testid="quizcard-thread-tags-list"
+                    className="flex flex-wrap items-center gap-1.5 min-w-0"
                   >
-                    Inspect in Azure Themes →
-                  </button>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-900 text-amber-300 text-[10px] font-black uppercase tracking-wider shrink-0">
+                      <GitBranch className="w-3 h-3 text-sky-400 shrink-0" />
+                      <span>Question Thread Tags</span>
+                    </span>
+
+                    {questionThreadTags.map((tag) => {
+                      const tagModuleCtx = getThreadContextForModule(
+                        tag.themeId,
+                        question.moduleId
+                      );
+                      const roleBadge = tagModuleCtx.moduleLink?.roleInThread;
+                      return (
+                        <div
+                          key={tag.id}
+                          data-testid={`question-thread-tag-${tag.id}`}
+                          className="inline-flex items-center gap-1"
+                        >
+                          <ThreadTagBadge
+                            tag={tag}
+                            size="sm"
+                            animateOnHover
+                            customTooltip={`${tag.label} (${tag.shortDescription}) — Click to inspect how ${tag.label} applies in Module ${question.moduleId}`}
+                            onClick={(clickedTag) => setActiveThreadModalTag(clickedTag)}
+                          />
+                          {roleBadge && (
+                            <span
+                              className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-extrabold bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                              title={`Module ${question.moduleId} role in ${tag.label} thread: ${roleBadge}`}
+                            >
+                              {roleBadge}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Additional custom question threadTags if present */}
+                    {(question.threadTags || [])
+                      .filter(
+                        (customTag) =>
+                          !questionThreadTags.some(
+                            (t) =>
+                              t.id.toLowerCase() === customTag.toLowerCase() ||
+                              t.label.toLowerCase() === customTag.toLowerCase()
+                          )
+                      )
+                      .map((customTag) => (
+                        <span
+                          key={customTag}
+                          className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-900 border border-sky-300"
+                        >
+                          #{customTag}
+                        </span>
+                      ))}
+
+                    {/* Associated Service Category & Azure Services Context Pill */}
+                    {primaryThreadContext?.moduleLink?.serviceCategory && (
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 dark:bg-slate-900 text-[#0078D4] dark:text-sky-300 border border-blue-200 dark:border-slate-700">
+                        {primaryThreadContext.moduleLink.serviceCategory}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Right Actions: Thread Context Toggle, Inspect in Azure Themes & Share Question Deep-Link Button */}
+                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                    {primaryThreadContext && (
+                      <button
+                        type="button"
+                        data-testid="toggle-thread-context-preview-btn"
+                        onClick={() => setIsThreadContextPreviewOpen((prev) => !prev)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border inline-flex items-center gap-1 transition-all cursor-pointer ${
+                          isThreadContextPreviewOpen
+                            ? 'bg-[#0078D4] text-white border-[#0078D4]'
+                            : 'bg-white dark:bg-slate-900 hover:bg-sky-50 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                        }`}
+                        title="Toggle inline Thread Context breakdown for this question"
+                      >
+                        <span>Thread Context</span>
+                        <ChevronDown
+                          className={`w-3 h-3 transition-transform ${
+                            isThreadContextPreviewOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+                    )}
+
+                    {onOpenAzureTheme && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenAzureTheme(questionThreadTags[0].themeId, question.moduleId)
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-sky-50 text-[11px] font-bold text-[#0078D4] dark:text-sky-400 border border-slate-200 dark:border-slate-700 whitespace-nowrap cursor-pointer"
+                      >
+                        Azure Themes →
+                      </button>
+                    )}
+
+                    {/* Visible 'Share Question' Deep-Link Button */}
+                    <div className="inline-flex items-center rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 overflow-hidden shadow-2xs">
+                      <button
+                        type="button"
+                        data-testid="card-body-share-question-btn"
+                        onClick={handleShareDeepLinkCopy}
+                        title="Copy a direct deep link to this question to your clipboard for peer sharing"
+                        className={`px-2.5 py-1 text-[11px] font-extrabold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+                          shareCopiedToast
+                            ? 'bg-emerald-600 text-white'
+                            : 'hover:bg-sky-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'
+                        }`}
+                      >
+                        {shareCopiedToast ? (
+                          <>
+                            <Check className="w-3 h-3 text-white shrink-0" />
+                            <span>Deep Link Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Share2 className="w-3 h-3 text-[#0078D4] dark:text-sky-400 shrink-0" />
+                            <span>Share Question</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowShareModal(true)}
+                        title="Open QR Code & Peer Share Modal"
+                        aria-label="Open QR Code Modal for current question"
+                        className="px-1.5 py-1 border-l border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[#0078D4] cursor-pointer"
+                      >
+                        <QrCode className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Inline Deep Link Copied Confirmation Banner */}
+                {shareCopiedToast && typeof window !== 'undefined' && (
+                  <div
+                    data-testid="share-question-copied-banner"
+                    role="status"
+                    className="px-3 py-1.5 rounded-lg bg-emerald-950 text-emerald-100 border border-emerald-500/50 text-[11px] flex flex-wrap items-center justify-between gap-2 animate-in fade-in duration-150"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="font-bold">Question deep link copied to clipboard:</span>
+                      <code className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-[10px] truncate max-w-[260px] sm:max-w-[420px]">
+                        {`${window.location.origin}${window.location.pathname}?q=${encodeURIComponent(
+                          question.id
+                        )}&path=${question.learningPathId}&mod=${question.moduleId}`}
+                      </code>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowShareModal(true)}
+                      className="text-[10px] font-black text-amber-300 hover:underline cursor-pointer shrink-0"
+                    >
+                      Show QR Code →
+                    </button>
+                  </div>
+                )}
+
+                {/* Expandable Thread Context Breakdown for Active Question */}
+                {isThreadContextPreviewOpen && primaryThreadContext && (
+                  <div
+                    data-testid="quizcard-thread-context-preview"
+                    className="p-3 rounded-xl bg-white/95 dark:bg-slate-900/90 border border-sky-200 dark:border-slate-700 text-xs space-y-2 animate-in fade-in duration-150"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-sky-100 text-[#0078D4] text-[10px] font-mono">
+                          {primaryThreadContext.theme.numberLabel}
+                        </span>
+                        <span>{primaryThreadContext.theme.title}</span>
+                      </div>
+                      {primaryThreadContext.azureServices.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1">
+                          {primaryThreadContext.azureServices.slice(0, 3).map((svc) => (
+                            <span
+                              key={svc}
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                            >
+                              {svc}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                      <strong className="text-slate-900 dark:text-white">Module {question.moduleId} Application:</strong>{' '}
+                      {primaryThreadContext.explanationSummary}
+                    </p>
+                    <div className="p-2 rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/50 text-[11px] text-amber-950 dark:text-amber-200">
+                      <strong>🎯 Thread Exam Guardrail:</strong> {primaryThreadContext.examRule}
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -3683,6 +4154,26 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                           }`}
                         />
                       </div>
+                    </button>
+
+                    {/* Contextual 'Ask AI Tutor' Sidebar Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAiTutorSidebar()}
+                      aria-pressed={showAiTutorSidebar}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer border shadow-2xs ${
+                        showAiTutorSidebar
+                          ? 'bg-gradient-to-r from-[#C2410C] to-[#D97706] text-white border-amber-400 ring-2 ring-amber-400/30'
+                          : 'bg-white hover:bg-amber-50 text-slate-900 border-amber-300'
+                      }`}
+                      title="Open contextual Ask AI Tutor sidebar next to QuizCard with current question details pre-filled"
+                    >
+                      <Sparkles
+                        className={`w-3.5 h-3.5 ${
+                          showAiTutorSidebar ? 'text-yellow-200' : 'text-[#C2410C]'
+                        }`}
+                      />
+                      <span>Ask AI Tutor</span>
                     </button>
                   </div>
                 ) : (
@@ -4530,16 +5021,36 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAiTutorSidebar(true);
-                }}
-                className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:border-amber-500 hover:text-amber-700 text-xs font-semibold text-slate-700 shadow-2xs flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span>Ask AI Tutor</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCopyQuestionContext}
+                  title="Copy question, explanation, and selected distractor as a Markdown snippet for AI prompting"
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer ${
+                    copiedContext
+                      ? 'bg-emerald-600 border-emerald-500 text-white'
+                      : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 hover:border-sky-500 hover:text-sky-700 dark:hover:text-sky-300 text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  {copiedContext ? (
+                    <Check className="w-3.5 h-3.5 text-white" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-400" />
+                  )}
+                  <span>{copiedContext ? 'Copied Markdown!' : 'Copy Question Context'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAiTutorSidebar(true);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:border-amber-500 hover:text-amber-700 text-xs font-semibold text-slate-700 shadow-2xs flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Ask AI Tutor</span>
+                </button>
+              </div>
             </div>
 
             {/* If Incorrect: Targeted Diagnostic Analysis & Smart Knowledge Assistant Explanation */}
@@ -4619,26 +5130,38 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   <span>Why Option {question.correctAnswer} is Correct:</span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleToggleSpeakWhyCorrect}
-                  aria-label={
-                    isSpeakingWhyCorrect
-                      ? 'Stop reading why option is correct aloud'
-                      : 'Read why option is correct aloud'
-                  }
-                  aria-pressed={isSpeakingWhyCorrect}
-                  title={
-                    isSpeakingWhyCorrect
-                      ? 'Stop reading explanation'
-                      : 'Hear explanation read aloud (Web Speech API)'
-                  }
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold border transition-all cursor-pointer ${
-                    isSpeakingWhyCorrect
-                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs ring-2 ring-emerald-400/40'
-                      : 'bg-white hover:bg-emerald-100/70 text-emerald-800 border-emerald-300 shadow-2xs'
-                  }`}
-                >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    data-testid="refine-concept-feedback-btn"
+                    onClick={() => setIsConceptRefinementOpen(true)}
+                    title="Generate a Simpler Analogy or Real-World Enterprise Mapping for this concept using AI Assistant"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold border bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 shadow-2xs cursor-pointer transition-all"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600 fill-amber-200" />
+                    <span>💡 AI Concept Refinement</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleSpeakWhyCorrect}
+                    aria-label={
+                      isSpeakingWhyCorrect
+                        ? 'Stop reading why option is correct aloud'
+                        : 'Read why option is correct aloud'
+                    }
+                    aria-pressed={isSpeakingWhyCorrect}
+                    title={
+                      isSpeakingWhyCorrect
+                        ? 'Stop reading explanation'
+                        : 'Hear explanation read aloud (Web Speech API)'
+                    }
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold border transition-all cursor-pointer ${
+                      isSpeakingWhyCorrect
+                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs ring-2 ring-emerald-400/40'
+                        : 'bg-white hover:bg-emerald-100/70 text-emerald-800 border-emerald-300 shadow-2xs'
+                    }`}
+                  >
                   {isSpeakingWhyCorrect ? (
                     <>
                       <Square className="w-3.5 h-3.5 fill-current animate-pulse" />
@@ -4652,7 +5175,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   )}
                 </button>
               </div>
-              <p className="text-sm text-slate-800 leading-relaxed font-normal">
+            </div>
+            <p className="text-sm text-slate-800 leading-relaxed font-normal">
                 {question.whyCorrect}
               </p>
               {ttsFeedbackError && (
@@ -4674,7 +5198,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   ) : (
                     <>
                       <ShieldAlert className="w-4 h-4 text-rose-600" />
-                      <span>Analyze Distractors • Azure Architectural Misconception Mapper:</span>
+                      <span>Why the Other Three Incorrect Options Are Not the Best Fit (Nuance & Trap Analysis):</span>
                     </>
                   )}
                 </div>
@@ -4778,7 +5302,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                         </div>
 
                         <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-normal">
-                          <strong className="font-bold text-slate-900">Why It Is Wrong: </strong>
+                          <strong className="font-bold text-slate-900">Why It Is Not the Best Fit: </strong>
                           {distractor.reason}
                         </p>
 
@@ -4954,11 +5478,19 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               <button
                 type="button"
                 onClick={onFinishSession}
-                className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-rose-600 to-orange-600 hover:from-rose-700 hover:to-orange-700 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
-                title="Conclude this quiz session, identify your lowest-scoring modules, and generate a separate Weak-Area Review question set"
+                className={`px-4 py-2.5 rounded-lg text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer ${
+                  questionIndex === totalQuestions - 1 && isAnswered
+                    ? 'bg-[#0078D4] hover:bg-[#005A9E] ring-2 ring-sky-300'
+                    : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+                title="Analyze your performance by module and launch a Weakest Areas Review practice set with full answer explanations"
               >
                 <Sparkles className="w-4 h-4 text-amber-200" />
-                <span>Finish Session &amp; Review Weak Areas</span>
+                <span>
+                  {questionIndex === totalQuestions - 1 && isAnswered
+                    ? 'Quiz Complete · Open Weakest Areas Review'
+                    : 'Analyze Quiz & Review Weakest Areas'}
+                </span>
               </button>
             )}
 
@@ -4992,6 +5524,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           <div className="lg:col-span-4 sticky top-4 space-y-4">
             {showAiTutorSidebar && (
               <aside
+                data-testid="contextual-ask-ai-tutor-sidebar"
                 aria-label="Contextual Ask AI Tutor & Knowledge Assistant Sidebar"
                 className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-amber-400/90 dark:border-amber-500/80 shadow-xl overflow-hidden flex flex-col max-h-[680px] animate-in slide-in-from-right-4 duration-200"
               >
@@ -5008,7 +5541,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                         </h4>
                       </div>
                       <p className="text-[11px] font-semibold text-amber-100 truncate">
-                        Pre-filled · Module {question.moduleId}: {question.moduleTitle}
+                        Pre-filled · {question.id.toUpperCase()} · Module {question.moduleId}: {question.moduleTitle}
                       </p>
                     </div>
                   </div>
@@ -5025,7 +5558,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                     )}
                     <button
                       type="button"
-                      onClick={() => setShowAiTutorSidebar(false)}
+                      onClick={() => handleToggleAiTutorSidebar(false)}
                       className="text-white/85 hover:text-white p-1 rounded-lg bg-white/15 hover:bg-white/25 transition-colors cursor-pointer"
                       aria-label="Close Ask AI Tutor sidebar"
                       title="Close Ask AI Tutor sidebar"
@@ -5040,20 +5573,67 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-black text-[10px] uppercase tracking-wider text-[#005A9E] dark:text-sky-300 flex items-center gap-1">
                       <HelpCircle className="w-3.5 h-3.5 text-[#0078D4]" />
-                      <span>Pre-Filled Question Details ({question.difficulty})</span>
+                      <span>
+                        Pre-Filled Question Details (Path {question.learningPathId} · {question.difficulty})
+                      </span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setIsAiContextExpanded((prev) => !prev)}
-                      className="text-[10px] font-extrabold text-[#0078D4] hover:underline cursor-pointer"
-                    >
-                      {isAiContextExpanded ? 'Collapse' : 'Expand Details'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyQuestionContext}
+                        title="Copy Question Context as Markdown"
+                        className={`px-2 py-0.5 rounded-md border text-[10px] font-extrabold flex items-center gap-1 transition-colors cursor-pointer ${
+                          copiedContext
+                            ? 'bg-emerald-600 border-emerald-500 text-white'
+                            : 'bg-white dark:bg-slate-700 border-sky-200 dark:border-slate-600 text-[#005A9E] dark:text-sky-200 hover:bg-sky-100 dark:hover:bg-slate-600'
+                        }`}
+                      >
+                        {copiedContext ? (
+                          <Check className="w-2.5 h-2.5" />
+                        ) : (
+                          <Copy className="w-2.5 h-2.5" />
+                        )}
+                        <span>{copiedContext ? 'Copied' : 'Copy MD'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAiContextExpanded((prev) => !prev)}
+                        className="text-[10px] font-extrabold text-[#0078D4] hover:underline cursor-pointer"
+                      >
+                        {isAiContextExpanded ? 'Collapse' : 'Expand Details'}
+                      </button>
+                    </div>
                   </div>
 
                   <p className="font-bold text-slate-900 dark:text-white leading-snug text-xs">
                     {question.question}
                   </p>
+
+                  {/* Live Pre-Filled Selected Option / Distractor Context Pill */}
+                  {selectedOption && (
+                    <div
+                      className={`px-2.5 py-1.5 rounded-lg border text-[11px] flex items-center justify-between gap-2 ${
+                        selectedOption === question.correctAnswer
+                          ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 text-emerald-900 dark:text-emerald-200'
+                          : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 text-rose-900 dark:text-rose-200'
+                      }`}
+                    >
+                      <span className="font-bold truncate">
+                        Selected Option {selectedOption}:{' '}
+                        {question.options.find((o) => o.letter === selectedOption)?.text}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const opt = question.options.find((o) => o.letter === selectedOption);
+                          if (opt) handleAskAiAboutOption(opt);
+                        }}
+                        className="px-2 py-0.5 rounded bg-slate-900 text-amber-300 text-[10px] font-black shrink-0 cursor-pointer"
+                      >
+                        Explain Choice
+                      </button>
+                    </div>
+                  )}
 
                   {isAiContextExpanded && (
                     <div className="space-y-1.5 pt-1 border-t border-sky-200/70 dark:border-slate-700">
@@ -5232,6 +5812,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           </div>
         )}
       </motion.div>
+        </div>
     </div>
 
     {/* Quick Notes Slide-Out Panel */}
@@ -5253,6 +5834,22 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       question={question}
       isOpen={showShareModal}
       onClose={() => setShowShareModal(false)}
+    />
+
+    {/* AI Concept Refinement Temporary Overlay */}
+    <ConceptRefinementOverlay
+      isOpen={isConceptRefinementOpen}
+      onClose={() => setIsConceptRefinementOpen(false)}
+      question={question}
+      selectedOption={selectedOption}
+      onOpenAiTutorDrawer={onOpenAiTutorDrawer}
+    />
+
+    {/* 30-Second Recall Sprint Modal (Rapid-Fire Low Confidence Drill) */}
+    <RecallSprintModal
+      isOpen={showRecallSprintModal}
+      onClose={() => setShowRecallSprintModal(false)}
+      questions={recallSprintQuestions}
     />
 
     {/* Mini-Modal Explaining How Clicked Theme Applies in Current Module */}

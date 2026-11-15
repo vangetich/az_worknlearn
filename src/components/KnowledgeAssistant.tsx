@@ -20,9 +20,11 @@ import {
   ChevronDown,
   ChevronUp,
   HelpCircle,
+  Anchor,
 } from 'lucide-react';
 import { ChatMessage, Question } from '../types/quiz';
 import { MaasaiMedallion } from './MotifDecorations';
+import { KnowledgeDeckComponent } from './KnowledgeDeckComponent';
 
 interface KnowledgeAssistantProps {
   initialQuestionContext?: Question | null;
@@ -34,6 +36,7 @@ interface KnowledgeAssistantProps {
   onCloseDrawer?: () => void;
   isDrawerExpanded?: boolean;
   onToggleDrawerExpand?: () => void;
+  onSwitchToKnowledgeDeck?: () => void;
 }
 
 function buildDrawerPrefillPrompt(q: Question, selectedOpt?: string | null): string {
@@ -283,8 +286,10 @@ export const KnowledgeAssistant: React.FC<KnowledgeAssistantProps> = ({
   onCloseDrawer,
   isDrawerExpanded = false,
   onToggleDrawerExpand,
+  onSwitchToKnowledgeDeck,
 }) => {
   const isDrawer = variant === 'drawer';
+  const [showAdjacentDeckInPage, setShowAdjacentDeckInPage] = useState<boolean>(true);
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const baseWelcome: ChatMessage = {
       id: 'welcome',
@@ -715,6 +720,34 @@ ${citationsList}`;
             >
               <ExternalLink className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Full View</span>
+            </button>
+          )}
+          {isDrawer && onSwitchToKnowledgeDeck && (
+            <button
+              type="button"
+              data-testid="drawer-switch-to-knowledge-deck-btn"
+              onClick={onSwitchToKnowledgeDeck}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11px] font-extrabold shadow-xs transition-colors cursor-pointer"
+              title="Open Knowledge Deck (Custom Memory Anchors)"
+            >
+              <Anchor className="w-3.5 h-3.5" />
+              <span>Memory Anchors</span>
+            </button>
+          )}
+          {!isDrawer && (
+            <button
+              type="button"
+              data-testid="toggle-adjacent-knowledge-deck-btn"
+              onClick={() => setShowAdjacentDeckInPage((prev) => !prev)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                showAdjacentDeckInPage
+                  ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-xs'
+                  : 'bg-white/15 hover:bg-white/25 text-white border-white/25'
+              }`}
+              title="Toggle adjacent Knowledge Deck (Memory Anchors) sidebar"
+            >
+              <Anchor className="w-3.5 h-3.5" />
+              <span>Knowledge Deck ({showAdjacentDeckInPage ? 'Open' : 'Show'})</span>
             </button>
           )}
           {!isDrawer && <MaasaiMedallion size={34} className="opacity-90" />}
@@ -1174,6 +1207,17 @@ ${citationsList}`;
           </button>
         </form>
       </div>
+
+      {/* Adjacent Knowledge Deck (Custom Memory Anchors) Panel when in Page View */}
+      {!isDrawer && showAdjacentDeckInPage && (
+        <div className="p-4 bg-slate-50 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800">
+          <KnowledgeDeckComponent
+            variant="sidebar"
+            activeQuestionContext={activeQuestionContext || initialQuestionContext || null}
+            onAskAssistant={(prompt) => handleSendMessage(prompt)}
+          />
+        </div>
+      )}
     </div>
   );
 };

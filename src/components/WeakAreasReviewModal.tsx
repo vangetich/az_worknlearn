@@ -14,8 +14,12 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
-import { MaasaiMedallion, KitengeRibbon } from './MotifDecorations';
+import { MaasaiMedallion, KitengeRibbon, KitengeCardWatermark } from './MotifDecorations';
 import { ResponsiveModalContainer } from './ResponsiveModalContainer';
+import {
+  analyzeModulePerformance,
+  buildWeakestAreasPracticeSet,
+} from '../utils/weakAreasAnalyzer';
 import confetti from 'canvas-confetti';
 
 interface WeakAreasReviewModalProps {
@@ -40,57 +44,21 @@ export const WeakAreasReviewModal: React.FC<WeakAreasReviewModalProps> = ({
   );
 
   const targetQuestions = useMemo(() => {
-    // Always prioritize questions explicitly skipped by the user for Weak Areas review
-    const skippedQuestions = allQuestions.filter((q) =>
-      (stats.skippedQuestionIds || []).includes(q.id)
-    );
+    const analysis = analyzeModulePerformance(stats, [], allQuestions, 'Cumulative Mastery');
+    const weakModuleIds = analysis.rankedWeakestModules
+      .slice(0, 3)
+      .map((m) => m.moduleId);
 
-    // Module stats map
-    const moduleScores: { moduleId: number; accuracy: number; total: number; mistakes: number }[] = [];
+    const skippedCount = (stats.skippedQuestionIds || []).length;
+    const count = Math.min(10, Math.max(6, skippedCount + 5));
 
-    // Check all 12 modules
-    for (let mId = 1; mId <= 12; mId++) {
-      const mm = stats.moduleMastery[mId];
-      const mistakesCount = (stats.mistakesHistory || []).filter((m) => m.moduleId === mId).length;
-      const skippedInMod = skippedQuestions.filter((q) => q.moduleId === mId).length;
-      if (mm && mm.total > 0) {
-        moduleScores.push({
-          moduleId: mId,
-          accuracy: Math.round((mm.correct / mm.total) * 100),
-          total: mm.total,
-          mistakes: mistakesCount + skippedInMod,
-        });
-      } else {
-        // Untested module or module with mistakes/skips
-        moduleScores.push({
-          moduleId: mId,
-          accuracy: 0,
-          total: 0,
-          mistakes: mistakesCount + skippedInMod,
-        });
-      }
-    }
-
-    // Sort by lowest accuracy first, then highest mistakes/skips
-    moduleScores.sort((a, b) => {
-      if (a.accuracy !== b.accuracy) return a.accuracy - b.accuracy;
-      return b.mistakes - a.mistakes;
+    return buildWeakestAreasPracticeSet({
+      targetModuleIds: weakModuleIds,
+      allQuestions,
+      stats,
+      sessionAttempts: [],
+      questionCount: count,
     });
-
-    // Pick top 3 weakest module IDs
-    const weakModuleIds = moduleScores.slice(0, 3).map((m) => m.moduleId);
-
-    // Pull remaining questions from these weak modules (excluding already-queued skipped questions)
-    const skippedIdLookup = new Set(skippedQuestions.map((q) => q.id));
-    const matching = allQuestions.filter(
-      (q) => weakModuleIds.includes(q.moduleId) && !skippedIdLookup.has(q.id)
-    );
-
-    // Shuffle and combine with skipped questions at the front
-    const shuffled = [...matching].sort(() => 0.5 - Math.random());
-    const combined = [...skippedQuestions, ...shuffled];
-    const count = Math.min(Math.max(5, Math.min(10, combined.length)), Math.max(10, skippedQuestions.length));
-    return combined.slice(0, count);
   }, [stats, allQuestions]);
 
   const [currentIndex, setCurrentIndex] = useState<number>(0);
@@ -184,7 +152,9 @@ export const WeakAreasReviewModal: React.FC<WeakAreasReviewModalProps> = ({
         </div>
 
         {/* Body Content */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-5">
+        <div className="relative p-6 overflow-y-auto flex-1">
+          <KitengeCardWatermark opacity={0.05} />
+          <div className="relative z-10 space-y-5">
           {!isCompleted && currentQ ? (
             <>
               {/* Question Progress & Module Tag */}
@@ -358,6 +328,7 @@ export const WeakAreasReviewModal: React.FC<WeakAreasReviewModalProps> = ({
               </button>
             </div>
           ) : null}
+          </div>
         </div>
 
         {/* Footer Navigation */}

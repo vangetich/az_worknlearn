@@ -29,6 +29,7 @@ export interface Question {
   examTip: string;
   errorDiagnostic?: ErrorDiagnostic;
   isAiGenerated?: boolean;
+  threadTags?: string[];
 }
 
 export type ModuleComplexityLevel = 'Beginner' | 'Intermediate' | 'Advanced';
@@ -69,6 +70,7 @@ export interface QuestionAttempt {
 export interface UserStats {
   totalAnswered: number;
   totalCorrect: number;
+  points?: number; // Cumulative earned quiz points
   streakDays: number;
   lastActiveDate: string;
   dailyGoal?: number; // target questions per day

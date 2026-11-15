@@ -107,6 +107,142 @@ export const AfricanWatermarkPattern: React.FC<{
 );
 
 /**
+ * Kenyan Kitenge & Kanga Weave Quiz Card Watermark (0.04 to 0.08 opacity)
+ * Combines minimalist modern tech precision with warm African geometric textile weaves
+ * (stepped diamonds, Kanga micro-chevrons, concentric lozenges, and beadwork vertices).
+ * Uses React.useId() so multiple concurrent quiz cards never collide on SVG pattern IDs.
+ */
+export const KitengeCardWatermark: React.FC<{
+  className?: string;
+  opacity?: number;
+}> = ({ className = '', opacity = 0.055 }) => {
+  const uid = React.useId().replace(/:/g, '');
+  const patternId = `kitenge_kanga_card_${uid}`;
+  const clampedOpacity = Math.min(0.08, Math.max(0.04, opacity));
+
+  return (
+    <div
+      data-testid="kitenge-card-watermark"
+      className={`pointer-events-none absolute inset-0 overflow-hidden select-none z-0 ${className}`}
+      style={{ opacity: clampedOpacity }}
+      aria-hidden="true"
+    >
+      <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern
+            id={patternId}
+            width="80"
+            height="80"
+            patternUnits="userSpaceOnUse"
+          >
+            {/* Outer Kenyan Kitenge Stepped Diamond Lattice */}
+            <polygon
+              points="40,4 76,40 40,76 4,40"
+              fill="none"
+              stroke="#C2410C"
+              strokeWidth="1.25"
+            />
+            {/* Inner Concentric Kanga Lozenge */}
+            <polygon
+              points="40,16 64,40 40,64 16,40"
+              fill="none"
+              stroke="#D97706"
+              strokeWidth="1.05"
+              strokeDasharray="4 2"
+            />
+            {/* Core Sunburst Diamond (Warm Gold + Modern Tech Center) */}
+            <polygon
+              points="40,28 52,40 40,52 28,40"
+              fill="#D97706"
+              fillOpacity="0.22"
+              stroke="#0078D4"
+              strokeWidth="1"
+            />
+            <circle cx="40" cy="40" r="3.2" fill="#C2410C" />
+            <circle cx="40" cy="40" r="1.4" fill="#0078D4" />
+
+            {/* Kanga Woven Corner Chevrons (Top-Left, Top-Right, Bottom-Left, Bottom-Right) */}
+            <polyline
+              points="4,16 16,16 16,4"
+              fill="none"
+              stroke="#0078D4"
+              strokeWidth="1.1"
+            />
+            <polyline
+              points="64,4 64,16 76,16"
+              fill="none"
+              stroke="#0078D4"
+              strokeWidth="1.1"
+            />
+            <polyline
+              points="4,64 16,64 16,76"
+              fill="none"
+              stroke="#0078D4"
+              strokeWidth="1.1"
+            />
+            <polyline
+              points="64,76 64,64 76,64"
+              fill="none"
+              stroke="#0078D4"
+              strokeWidth="1.1"
+            />
+
+            {/* Minimalist Tech Axis Hairlines */}
+            <line
+              x1="40"
+              y1="0"
+              x2="40"
+              y2="14"
+              stroke="#0F766E"
+              strokeWidth="0.9"
+              strokeDasharray="2 2"
+            />
+            <line
+              x1="40"
+              y1="66"
+              x2="40"
+              y2="80"
+              stroke="#0F766E"
+              strokeWidth="0.9"
+              strokeDasharray="2 2"
+            />
+            <line
+              x1="0"
+              y1="40"
+              x2="14"
+              y2="40"
+              stroke="#0F766E"
+              strokeWidth="0.9"
+              strokeDasharray="2 2"
+            />
+            <line
+              x1="66"
+              y1="40"
+              x2="80"
+              y2="40"
+              stroke="#0F766E"
+              strokeWidth="0.9"
+              strokeDasharray="2 2"
+            />
+
+            {/* Kitenge Beadwork Cardinal & Corner Nodes */}
+            <circle cx="0" cy="0" r="2.2" fill="#EAB308" />
+            <circle cx="80" cy="0" r="2.2" fill="#EAB308" />
+            <circle cx="0" cy="80" r="2.2" fill="#EAB308" />
+            <circle cx="80" cy="80" r="2.2" fill="#EAB308" />
+            <circle cx="40" cy="4" r="1.8" fill="#C2410C" />
+            <circle cx="76" cy="40" r="1.8" fill="#C2410C" />
+            <circle cx="40" cy="76" r="1.8" fill="#C2410C" />
+            <circle cx="4" cy="40" r="1.8" fill="#C2410C" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill={`url(#${patternId})`} />
+      </svg>
+    </div>
+  );
+};
+
+/**
  * Kenyan Maasai Moran Warrior Shield & Crossed Spears
  * Stylized iconic African warrior heritage motif with animations
  */

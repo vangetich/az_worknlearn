@@ -23,9 +23,9 @@ import {
   Keyboard,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { Question, QuizSessionMissedQuestion, UserStats } from '../types/quiz';
+import { Question, QuestionAttempt, QuizSessionMissedQuestion, UserStats } from '../types/quiz';
 import { LEARNING_PATHS } from '../data/curriculum';
-import { KitengeRibbon } from './MotifDecorations';
+import { KitengeRibbon, KitengeCardWatermark } from './MotifDecorations';
 import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 
 export type MockExamModeType = 'simulation' | 'weakness' | 'full' | 'mini';
@@ -58,6 +58,7 @@ interface MockExamProps {
   initialMode?: MockExamModeType;
   onLaunchAdaptiveForPath?: (pathId: 1 | 2 | 3) => void;
   onOpenStudyPlanner?: () => void;
+  onOpenWeakestAreasReview?: (attempts: QuestionAttempt[]) => void;
 }
 
 const SIMULATION_COUNTS = [45, 50, 55, 60, 75, 90] as const;
@@ -106,6 +107,7 @@ export const MockExamModal: React.FC<MockExamProps> = ({
   initialMode = 'simulation',
   onLaunchAdaptiveForPath,
   onOpenStudyPlanner,
+  onOpenWeakestAreasReview,
 }) => {
   const [examMode, setExamMode] = useState<MockExamModeType>(initialMode);
   const [simulationQuestionCount, setSimulationQuestionCount] =
@@ -531,6 +533,25 @@ export const MockExamModal: React.FC<MockExamProps> = ({
     answeredCount > 0 ? Math.round(elapsedSeconds / answeredCount) : 0;
   const targetPacePerQ =
     speedRoutine === 'blitz' ? 30 : speedRoutine === 'sharp' ? 45 : 65;
+  const isHighPressureRoutine =
+    speedRoutine === 'sharp' || speedRoutine === 'blitz';
+  const questionTimeRemaining = Math.max(
+    0,
+    targetPacePerQ - currentQuestionElapsed
+  );
+  const questionTimeRemainingPct = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round((questionTimeRemaining / Math.max(1, targetPacePerQ)) * 100)
+    )
+  );
+  const isQuestionPaceExceeded = currentQuestionElapsed > targetPacePerQ;
+  const isQuestionPaceCritical =
+    questionTimeRemaining <= Math.ceil(targetPacePerQ * 0.25);
+  const isQuestionPaceWarning =
+    !isQuestionPaceCritical &&
+    questionTimeRemaining <= Math.ceil(targetPacePerQ * 0.5);
 
   const isCriticalTime = timeLeft <= 180;
   const isWarningTime = timeLeft > 180 && timeLeft <= 300;
@@ -743,30 +764,69 @@ export const MockExamModal: React.FC<MockExamProps> = ({
             </span>
 
             {/* Real-time Speed Routine & Question Pace Telemetry */}
-            <div className="flex items-center gap-3 sm:gap-4 text-[11px] font-mono flex-wrap">
+            <div className="flex items-center gap-2.5 sm:gap-3.5 text-[11px] font-mono flex-wrap">
+              {/* Live Difficulty / Speed Mode Switcher (Standard 65s | Speed 45s | Blitz 30s) */}
+              <div
+                className="inline-flex items-center rounded-lg bg-slate-800/90 border border-slate-700 p-0.5 font-sans"
+                role="group"
+                aria-label="Exam difficulty pace mode"
+              >
+                {(
+                  [
+                    { id: 'standard', label: 'Standard 65s' },
+                    { id: 'sharp', label: '⚡ Speed 45s' },
+                    { id: 'blitz', label: '🔥 Blitz 30s' },
+                  ] as const
+                ).map((modeOpt) => {
+                  const active = speedRoutine === modeOpt.id;
+                  return (
+                    <button
+                      key={modeOpt.id}
+                      type="button"
+                      onClick={() => setSpeedRoutine(modeOpt.id)}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold transition-all cursor-pointer tabular-nums ${
+                        active
+                          ? modeOpt.id === 'blitz'
+                            ? 'bg-amber-400 text-slate-950 shadow-2xs'
+                            : modeOpt.id === 'sharp'
+                            ? 'bg-[#0078D4] text-white shadow-2xs'
+                            : 'bg-slate-600 text-white'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      {modeOpt.label}
+                    </button>
+                  );
+                })}
+              </div>
+
               <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border ${
-                  currentQuestionElapsed <= targetPacePerQ
-                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                    : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border tabular-nums ${
+                  isQuestionPaceExceeded
+                    ? 'bg-rose-500/20 border-rose-400/50 text-rose-300 animate-pulse'
+                    : isQuestionPaceCritical
+                    ? 'bg-amber-500/20 border-amber-400/50 text-amber-300'
+                    : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
                 }`}
-                title={`Target pace for ${speedRoutine} routine is ${targetPacePerQ}s per question`}
+                title={`Per-question countdown for ${speedRoutine} mode (${targetPacePerQ}s target)`}
               >
                 <Gauge className="w-3 h-3" />
-                This Q: {currentQuestionElapsed}s / {targetPacePerQ}s target
+                {isHighPressureRoutine
+                  ? `Q Time Left: ${questionTimeRemaining}s / ${targetPacePerQ}s`
+                  : `This Q: ${currentQuestionElapsed}s / ${targetPacePerQ}s target`}
               </span>
 
               {answeredCount > 0 && (
-                <span className="text-sky-300 hidden md:inline-flex items-center gap-1">
+                <span className="text-sky-300 hidden md:inline-flex items-center gap-1 tabular-nums">
                   <Zap className="w-3 h-3 text-amber-400" />
                   Avg Pace: {avgSecPerAnswered}s/Q
                 </span>
               )}
 
-              <span className="text-emerald-400">
+              <span className="text-emerald-400 tabular-nums">
                 {answeredCount}/{examQuestions.length} Answered
               </span>
-              <span className="text-amber-300">
+              <span className="text-amber-300 tabular-nums">
                 {Object.values(flagged).filter(Boolean).length} Flagged
               </span>
             </div>
@@ -1270,7 +1330,120 @@ export const MockExamModal: React.FC<MockExamProps> = ({
           </div>
 
           {/* Current Question Body */}
-          <div className="space-y-4">
+          <div className="relative rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 overflow-hidden">
+            <KitengeCardWatermark opacity={0.05} />
+            <div className="relative z-10 space-y-4">
+              {/* Per-Question Time Remaining Progress Bar for 'Speed' (sharp) and 'Blitz' (blitz) High-Pressure Modes */}
+              {isHighPressureRoutine ? (
+                <div
+                  data-testid="mock-exam-question-timer-bar"
+                  className={`p-3 rounded-xl border transition-colors ${
+                    isQuestionPaceExceeded
+                      ? 'bg-rose-950 text-white border-rose-500/80'
+                      : isQuestionPaceCritical
+                      ? 'bg-amber-950 text-white border-amber-400/80'
+                      : 'bg-slate-900 text-white border-slate-700'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                          speedRoutine === 'blitz'
+                            ? 'bg-amber-400 text-slate-950'
+                            : 'bg-[#0078D4] text-white'
+                        }`}
+                      >
+                        <Zap className="w-3 h-3" />
+                        <span>
+                          {speedRoutine === 'blitz'
+                            ? 'Blitz Mode (30s / Q)'
+                            : 'Speed Mode (45s / Q)'}
+                        </span>
+                      </span>
+                      <span className="text-[11px] font-bold text-slate-200">
+                        {isQuestionPaceExceeded
+                          ? 'Target Pace Exceeded — Commit & Advance!'
+                          : isQuestionPaceCritical
+                          ? 'Final Seconds — Lock In Your Choice'
+                          : isQuestionPaceWarning
+                          ? 'Halfway Mark — Eliminate Distractors'
+                          : 'High-Pressure Per-Question Countdown'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 font-mono text-xs tabular-nums">
+                      <span
+                        className={`font-black ${
+                          isQuestionPaceExceeded
+                            ? 'text-rose-300 animate-pulse'
+                            : isQuestionPaceCritical
+                            ? 'text-amber-300'
+                            : 'text-emerald-300'
+                        }`}
+                      >
+                        {isQuestionPaceExceeded
+                          ? `0s left (+${currentQuestionElapsed - targetPacePerQ}s over)`
+                          : `${questionTimeRemaining}s remaining of ${targetPacePerQ}s (${questionTimeRemainingPct}%)`}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    role="progressbar"
+                    aria-label={`Time remaining per question in ${
+                      speedRoutine === 'blitz' ? 'Blitz' : 'Speed'
+                    } mode`}
+                    aria-valuenow={questionTimeRemaining}
+                    aria-valuemin={0}
+                    aria-valuemax={targetPacePerQ}
+                    className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-white/10"
+                  >
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        isQuestionPaceExceeded
+                          ? 'bg-rose-500 animate-pulse'
+                          : isQuestionPaceCritical
+                          ? 'bg-gradient-to-r from-rose-500 to-amber-400'
+                          : isQuestionPaceWarning
+                          ? 'bg-gradient-to-r from-amber-400 to-yellow-300'
+                          : speedRoutine === 'blitz'
+                          ? 'bg-gradient-to-r from-amber-400 via-orange-500 to-emerald-400'
+                          : 'bg-gradient-to-r from-[#0078D4] via-sky-400 to-emerald-400'
+                      }`}
+                      style={{
+                        width: `${isQuestionPaceExceeded ? 100 : questionTimeRemainingPct}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200/90 text-xs">
+                  <div className="flex items-center gap-2 text-slate-600 font-semibold tabular-nums">
+                    <Gauge className="w-3.5 h-3.5 text-[#0078D4]" />
+                    <span>
+                      Standard Pace ({currentQuestionElapsed}s / {targetPacePerQ}s) — Simulate high-pressure per-question countdown:
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSpeedRoutine('sharp')}
+                      className="px-2.5 py-1 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-[11px] font-extrabold transition-colors cursor-pointer"
+                    >
+                      ⚡ Enable Speed (45s/Q)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSpeedRoutine('blitz')}
+                      className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-950 text-[11px] font-extrabold transition-colors cursor-pointer"
+                    >
+                      🔥 Enable Blitz (30s/Q)
+                    </button>
+                  </div>
+                </div>
+              )}
+
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                 <span className="font-extrabold text-slate-900">
@@ -1344,6 +1517,7 @@ export const MockExamModal: React.FC<MockExamProps> = ({
                   </button>
                 );
               })}
+            </div>
             </div>
           </div>
         </div>
@@ -1451,11 +1625,35 @@ export const MockExamModal: React.FC<MockExamProps> = ({
                   setWeaknessQuestionCount(20);
                   handleRestart('weakness');
                 }}
-                className="px-3.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
               >
                 <ShieldAlert className="w-3.5 h-3.5" />
                 <span>Launch 20Q Weakness Drill on Weak Areas</span>
               </button>
+              {onOpenWeakestAreasReview && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nowTs = Date.now();
+                    const attemptsPayload: QuestionAttempt[] = examQuestions
+                      .filter((q) => answers[q.id] !== undefined)
+                      .map((q, idx) => ({
+                        questionId: q.id,
+                        moduleId: q.moduleId,
+                        pathId: q.learningPathId,
+                        selectedAnswer: answers[q.id],
+                        isCorrect: answers[q.id] === q.correctAnswer,
+                        timestamp: nowTs + idx,
+                        trapType: q.errorDiagnostic?.trapType || 'Conceptual Gap',
+                      }));
+                    onOpenWeakestAreasReview(attemptsPayload);
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white font-extrabold inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Target className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Open Weakest Areas Review Mode</span>
+                </button>
+              )}
             </div>
           </div>
 

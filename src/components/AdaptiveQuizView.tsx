@@ -32,6 +32,7 @@ import {
 import { LEARNING_PATHS } from '../data/curriculum';
 import { CURRICULUM_STUDY_MODULES, StudyModuleGuide } from '../data/studyNotes';
 import { saveUserAttempt, saveQuizSession } from '../utils/storage';
+import { KitengeCardWatermark } from './MotifDecorations';
 import confetti from 'canvas-confetti';
 
 interface AdaptiveQuizViewProps {
@@ -41,6 +42,7 @@ interface AdaptiveQuizViewProps {
   onNavigateToHistory: () => void;
   onNavigateToPractice: () => void;
   onOpenPersonalizedReview?: () => void;
+  onOpenWeakestAreasReview?: (attempts: QuestionAttempt[]) => void;
   onSelectModuleForPractice?: (moduleId: number) => void;
   initialFocusPathId?: 1 | 2 | 3 | null;
   initialFocusModuleId?: number | null;
@@ -162,6 +164,7 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
   onNavigateToHistory,
   onNavigateToPractice,
   onOpenPersonalizedReview,
+  onOpenWeakestAreasReview,
   onSelectModuleForPractice,
   initialFocusPathId = null,
   initialFocusModuleId = null,
@@ -1163,6 +1166,29 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
               </button>
             )}
 
+            {onOpenWeakestAreasReview && (
+              <button
+                type="button"
+                onClick={() => {
+                  const nowTs = Date.now();
+                  const mapped: QuestionAttempt[] = sessionAttemptLog.map((item, idx) => ({
+                    questionId: item.question.id,
+                    moduleId: item.question.moduleId,
+                    pathId: item.question.learningPathId,
+                    selectedAnswer: item.selectedAnswer,
+                    isCorrect: item.isCorrect,
+                    timestamp: nowTs + idx,
+                    trapType: item.question.errorDiagnostic?.trapType || 'Conceptual Gap',
+                  }));
+                  onOpenWeakestAreasReview(mapped);
+                }}
+                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <Target className="w-4 h-4 text-amber-300" />
+                <span>Weakest Areas Review Mode</span>
+              </button>
+            )}
+
             {onOpenPersonalizedReview && sessionMissedQuestions.length > 0 && (
               <button
                 onClick={onOpenPersonalizedReview}
@@ -1636,8 +1662,10 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
       {/* Main Adaptive Quiz Card */}
       <div
         key={`adaptive-card-${currentQuestion.id}`}
-        className="bg-white rounded-2xl border border-slate-200 card-elevation overflow-hidden p-4 sm:p-6 lg:p-8 space-y-6 animate-quiz-card-fade-in-up"
+        className="relative bg-white rounded-2xl border border-slate-200 card-elevation overflow-hidden p-4 sm:p-6 lg:p-8 animate-quiz-card-fade-in-up"
       >
+        <KitengeCardWatermark opacity={0.05} />
+        <div className="relative z-10 space-y-6">
         {/* Module Header Tag */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -1832,6 +1860,7 @@ export const AdaptiveQuizView: React.FC<AdaptiveQuizViewProps> = ({
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

@@ -64,6 +64,10 @@ import { formatShortcutCombo } from '../utils/keyboardShortcuts';
 import { DifficultyStreakTracker } from './DifficultyStreakTracker';
 import { AnimatePresence, motion } from 'motion/react';
 import { fireDailyGoalCompletionConfetti } from '../utils/confetti';
+import {
+  getStoredStreakCelebrationsEnabled,
+  STREAK_CELEBRATION_EFFECTS_CHANGED_EVENT,
+} from '../utils/highContrast';
 
 const HARAMBEE_STREAK_MILESTONES: Record<
   7 | 14 | 30,
@@ -447,6 +451,7 @@ const SingleFileHorizontalScroller: React.FC<{
 export type AppTab =
   | 'quiz'
   | 'adaptive'
+  | 'weakest-review'
   | 'planner'
   | 'image-tutor'
   | 'azure-themes'
@@ -627,6 +632,22 @@ const NAV_TABS: NavTabConfig[] = [
         <WarriorSpearBadge size={12} />
       ) : (
         <Zap className="w-3 h-3 text-amber-600 dark:text-amber-300 fill-amber-400 shrink-0" />
+      ),
+  },
+  {
+    id: 'weakest-review',
+    label: 'Weakest Areas Review',
+    group: 'Exam & Drills',
+    title:
+      'Weakest Areas Review Mode: Analyze your lowest-scoring AZ-900 modules and practice targeted questions with full explanations',
+    activeClass:
+      'bg-gradient-to-r from-rose-700 to-orange-600 text-white shadow-sm ring-1 ring-amber-300 font-black',
+    fontWeightClass: 'font-extrabold',
+    renderIcon: (isActive) =>
+      isActive ? (
+        <WarriorSpearBadge size={12} />
+      ) : (
+        <Target className="w-3 h-3 text-rose-600 dark:text-rose-300 shrink-0" />
       ),
   },
   {
@@ -831,6 +852,22 @@ export const Header: React.FC<HeaderProps> = ({
   const [showEditDailyGoalModal, setShowEditDailyGoalModal] = useState<boolean>(false);
   const [showGoalAlertsModal, setShowGoalAlertsModal] = useState<boolean>(false);
   const [showDailyGoalCelebrationModal, setShowDailyGoalCelebrationModal] = useState<boolean>(false);
+  const [areCelebrationsEnabled, setAreCelebrationsEnabled] = useState<boolean>(
+    getStoredStreakCelebrationsEnabled
+  );
+
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<{ enabled?: boolean }>;
+      if (typeof customEvent.detail?.enabled === 'boolean') {
+        setAreCelebrationsEnabled(customEvent.detail.enabled);
+      } else {
+        setAreCelebrationsEnabled(getStoredStreakCelebrationsEnabled());
+      }
+    };
+    window.addEventListener(STREAK_CELEBRATION_EFFECTS_CHANGED_EVENT, handleSync);
+    return () => window.removeEventListener(STREAK_CELEBRATION_EFFECTS_CHANGED_EVENT, handleSync);
+  }, []);
   const [showLocalAccessibilityModal, setShowLocalAccessibilityModal] = useState<boolean>(false);
   const [activeHarambeeMilestonePopup, setActiveHarambeeMilestonePopup] = useState<7 | 14 | 30 | null>(null);
   const prevStreakDaysRef = useRef<number>(stats.streakDays || 0);
@@ -1221,10 +1258,12 @@ export const Header: React.FC<HeaderProps> = ({
     <header
       ref={headerRef}
       className={`sticky top-0 z-40 w-full max-w-full bg-white/95 backdrop-blur-md border-b shadow-xs transition-all duration-300 ${
-        consecutiveCorrect >= 5
+        consecutiveCorrect >= 5 && areCelebrationsEnabled
           ? consecutiveCorrect % 5 === 0
             ? 'border-orange-500 animate-five-streak-header-pulse-intense'
             : 'border-orange-400 animate-five-streak-header-pulse'
+          : consecutiveCorrect >= 5
+          ? 'border-orange-300'
           : 'border-sky-200/80'
       }`}
     >
@@ -1431,6 +1470,15 @@ export const Header: React.FC<HeaderProps> = ({
                 onOpenCelebration={() => setShowDailyGoalCelebrationModal(true)}
                 compact={true}
               />
+
+              {/* Total Quiz Points Chip */}
+              <div
+                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs font-black shadow-2xs"
+                title={`Total Quiz Points Earned: ${(stats.points || 0).toLocaleString()} pts (+100 pts per correct answer)`}
+              >
+                <Award className="w-3.5 h-3.5 text-amber-600 fill-amber-300" />
+                <span>{(stats.points || 0).toLocaleString()} pts</span>
+              </div>
 
               {/* Tools, Path, Timer & Goal Dropdown Trigger */}
               <button

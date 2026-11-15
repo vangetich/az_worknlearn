@@ -25,6 +25,14 @@ import {
   resetShortcutConfig,
   saveShortcutConfig,
 } from '../utils/keyboardShortcuts';
+import {
+  getStoredQuizAnimationsEnabled,
+  applyQuizAnimationsEnabled,
+  QUIZ_ANIMATIONS_CHANGED_EVENT,
+  getStoredStreakCelebrationsEnabled,
+  applyStreakCelebrationsEnabled,
+  STREAK_CELEBRATION_EFFECTS_CHANGED_EVENT,
+} from '../utils/highContrast';
 
 export function useKeyboardShortcutsConfig() {
   const [config, setConfig] = useState<AccessibilityShortcutConfig>(getStoredShortcutConfig);
@@ -213,6 +221,12 @@ export const AccessibilitySettingsModal: React.FC<AccessibilitySettingsModalProp
   const platformInfo = getPlatformDisplayInfo(platform);
 
   const [draft, setDraft] = useState<AccessibilityShortcutConfig>(getStoredShortcutConfig);
+  const [areQuizAnimationsEnabled, setAreQuizAnimationsEnabled] = useState<boolean>(
+    getStoredQuizAnimationsEnabled
+  );
+  const [areStreakCelebrationsEnabled, setAreStreakCelebrationsEnabled] = useState<boolean>(
+    getStoredStreakCelebrationsEnabled
+  );
   const [recordingTarget, setRecordingTarget] = useState<
     'focusMode' | 'adaptiveDifficulty' | null
   >(null);
@@ -221,10 +235,38 @@ export const AccessibilitySettingsModal: React.FC<AccessibilitySettingsModalProp
   useEffect(() => {
     if (isOpen) {
       setDraft(getStoredShortcutConfig());
+      setAreQuizAnimationsEnabled(getStoredQuizAnimationsEnabled());
+      setAreStreakCelebrationsEnabled(getStoredStreakCelebrationsEnabled());
       setRecordingTarget(null);
       setSavedToast(null);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    const handleAnimSync = (e: Event) => {
+      const customEvent = e as CustomEvent<{ enabled?: boolean }>;
+      if (typeof customEvent.detail?.enabled === 'boolean') {
+        setAreQuizAnimationsEnabled(customEvent.detail.enabled);
+      } else {
+        setAreQuizAnimationsEnabled(getStoredQuizAnimationsEnabled());
+      }
+    };
+    const handleCelebrationsSync = (e: Event) => {
+      const customEvent = e as CustomEvent<{ enabled?: boolean }>;
+      if (typeof customEvent.detail?.enabled === 'boolean') {
+        setAreStreakCelebrationsEnabled(customEvent.detail.enabled);
+      } else {
+        setAreStreakCelebrationsEnabled(getStoredStreakCelebrationsEnabled());
+      }
+    };
+
+    window.addEventListener(QUIZ_ANIMATIONS_CHANGED_EVENT, handleAnimSync);
+    window.addEventListener(STREAK_CELEBRATION_EFFECTS_CHANGED_EVENT, handleCelebrationsSync);
+    return () => {
+      window.removeEventListener(QUIZ_ANIMATIONS_CHANGED_EVENT, handleAnimSync);
+      window.removeEventListener(STREAK_CELEBRATION_EFFECTS_CHANGED_EVENT, handleCelebrationsSync);
+    };
+  }, []);
 
   // Interactive key-combo recorder when user clicks "Record Key Combo"
   useEffect(() => {
@@ -326,9 +368,111 @@ export const AccessibilitySettingsModal: React.FC<AccessibilitySettingsModalProp
         <div className="p-5 space-y-4 max-h-[75dvh] overflow-y-auto">
           <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs text-slate-700 leading-relaxed">
             Customize your keyboard shortcuts for <strong>Focus Mode</strong> and{' '}
-            <strong>Adaptive Difficulty</strong>. Key labels automatically adapt to{' '}
+            <strong>Adaptive Difficulty</strong>, or toggle conditional motion animations below. Key labels automatically adapt to{' '}
             <strong>{platformInfo.label}</strong> ({platformInfo.ctrlLabel}, {platformInfo.altLabel},{' '}
-            {platformInfo.shiftLabel}). Click <em>Record Key Combo</em> or configure modifiers directly below.
+            {platformInfo.shiftLabel}).
+          </div>
+
+          {/* Conditional QuizCard Slide-and-Fade Transition Animation Toggle */}
+          <div
+            className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+              areQuizAnimationsEnabled
+                ? 'bg-emerald-50/75 border-emerald-300'
+                : 'bg-slate-100 border-slate-300'
+            }`}
+          >
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-xs sm:text-sm font-extrabold text-slate-900">
+                  QuizCard Transition Animations (Slide &amp; Fade)
+                </h4>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                    areQuizAnimationsEnabled
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-300 text-slate-800'
+                  }`}
+                >
+                  {areQuizAnimationsEnabled ? 'ON' : 'OFF'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600">
+                Animates QuizCard question transitions with a custom slide-and-fade entrance effect. Toggle off for reduced motion.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={areQuizAnimationsEnabled}
+              aria-label="Toggle QuizCard slide-and-fade question transition animations"
+              data-testid="toggle-quizcard-animations"
+              onClick={() => {
+                const next = !areQuizAnimationsEnabled;
+                applyQuizAnimationsEnabled(next);
+                setAreQuizAnimationsEnabled(next);
+              }}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                areQuizAnimationsEnabled ? 'bg-emerald-600' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  areQuizAnimationsEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Toggle Five-Streak Header Pulse & High-Energy Celebration Effects (Reduced Cognitive Load) */}
+          <div
+            className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+              areStreakCelebrationsEnabled
+                ? 'bg-amber-50/75 border-amber-300'
+                : 'bg-slate-100 border-slate-300'
+            }`}
+          >
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-xs sm:text-sm font-extrabold text-slate-900">
+                  Five-Streak Header Pulse &amp; Celebration Fanfare
+                </h4>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                    areStreakCelebrationsEnabled
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-slate-300 text-slate-800'
+                  }`}
+                >
+                  {areStreakCelebrationsEnabled ? 'ON' : 'OFF'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600">
+                Controls the glowing orange 'Five-Streak Header Pulse' border animation and high-energy celebration fanfare (confetti bursts, milestone pulses). Turn off to reduce sensory distraction and cognitive load during long study sessions.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={areStreakCelebrationsEnabled}
+              aria-label="Toggle Five-Streak Header Pulse and celebration effects"
+              data-testid="toggle-streak-celebration-effects"
+              onClick={() => {
+                const next = !areStreakCelebrationsEnabled;
+                applyStreakCelebrationsEnabled(next);
+                setAreStreakCelebrationsEnabled(next);
+              }}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                areStreakCelebrationsEnabled ? 'bg-amber-600' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  areStreakCelebrationsEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
 
           {(

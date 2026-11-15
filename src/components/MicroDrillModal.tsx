@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Question } from '../types/quiz';
-import { KitengeRibbon, MaasaiMedallion, KenyanFlagMiniEmblem } from './MotifDecorations';
+import { KitengeRibbon, MaasaiMedallion, KenyanFlagMiniEmblem, KitengeCardWatermark } from './MotifDecorations';
 import { ResponsiveModalContainer } from './ResponsiveModalContainer';
 
 interface MicroDrillProps {
@@ -631,7 +631,9 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
 
         {/* Scrollable Body that adapts to any viewport height */}
         {!isFinished && currentQ ? (
-          <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
+          <div className="relative flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+            <KitengeCardWatermark opacity={0.05} />
+            <div className="relative z-10 space-y-4">
             {/* Progress indicators */}
             <div className="flex items-center justify-between text-xs font-semibold text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/80">
               <div className="flex items-center gap-2">
@@ -770,6 +772,7 @@ export const MicroDrillModal: React.FC<MicroDrillProps> = ({
                 </button>
               </div>
             )}
+            </div>
           </div>
         ) : (
           /* Finished summary & Accuracy Badge Presentation */

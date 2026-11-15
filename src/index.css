@@ -19,6 +19,27 @@
   }
 }
 
+@keyframes quizcardSlideFadeEntrance {
+  0% {
+    opacity: 0;
+    transform: translate3d(28px, 12px, 0) scale(0.992);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.animate-quizcard-slide-fade {
+  animation: quizcardSlideFadeEntrance 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+html.reduce-quiz-transitions .animate-quizcard-slide-fade,
+html[data-quiz-animations="false"] .animate-quizcard-slide-fade {
+  animation: none !important;
+  transition: none !important;
+}
+
 :root {
   /* Brand Core Colors */
   --color-azure: #0078d4;
@@ -1326,6 +1347,17 @@ html[data-high-contrast="true"] input:focus-visible {
 
 .thread-tag-hover-interactive:hover {
   animation: threadTagPulseGlow 1.35s ease-in-out infinite;
+}
+
+/* Reduced Cognitive Load: Suppress Five-Streak Header Pulse and high-energy celebration animations */
+html[data-streak-celebrations="false"] .animate-five-streak-header-pulse,
+html[data-streak-celebrations="false"] .animate-five-streak-header-pulse-intense,
+html[data-streak-celebrations="false"] .animate-goal-celebrate,
+html.reduce-celebration-motion .animate-five-streak-header-pulse,
+html.reduce-celebration-motion .animate-five-streak-header-pulse-intense,
+html.reduce-celebration-motion .animate-goal-celebrate {
+  animation: none !important;
+  box-shadow: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

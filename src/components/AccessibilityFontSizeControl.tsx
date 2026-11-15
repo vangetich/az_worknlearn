@@ -12,6 +12,7 @@ import {
   Info,
   Minimize2,
   Maximize2,
+  Flame,
 } from 'lucide-react';
 import {
   getStoredFontScalePercent,
@@ -25,6 +26,12 @@ import {
 import {
   getStoredHighContrast,
   applyHighContrast,
+  getStoredQuizAnimationsEnabled,
+  applyQuizAnimationsEnabled,
+  QUIZ_ANIMATIONS_CHANGED_EVENT,
+  getStoredStreakCelebrationsEnabled,
+  applyStreakCelebrationsEnabled,
+  STREAK_CELEBRATION_EFFECTS_CHANGED_EVENT,
 } from '../utils/highContrast';
 import { ResetPasswordModal } from './ResetPasswordModal';
 
@@ -41,6 +48,12 @@ export const AccessibilityFontSizeControl: React.FC<
   );
   const [isHighContrast, setIsHighContrast] = useState<boolean>(
     getStoredHighContrast
+  );
+  const [areQuizAnimationsEnabled, setAreQuizAnimationsEnabled] = useState<boolean>(
+    getStoredQuizAnimationsEnabled
+  );
+  const [areStreakCelebrationsEnabled, setAreStreakCelebrationsEnabled] = useState<boolean>(
+    getStoredStreakCelebrationsEnabled
   );
   const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
   const [isResetPasswordOpen, setIsResetPasswordOpen] = useState<boolean>(false);
@@ -71,11 +84,33 @@ export const AccessibilityFontSizeControl: React.FC<
       }
     };
 
+    const handleAnimationsSync = (e: Event) => {
+      const customEvent = e as CustomEvent<{ enabled?: boolean }>;
+      if (typeof customEvent.detail?.enabled === 'boolean') {
+        setAreQuizAnimationsEnabled(customEvent.detail.enabled);
+      } else {
+        setAreQuizAnimationsEnabled(getStoredQuizAnimationsEnabled());
+      }
+    };
+
+    const handleCelebrationsSync = (e: Event) => {
+      const customEvent = e as CustomEvent<{ enabled?: boolean }>;
+      if (typeof customEvent.detail?.enabled === 'boolean') {
+        setAreStreakCelebrationsEnabled(customEvent.detail.enabled);
+      } else {
+        setAreStreakCelebrationsEnabled(getStoredStreakCelebrationsEnabled());
+      }
+    };
+
     window.addEventListener('az900-font-size-changed', handleSync);
     window.addEventListener('az900-high-contrast-changed', handleHighContrastSync);
+    window.addEventListener(QUIZ_ANIMATIONS_CHANGED_EVENT, handleAnimationsSync);
+    window.addEventListener(STREAK_CELEBRATION_EFFECTS_CHANGED_EVENT, handleCelebrationsSync);
     return () => {
       window.removeEventListener('az900-font-size-changed', handleSync);
       window.removeEventListener('az900-high-contrast-changed', handleHighContrastSync);
+      window.removeEventListener(QUIZ_ANIMATIONS_CHANGED_EVENT, handleAnimationsSync);
+      window.removeEventListener(STREAK_CELEBRATION_EFFECTS_CHANGED_EVENT, handleCelebrationsSync);
     };
   }, []);
 
@@ -117,6 +152,16 @@ export const AccessibilityFontSizeControl: React.FC<
   const handleToggleHighContrast = (enabled: boolean) => {
     applyHighContrast(enabled);
     setIsHighContrast(enabled);
+  };
+
+  const handleToggleQuizAnimations = (enabled: boolean) => {
+    applyQuizAnimationsEnabled(enabled);
+    setAreQuizAnimationsEnabled(enabled);
+  };
+
+  const handleToggleStreakCelebrations = (enabled: boolean) => {
+    applyStreakCelebrationsEnabled(enabled);
+    setAreStreakCelebrationsEnabled(enabled);
   };
 
   const deltaFromBase = scalePercent - 100;
@@ -203,6 +248,24 @@ export const AccessibilityFontSizeControl: React.FC<
         >
           <Contrast className="w-3 h-3 text-[#0078D4]" />
           <span>High Contrast: {isHighContrast ? 'ON' : 'OFF'}</span>
+        </button>
+
+        {/* Conditional Slide-and-Fade Question Transition Animation Toggle */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={areQuizAnimationsEnabled}
+          data-testid="inline-quiz-animations-toggle"
+          onClick={() => handleToggleQuizAnimations(!areQuizAnimationsEnabled)}
+          className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all cursor-pointer flex items-center gap-1 border ${
+            areQuizAnimationsEnabled
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+              : 'bg-slate-200 text-slate-700 border-slate-300'
+          }`}
+          title="Toggle QuizCard Slide-and-Fade Question Transition Animations ON or OFF"
+        >
+          <Sparkles className="w-3 h-3 text-emerald-600" />
+          <span>Transitions: {areQuizAnimationsEnabled ? 'ON' : 'OFF'}</span>
         </button>
 
         {/* Settings Panel: Reset Password Modal Trigger */}
@@ -411,6 +474,73 @@ export const AccessibilityFontSizeControl: React.FC<
                   </div>
                 </div>
 
+                {/* Dedicated QuizCard Slide-and-Fade Transition Animation Toggle */}
+                <div className="pt-2 border-t border-slate-100">
+                  <div
+                    className={`p-2.5 rounded-xl border transition-all ${
+                      areQuizAnimationsEnabled
+                        ? 'bg-emerald-50/70 border-emerald-200'
+                        : 'bg-slate-100 border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className={`p-1.5 rounded-lg shrink-0 ${
+                            areQuizAnimationsEnabled
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-slate-300 text-slate-700'
+                          }`}
+                        >
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h5 className="text-xs font-black text-slate-900 leading-tight">
+                              Question Transition Animations
+                            </h5>
+                            <span
+                              className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider ${
+                                areQuizAnimationsEnabled
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'bg-slate-300 text-slate-800'
+                              }`}
+                            >
+                              {areQuizAnimationsEnabled ? 'Slide & Fade ON' : 'Reduced Motion'}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 leading-snug mt-0.5">
+                            Slide-and-fade entrance effect when switching QuizCard questions
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={areQuizAnimationsEnabled}
+                        aria-label="Toggle QuizCard question transition animations"
+                        data-testid="popover-quiz-animations-toggle"
+                        onClick={() => handleToggleQuizAnimations(!areQuizAnimationsEnabled)}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          areQuizAnimationsEnabled ? 'bg-emerald-600' : 'bg-slate-300'
+                        }`}
+                        title={
+                          areQuizAnimationsEnabled
+                            ? 'Turn off QuizCard slide-and-fade transition animations'
+                            : 'Turn on QuizCard slide-and-fade transition animations'
+                        }
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            areQuizAnimationsEnabled ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Account Security: Reset Password Option in Settings Panel */}
                 <div className="pt-2 border-t border-slate-100">
                   <div className="p-2.5 rounded-xl bg-sky-50/80 border border-sky-200 flex items-center justify-between gap-2">
@@ -446,6 +576,7 @@ export const AccessibilityFontSizeControl: React.FC<
                     onClick={() => {
                       handleAdjust(DEFAULT_FONT_SCALE_PERCENT);
                       if (isHighContrast) handleToggleHighContrast(false);
+                      if (!areQuizAnimationsEnabled) handleToggleQuizAnimations(true);
                     }}
                     className="text-[11px] font-bold text-slate-600 hover:text-[#0078D4] flex items-center gap-1 cursor-pointer"
                   >
@@ -724,6 +855,140 @@ export const AccessibilityFontSizeControl: React.FC<
                   <span
                     className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
                       isHighContrast ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Full Panel: QuizCard Slide-and-Fade Transition Animations Section */}
+          <div className="pt-2 border-t border-sky-100">
+            <div
+              className={`p-3 rounded-xl border transition-all ${
+                areQuizAnimationsEnabled
+                  ? 'bg-emerald-50/70 border-emerald-300'
+                  : 'bg-slate-100 border-slate-300'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`p-2 rounded-xl shrink-0 ${
+                      areQuizAnimationsEnabled
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h5 className="text-sm font-black text-slate-900">
+                        QuizCard Transition Animations (Slide &amp; Fade)
+                      </h5>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                          areQuizAnimationsEnabled
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-300 text-slate-800'
+                        }`}
+                      >
+                        {areQuizAnimationsEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Animates the QuizCard transition between questions with a smooth custom slide-and-fade entrance effect. Toggle off for instant, reduced-motion question switching.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={areQuizAnimationsEnabled}
+                  aria-label="Toggle QuizCard slide-and-fade question transition animations"
+                  data-testid="panel-quiz-animations-toggle"
+                  onClick={() => handleToggleQuizAnimations(!areQuizAnimationsEnabled)}
+                  className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out self-end sm:self-center focus:outline-none ${
+                    areQuizAnimationsEnabled ? 'bg-emerald-600' : 'bg-slate-300'
+                  }`}
+                  title={
+                    areQuizAnimationsEnabled
+                      ? 'Disable QuizCard slide-and-fade transitions'
+                      : 'Enable QuizCard slide-and-fade transitions'
+                  }
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      areQuizAnimationsEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Full Panel: Five-Streak Header Pulse & High-Energy Celebration Effects */}
+          <div className="pt-2 border-t border-sky-100">
+            <div
+              className={`p-3 rounded-xl border transition-all ${
+                areStreakCelebrationsEnabled
+                  ? 'bg-amber-50/70 border-amber-300'
+                  : 'bg-slate-100 border-slate-300'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`p-2 rounded-xl shrink-0 ${
+                      areStreakCelebrationsEnabled
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <Flame className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h5 className="text-sm font-black text-slate-900">
+                        Five-Streak Header Pulse &amp; Celebration Effects
+                      </h5>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                          areStreakCelebrationsEnabled
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-slate-300 text-slate-800'
+                        }`}
+                      >
+                        {areStreakCelebrationsEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Controls the glowing orange 'Five-Streak Header Pulse' animation and celebratory confetti fanfare. Turn off to reduce cognitive load and sensory distraction during long sessions.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={areStreakCelebrationsEnabled}
+                  aria-label="Toggle Five-Streak Header Pulse and celebration effects"
+                  data-testid="panel-streak-celebrations-toggle"
+                  onClick={() => handleToggleStreakCelebrations(!areStreakCelebrationsEnabled)}
+                  className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out self-end sm:self-center focus:outline-none ${
+                    areStreakCelebrationsEnabled ? 'bg-amber-600' : 'bg-slate-300'
+                  }`}
+                  title={
+                    areStreakCelebrationsEnabled
+                      ? 'Disable Five-Streak Header Pulse and celebration fanfare'
+                      : 'Enable Five-Streak Header Pulse and celebration fanfare'
+                  }
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      areStreakCelebrationsEnabled ? 'translate-x-5' : 'translate-x-0'
                     }`}
                   />
                 </button>

@@ -10,6 +10,7 @@ export function getInitialStats(): UserStats {
   const defaultStats: UserStats = {
     totalAnswered: 0,
     totalCorrect: 0,
+    points: 0,
     streakDays: 1,
     lastActiveDate: new Date().toISOString().split('T')[0],
     dailyGoal: 10,
@@ -131,6 +132,7 @@ export function saveUserAttempt(
     ...stats,
     totalAnswered,
     totalCorrect,
+    points: (stats.points || 0) + (attempt.isCorrect ? 100 : 0),
     attempts: newAttempts,
     moduleMastery,
     pathMastery,

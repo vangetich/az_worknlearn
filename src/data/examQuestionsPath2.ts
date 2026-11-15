@@ -692,6 +692,170 @@ export const PATH2_EXPANSION_QUESTIONS: Question[] = [
   },
 
   // =========================================================================
+  // LEARNING PATH 2: ADDITIONAL SCENARIO SET (Modules 4 & 5)
+  // =========================================================================
+  {
+    id: 'az900-mod4-q17',
+    learningPathId: 2,
+    learningPathTitle: 'Describe Azure Architecture & Services',
+    moduleId: 4,
+    moduleTitle: 'Core Azure Architectural Components',
+    difficulty: 'Fundamental',
+    scenario:
+      'A growing SaaS enterprise runs both Engineering and Marketing workloads inside a single Microsoft Entra ID tenant. Finance requires completely separate monthly invoices for each department, and Marketing developers need full Contributor permissions inside their workspace without any risk of modifying Engineering resources.',
+    question:
+      'Which core Azure architectural construct acts as both a separate billing boundary and an administrative access control boundary within the same tenant?',
+    options: [
+      { letter: 'A', text: 'An Availability Zone' },
+      { letter: 'B', text: 'An Azure Subscription' },
+      { letter: 'C', text: 'An Azure Region Pair' },
+      { letter: 'D', text: 'A Virtual Network Subnet' },
+    ],
+    correctAnswer: 'B',
+    whyCorrect:
+      'An Azure Subscription is a logical unit of Azure services linked to an Azure account. It acts as both a billing boundary (generating separate invoices per subscription) and an access control boundary for managing Role-Based Access Control (RBAC) and quotas across workloads.',
+    distractorBreakdown: [
+      { letter: 'A', reason: 'Availability Zones are physically isolated datacenters for high availability, not billing or tenant IAM boundaries.' },
+      { letter: 'C', reason: 'Region Pairs link two geographical regions for disaster recovery rather than separating departmental invoices.' },
+      { letter: 'D', reason: 'Subnets segment IP address ranges inside a Virtual Network and do not isolate Azure billing invoices.' },
+    ],
+    examTip:
+      'Need separate departmental bills AND isolated admin boundaries under one Entra tenant? Create separate Azure Subscriptions!',
+    errorDiagnostic: {
+      trapType: 'Service Scope Confusion',
+      correctivePrescription: 'Map billing separation and administrative boundary requirements under a single tenant to Azure Subscriptions.',
+    },
+  },
+  {
+    id: 'az900-mod4-q18',
+    learningPathId: 2,
+    learningPathTitle: 'Describe Azure Architecture & Services',
+    moduleId: 4,
+    moduleTitle: 'Core Azure Architectural Components',
+    difficulty: 'Intermediate',
+    scenario:
+      'A cloud engineer creates a Resource Group named "RG-Analytics-EU" with its metadata location set to West Europe. Inside "RG-Analytics-EU", the engineer provisions an Azure Storage Account located in North Europe and an Azure SQL Database in France Central. Later, the team runs a command to delete "RG-Analytics-EU".',
+    question:
+      'Which statement accurately describes Azure Resource Group architecture and lifecycle behavior in this scenario?',
+    options: [
+      { letter: 'A', text: 'Deleting "RG-Analytics-EU" deletes only the West Europe metadata while leaving the North Europe Storage Account running' },
+      { letter: 'B', text: 'Resources inside a Resource Group can reside in different Azure regions than the Resource Group itself, and deleting the Resource Group deletes every resource inside it' },
+      { letter: 'C', text: 'Azure blocks deploying North Europe and France Central resources into a Resource Group whose metadata resides in West Europe' },
+      { letter: 'D', text: 'A nested child Resource Group can be placed inside "RG-Analytics-EU" to protect the SQL Database from deletion' },
+    ],
+    correctAnswer: 'B',
+    whyCorrect:
+      'A Resource Group’s location stores only metadata about the resources—individual resources inside it can be deployed to any supported Azure region worldwide. Because a Resource Group acts as a unified lifecycle container, deleting the Resource Group permanently deletes all resources contained within it unless protected by a Resource Lock.',
+    distractorBreakdown: [
+      { letter: 'A', reason: 'Deleting a Resource Group deletes all resources placed inside it across all regions.' },
+      { letter: 'C', reason: 'Azure allows resources from multiple different regions to share one Resource Group.' },
+      { letter: 'D', reason: 'Resource Groups cannot be nested inside other Resource Groups.' },
+    ],
+    examTip:
+      'Resource Group Metadata Rule: Resources inside a Resource Group CAN live in different regions, CANNOT be nested, and are ALL deleted if the Resource Group is deleted!',
+    errorDiagnostic: {
+      trapType: 'Governance vs Access',
+      correctivePrescription: 'Remember that Resource Groups can span regions for contained resources and enforce a shared deletion lifecycle.',
+    },
+  },
+  {
+    id: 'az900-mod4-q19',
+    learningPathId: 2,
+    learningPathTitle: 'Describe Azure Architecture & Services',
+    moduleId: 4,
+    moduleTitle: 'Core Azure Architectural Components',
+    difficulty: 'Advanced',
+    scenario:
+      'A European clearinghouse must adhere strictly to EU data residency laws while maintaining continuous protection against both single-datacenter power failures and regional natural disasters. The architects deploy active database replicas across three physically separate facilities inside West Europe (each with independent power, cooling, and network) and replicate encrypted recovery snapshots asynchronously to North Europe within the same European Geography.',
+    question:
+      'Which two Azure architectural features is the clearinghouse combining to meet datacenter HA and compliant cross-region DR?',
+    options: [
+      { letter: 'A', text: 'Resource Locks and Management Group Taxonomies' },
+      { letter: 'B', text: 'Availability Zones (within West Europe) and Azure Region Pairs (West Europe + North Europe)' },
+      { letter: 'C', text: 'Single-Datacenter Fault Domains and Sovereign China 21Vianet Clouds' },
+      { letter: 'D', text: 'Azure Subscriptions and Private VNet Subnets' },
+    ],
+    correctAnswer: 'B',
+    whyCorrect:
+      'Availability Zones provide physically separated datacenters inside one region (West Europe) for synchronous, sub-2ms datacenter fault isolation. Pairing West Europe with North Europe uses Azure Region Pairs separated by 300+ miles inside the same European Geography, ensuring data residency compliance alongside serialized updates and cross-region disaster recovery.',
+    distractorBreakdown: [
+      { letter: 'A', reason: 'Resource Locks and Management Groups govern permissions and deletion protection rather than physical datacenter resilience.' },
+      { letter: 'C', reason: 'Single-datacenter Fault Domains do not protect against entire datacenter loss, and China 21Vianet violates EU residency.' },
+      { letter: 'D', reason: 'Subscriptions and subnets are logical billing and IP constructs rather than physical datacenter HA/DR topologies.' },
+    ],
+    examTip:
+      'Inside 1 Region (independent power/cooling) = Availability Zones. Two Regions 300+ miles apart in same Geography = Azure Region Pairs!',
+    errorDiagnostic: {
+      trapType: 'Cost & Redundancy Trap',
+      correctivePrescription: 'Pair Availability Zones (intra-region datacenter isolation) with Region Pairs (inter-region geography-compliant DR).',
+    },
+  },
+  {
+    id: 'az900-mod5-q17',
+    learningPathId: 2,
+    learningPathTitle: 'Describe Azure Architecture & Services',
+    moduleId: 5,
+    moduleTitle: 'Azure Compute & Networking Services',
+    difficulty: 'Intermediate',
+    scenario:
+      'An IoT fleet platform streams raw TCP and UDP sensor packets across 12 Linux Virtual Machines requiring ultra-low-latency Layer-4 network load distribution. Meanwhile, its customer web portal needs Layer-7 HTTPS routing that inspects URL paths (routing "/images/*" to media servers and "/api/*" to backend APIs) along with centralized SSL/TLS termination.',
+    question:
+      'Which pair of Azure networking services matches the Layer-4 TCP/UDP VM traffic and the Layer-7 URL path-based web routing requirements respectively?',
+    options: [
+      { letter: 'A', text: 'Azure DNS for Layer-4 packet distribution and VPN Gateway for Layer-7 URL routing' },
+      { letter: 'B', text: 'Azure Load Balancer (Layer-4 TCP/UDP) and Azure Application Gateway (Layer-7 HTTP/URL routing)' },
+      { letter: 'C', text: 'Azure Bastion for Layer-4 balancing and ExpressRoute for SSL termination' },
+      { letter: 'D', text: 'Network Security Groups for Layer-4 load distribution and VNet Peering for HTTP inspection' },
+    ],
+    correctAnswer: 'B',
+    whyCorrect:
+      'Azure Load Balancer operates at OSI Layer 4 (Transport: TCP/UDP) to distribute high-throughput low-latency network flows across VMs, whereas Azure Application Gateway operates at OSI Layer 7 (Application: HTTP/HTTPS) supporting URL path-based routing, SSL termination, and optional Web Application Firewall (WAF) inspection.',
+    distractorBreakdown: [
+      { letter: 'A', reason: 'Azure DNS resolves domain names and VPN Gateway builds encrypted tunnels—neither performs Layer-4/Layer-7 load balancing.' },
+      { letter: 'C', reason: 'Bastion provides browser-based RDP/SSH access and ExpressRoute provides private hybrid fiber links.' },
+      { letter: 'D', reason: 'NSGs filter subnet traffic via 5-tuple rules and VNet Peering interconnects virtual networks without HTTP path routing.' },
+    ],
+    examTip:
+      'OSI Layer Load Balancing Rule: Layer 4 (TCP/UDP, ultra-low latency) = Azure Load Balancer. Layer 7 (HTTP/HTTPS, URL paths, SSL termination, WAF) = Azure Application Gateway!',
+    errorDiagnostic: {
+      trapType: 'Service Scope Confusion',
+      correctivePrescription: 'Match Layer-4 TCP/UDP distribution to Azure Load Balancer and Layer-7 HTTP URL routing to Application Gateway.',
+    },
+  },
+  {
+    id: 'az900-mod5-q18',
+    learningPathId: 2,
+    learningPathTitle: 'Describe Azure Architecture & Services',
+    moduleId: 5,
+    moduleTitle: 'Azure Compute & Networking Services',
+    difficulty: 'Advanced',
+    scenario:
+      'A civil engineering consultancy employs 350 field engineers who travel constantly to remote construction sites and hotels with company laptops. Each engineer needs an encrypted tunnel directly from their individual laptop into the company’s private Azure Virtual Network ("VNet-Engineering") to query internal CAD servers—without provisioning branch-office VPN hardware appliances or exposing CAD ports on public IP addresses.',
+    question:
+      'Which Azure VPN Gateway configuration enables encrypted connections directly from individual remote client computers to an Azure Virtual Network?',
+    options: [
+      { letter: 'A', text: 'Point-to-Site (P2S) VPN Gateway' },
+      { letter: 'B', text: 'Site-to-Site (S2S) VPN Gateway' },
+      { letter: 'C', text: 'Azure ExpressRoute Direct Physical Circuit' },
+      { letter: 'D', text: 'Global VNet Peering' },
+    ],
+    correctAnswer: 'A',
+    whyCorrect:
+      'A Point-to-Site (P2S) VPN Gateway connection lets individual client computers (Windows, macOS, Linux laptops) establish secure, encrypted SSTP/OpenVPN/IKEv2 connections directly into an Azure Virtual Network from any remote location without requiring an on-premises edge VPN router.',
+    distractorBreakdown: [
+      { letter: 'B', reason: 'Site-to-Site (S2S) VPN connects an entire on-premises corporate datacenter network via a dedicated hardware VPN appliance, not individual traveling laptops.' },
+      { letter: 'C', reason: 'ExpressRoute connects fixed corporate offices or colocation datacenters via private fiber partners, not mobile field laptops.' },
+      { letter: 'D', reason: 'Global VNet Peering interconnects two Azure Virtual Networks inside Azure, not external remote client laptops.' },
+    ],
+    examTip:
+      'Individual remote laptops/telecommuters connecting to a VNet = Point-to-Site (P2S) VPN. Whole branch office hardware router to VNet = Site-to-Site (S2S) VPN!',
+    errorDiagnostic: {
+      trapType: 'Service Scope Confusion',
+      correctivePrescription: 'Differentiate individual client tunnels (Point-to-Site VPN) from office-to-VNet hardware tunnels (Site-to-Site VPN).',
+    },
+  },
+
+  // =========================================================================
   // MODULE 6 EXPANSION: Azure Storage Services (q6..q16)
   // =========================================================================
   {

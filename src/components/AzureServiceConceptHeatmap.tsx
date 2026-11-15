@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Question, UserStats } from '../types/quiz';
+import { AzureConceptMasteryD3Heatmap } from './AzureConceptMasteryD3Heatmap';
 
 export interface AzureServiceConceptItem {
   id: string;
@@ -393,6 +394,7 @@ export const AzureServiceConceptHeatmap: React.FC<AzureServiceConceptHeatmapProp
     AZ900_SERVICE_CONCEPTS[0].id
   );
   const [simulateDemoMisses, setSimulateDemoMisses] = useState<boolean>(false);
+  const [heatmapEngine, setHeatmapEngine] = useState<'d3' | 'grid'>('d3');
 
   const heatCells = useMemo<ComputedServiceConceptHeatCell[]>(() => {
     // Map questionId -> Question
@@ -530,9 +532,62 @@ export const AzureServiceConceptHeatmap: React.FC<AzureServiceConceptHeatmapProp
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 card-elevation overflow-hidden">
-      {/* Top Header Strip */}
-      <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+    <div className="space-y-4">
+      {/* Heatmap Engine View Switcher Bar */}
+      <div className="bg-slate-900 text-white px-4 py-2.5 rounded-2xl border border-slate-800 shadow-sm flex items-center justify-between gap-3 text-xs flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <span className="font-extrabold text-amber-300 flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            Heatmap Visualization:
+          </span>
+          <div className="flex items-center bg-white/10 p-1 rounded-xl border border-white/20">
+            <button
+              type="button"
+              data-testid="toggle-d3-heatmap-btn"
+              onClick={() => setHeatmapEngine('d3')}
+              className={`px-3 py-1 rounded-lg font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                heatmapEngine === 'd3'
+                  ? 'bg-amber-400 text-slate-950 shadow-xs'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>D3 Interactive Matrix Heatmap</span>
+            </button>
+            <button
+              type="button"
+              data-testid="toggle-grid-heatmap-btn"
+              onClick={() => setHeatmapEngine('grid')}
+              className={`px-3 py-1 rounded-lg font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                heatmapEngine === 'grid'
+                  ? 'bg-amber-400 text-slate-950 shadow-xs'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Vulnerability Cards Grid</span>
+            </button>
+          </div>
+        </div>
+
+        <span className="text-[11px] text-sky-200 hidden sm:inline">
+          {heatmapEngine === 'd3'
+            ? 'D3.js dynamic scale heatmap across individual Azure service concepts'
+            : 'Granular per-concept cards highlighting multi-misses'}
+        </span>
+      </div>
+
+      {heatmapEngine === 'd3' ? (
+        <AzureConceptMasteryD3Heatmap
+          stats={stats}
+          questions={questions}
+          onOpenStudyModule={onOpenStudyModule}
+          onPracticeConcept={onPracticeConcept}
+        />
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200/90 card-elevation overflow-hidden">
+          {/* Top Header Strip */}
+          <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-[#003E73] to-[#0078D4] text-white flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-rose-500/25 border border-rose-400/40 text-rose-200 text-[10px] font-black uppercase tracking-wider">
@@ -813,6 +868,8 @@ export const AzureServiceConceptHeatmap: React.FC<AzureServiceConceptHeatmapProp
           </div>
         )}
       </div>
+    </div>
+      )}
     </div>
   );
 };

@@ -52,6 +52,8 @@ import { AppTab } from './Header';
 import { StreakActivityGraph } from './StreakActivityGraph';
 import { StudyStreakCalendar } from './StudyStreakCalendar';
 import { DailyStudyConsistencyHeatmap } from './DailyStudyConsistencyHeatmap';
+import { FocusSessionHistoryD3Chart } from './FocusSessionHistoryD3Chart';
+import { DomainKnowledgeMapD3 } from './DomainKnowledgeMapD3';
 import { ProfileAnalyticsTab } from './ProfileAnalyticsTab';
 import { DailyStudyReminder } from './DailyStudyReminder';
 import { AccessibilityFontSizeControl } from './AccessibilityFontSizeControl';
@@ -122,6 +124,8 @@ export interface ProfileViewProps {
   unresolvedMistakesCount?: number;
   questionCountByModule?: Record<number, number>;
   onOpenUserGuide?: () => void;
+  onEnterFocusMode?: () => void;
+  isFocusModeActive?: boolean;
 }
 
 type ProfileExplorerTab = 'paths' | 'modules' | 'services' | 'gaps' | 'actions';
@@ -152,6 +156,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   unresolvedMistakesCount = 0,
   questionCountByModule = {},
   onOpenUserGuide,
+  onEnterFocusMode,
+  isFocusModeActive = false,
 }) => {
   const [candidateName, setCandidateName] = useState<string>(() => {
     return localStorage.getItem('az900_candidate_name') || 'Amina Wanjiku';
@@ -732,6 +738,35 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       {profileMainTab === 'overview' && (
         <>
           {/* =====================================================================
+              VISUAL CALENDAR STREAK TRACKER HEATMAP (HIGHLIGHTS DAILY GOAL-MET DAYS)
+             ===================================================================== */}
+          <StudyStreakCalendar
+            stats={stats}
+            onOpenManageGoal={onOpenManageGoal}
+          />
+
+          {/* =====================================================================
+              FOCUS SESSION HISTORY (DISTRACTION-FREE USAGE FREQUENCY D3 BAR CHART)
+             ===================================================================== */}
+          <FocusSessionHistoryD3Chart
+            onEnterFocusMode={onEnterFocusMode}
+            isFocusModeActive={isFocusModeActive}
+          />
+
+          {/* =====================================================================
+              DOMAIN KNOWLEDGE MAP (D3 INTERCONNECTED SERVICE RELATIONSHIPS NETWORK)
+             ===================================================================== */}
+          <DomainKnowledgeMapD3
+            onPracticeModule={(modId) => {
+              if (onSelectModule) {
+                onSelectModule(modId, 'all');
+              }
+              onNavigateToPractice();
+            }}
+            onNavigateToPractice={onNavigateToPractice}
+          />
+
+          {/* =====================================================================
               USER SETTINGS PANEL: APPLICATION-WIDE ACCESSIBILITY FONT SIZE CONTROL
              ===================================================================== */}
           <AccessibilityFontSizeControl variant="panel" />
@@ -810,6 +845,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <ProfileAnalyticsTab
             stats={stats}
             onOpenManageGoal={onOpenManageGoal}
+            onNavigateToPractice={onNavigateToPractice}
+          />
+          <FocusSessionHistoryD3Chart
+            onEnterFocusMode={onEnterFocusMode}
+            isFocusModeActive={isFocusModeActive}
+          />
+          <DomainKnowledgeMapD3
+            onPracticeModule={(modId) => {
+              if (onSelectModule) {
+                onSelectModule(modId, 'all');
+              }
+              onNavigateToPractice();
+            }}
             onNavigateToPractice={onNavigateToPractice}
           />
           <DailyAccuracyTrajectoryChart stats={stats} />
@@ -3089,12 +3137,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       <DailyStudyConsistencyHeatmap
         stats={stats}
         onStartPractice={onNavigateToPractice}
-        onOpenManageGoal={onOpenManageGoal}
-      />
-
-      {/* 3-Month Study Streak Calendar Heat Map (Highlights Daily Goal Met Days) */}
-      <StudyStreakCalendar
-        stats={stats}
         onOpenManageGoal={onOpenManageGoal}
       />
 

@@ -1391,3 +1391,170 @@ export const PeerChallengeModal: React.FC<PeerChallengeModalProps> = ({
     </ResponsiveModalContainer>
   );
 };
+
+export interface PeerChallengeInvitation {
+  id: string;
+  challengerName: string;
+  challengerAvatar: string;
+  chapter: string;
+  location: string;
+  badge: string;
+  challengeCode: string;
+  moduleId: number | 'all';
+  moduleTitle: string;
+  targetTimeSeconds: number;
+  receivedAt: number;
+}
+
+export const PEER_CHALLENGE_INVITE_EVENT = 'az900-peer-challenge-invite';
+
+export function createCohortPeerChallengeInvitation(
+  moduleId: number | 'all' = 4,
+  peerIndex?: number
+): PeerChallengeInvitation {
+  const safeIdx =
+    typeof peerIndex === 'number'
+      ? Math.abs(peerIndex) % COHORT_PEERS.length
+      : Math.floor(Date.now() / 1000) % COHORT_PEERS.length;
+  const peer = COHORT_PEERS[safeIdx] || COHORT_PEERS[0];
+
+  let resolvedModTitle = 'All AZ-900 Modules (Full Curriculum Mix)';
+  if (typeof moduleId === 'number') {
+    for (const lp of LEARNING_PATHS) {
+      const found = lp.modules.find((m) => m.id === moduleId);
+      if (found) {
+        resolvedModTitle = `Module ${found.id}: ${found.title}`;
+        break;
+      }
+    }
+  }
+
+  const codeSuffix = `${peer.name.slice(0, 2).toUpperCase()}${
+    typeof moduleId === 'number' ? moduleId : 9
+  }X`;
+  const challengeCode = formatChallengeCode(moduleId, codeSuffix);
+
+  return {
+    id: `invite-${peer.id}-${Date.now()}`,
+    challengerName: peer.name,
+    challengerAvatar: peer.avatar,
+    chapter: peer.chapter,
+    location: peer.location,
+    badge: peer.badge,
+    challengeCode,
+    moduleId,
+    moduleTitle: resolvedModTitle,
+    targetTimeSeconds: Math.round(peer.baseSpeedSecondsPerQ * 5),
+    receivedAt: Date.now(),
+  };
+}
+
+export function dispatchPeerChallengeInvitation(
+  invitation?: Partial<PeerChallengeInvitation> & { moduleId?: number | 'all' }
+): PeerChallengeInvitation {
+  const base = createCohortPeerChallengeInvitation(invitation?.moduleId ?? 4);
+  const merged: PeerChallengeInvitation = {
+    ...base,
+    ...invitation,
+  };
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent<PeerChallengeInvitation>(PEER_CHALLENGE_INVITE_EVENT, {
+        detail: merged,
+      })
+    );
+  }
+  return merged;
+}
+
+export interface PeerChallengeInviteToastProps {
+  invitation: PeerChallengeInvitation | null;
+  onJoinChallenge: (invitation: PeerChallengeInvitation) => void;
+  onDismiss: () => void;
+}
+
+/**
+ * Non-intrusive toast notification that alerts users when a peer challenge invitation is received,
+ * featuring a 'Join Challenge' button that opens the PeerChallengeModal directly.
+ */
+export const PeerChallengeInviteToast: React.FC<PeerChallengeInviteToastProps> = ({
+  invitation,
+  onJoinChallenge,
+  onDismiss,
+}) => {
+  if (!invitation) return null;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label={`Peer challenge invitation from ${invitation.challengerName}`}
+      data-testid="peer-challenge-invite-toast"
+      className="fixed bottom-20 md:bottom-5 right-3 sm:right-5 z-[115] w-[min(92vw,370px)] pointer-events-none animate-in slide-in-from-bottom-3 fade-in duration-200"
+    >
+      <div className="pointer-events-auto relative overflow-hidden rounded-2xl bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-md text-white border border-emerald-400/60 shadow-2xl p-3.5 space-y-2.5">
+        <KitengeRibbon className="absolute top-0 inset-x-0 h-1 opacity-90" />
+
+        <div className="flex items-start justify-between gap-2.5 pt-0.5">
+          <div className="flex items-start gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-base shrink-0">
+              <span>{invitation.challengerAvatar}</span>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  <Users className="w-2.5 h-2.5 text-amber-300" />
+                  <span>Peer Challenge Invite</span>
+                </span>
+                <span className="font-mono text-[10px] font-bold text-amber-300 tabular-nums">
+                  {invitation.challengeCode}
+                </span>
+              </div>
+
+              <p className="text-xs font-extrabold text-white mt-1 leading-snug">
+                {invitation.challengerName}{' '}
+                <span className="font-normal text-slate-300">
+                  ({invitation.chapter}) invited you to a 5-Q speed sprint!
+                </span>
+              </p>
+              <p className="text-[11px] text-sky-200/90 truncate mt-0.5">
+                {invitation.moduleTitle} · Target: ~{invitation.targetTimeSeconds}s
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Dismiss peer challenge invitation"
+            title="Dismiss notification"
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-1 border-t border-white/10">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-[11px] font-bold transition-colors cursor-pointer"
+          >
+            Later
+          </button>
+          <button
+            type="button"
+            data-testid="join-peer-challenge-toast-btn"
+            onClick={() => onJoinChallenge(invitation)}
+            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#006600] via-emerald-600 to-[#0078D4] hover:opacity-95 text-white text-xs font-black inline-flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+            <span>Join Challenge</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+

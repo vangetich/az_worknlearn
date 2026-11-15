@@ -1,7 +1,9 @@
 import { jsPDF } from 'jspdf';
-import { UserStats } from '../types/quiz';
+import { Question, UserStats } from '../types/quiz';
 import { LEARNING_PATHS } from '../data/curriculum';
 import { FAQ_HELP_DATASET } from '../data/faqHelpData';
+import { getAllQuestionNotes } from './storage';
+import { getSavedMemoryAnchors } from './exportNotesMarkdown';
 
 // Color definitions matching the Studio's African Heritage + Modern Tech palette
 const COLOR_AZURE = [0, 120, 212] as const; // #0078D4
@@ -808,3 +810,351 @@ export function generateUserManualPdf(): void {
 
   doc.save('Azure_Fundamentals_AZ900_Studio_User_Manual.pdf');
 }
+
+/**
+ * 3. Client-Side Comprehensive 'Export Study Report' PDF Generator:
+ * Aggregates:
+ *   1. Module Confidence Scores & Domain Mastery (Paths 1–3 & Modules 1–12)
+ *   2. Saved Personal Study Notes & Custom Memory Anchors
+ *   3. Bookmarked Questions (with Scenarios, Correct Answers, Explanations & Exam Tips)
+ */
+export function generateComprehensiveStudyReportPdf(
+  stats: UserStats,
+  questions: Question[]
+): {
+  filename: string;
+  notesCount: number;
+  bookmarksCount: number;
+  anchorsCount: number;
+} {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  const contentWidth = pageWidth - margin * 2;
+  const today = new Date().toISOString().split('T')[0];
+
+  const notesMap = getAllQuestionNotes();
+  const savedAnchors = getSavedMemoryAnchors();
+  const questionById = new Map<string, Question>(questions.map((q) => [q.id, q]));
+
+  const notedQuestionIds = Object.keys(notesMap).filter((id) => Boolean(notesMap[id]?.trim()));
+  const bookmarkedQuestions = (stats.bookmarks || [])
+    .map((id) => questionById.get(id))
+    .filter((q): q is Question => Boolean(q));
+
+  const overallAccuracy =
+    stats.totalAnswered > 0
+      ? Math.round((stats.totalCorrect / stats.totalAnswered) * 100)
+      : 0;
+  const scaledScore = Math.round((overallAccuracy / 100) * 1000);
+  const isExamReady = scaledScore >= 700;
+
+  let pageNumber = 1;
+
+  const drawFooter = (pageNum: number) => {
+    drawKitengeRibbon(doc, pageHeight - 3.5, 3.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLOR_MUTED);
+    doc.text(
+      `AZ-900 Offline Study Report • Notes, Bookmarks & Module Confidence • ${today}`,
+      margin,
+      pageHeight - 6
+    );
+    doc.text(`Page ${pageNum}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+  };
+
+  const ensureSpace = (neededMm: number, currentY: number): number => {
+    if (currentY + neededMm > pageHeight - 14) {
+      drawFooter(pageNumber);
+      doc.addPage();
+      pageNumber += 1;
+      drawKitengeRibbon(doc, 0, 3);
+      return 14;
+    }
+    return currentY;
+  };
+
+  // Top Ribbon & Header Banner
+  drawKitengeRibbon(doc, 0, 3.5);
+  doc.setFillColor(...COLOR_NAVY);
+  doc.rect(margin, 10, contentWidth, 26, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(255, 255, 255);
+  doc.text('AZ-900 Comprehensive Offline Study Report', margin + 6, 19);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(224, 242, 254);
+  doc.text(
+    'Aggregated Module Confidence Scores • Saved Study Notes • Bookmarked Questions • Memory Anchors',
+    margin + 6,
+    26
+  );
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(253, 230, 138);
+  doc.text(
+    `Generated: ${today} • Scaled Score: ${scaledScore}/1000 (${overallAccuracy}%) • Notes: ${notedQuestionIds.length} • Bookmarks: ${bookmarkedQuestions.length} • Anchors: ${savedAnchors.length}`,
+    margin + 6,
+    32.5
+  );
+
+  let y = 42;
+
+  // =========================================================================
+  // SECTION 1: MODULE CONFIDENCE SCORES & ACCURACY BREAKDOWN (12 MODULES)
+  // =========================================================================
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11.5);
+  doc.setTextColor(...COLOR_DARK_SLATE);
+  doc.text('1. Module Confidence Scores & Mastery Breakdown (Modules 1–12)', margin, y);
+  y += 4;
+
+  doc.setFillColor(...COLOR_AZURE);
+  doc.rect(margin, y, contentWidth, 7, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(255, 255, 255);
+  doc.text('Module', margin + 3, y + 4.8);
+  doc.text('Path', margin + 88, y + 4.8);
+  doc.text('Solved', margin + 104, y + 4.8);
+  doc.text('Accuracy', margin + 124, y + 4.8);
+  doc.text('Confidence Score', margin + 148, y + 4.8);
+  y += 7;
+
+  const allModules = LEARNING_PATHS.flatMap((p) => p.modules);
+  const confidenceMap = stats.confidenceScores || {};
+
+  allModules.forEach((mod, idx) => {
+    y = ensureSpace(8, y);
+    const modStat = stats.moduleMastery[mod.id] || { correct: 0, total: 0 };
+    const pct = modStat.total > 0 ? Math.round((modStat.correct / modStat.total) * 100) : 0;
+
+    // Compute average self-rated confidence for questions in this module if available
+    const modQuestions = questions.filter((q) => q.moduleId === mod.id);
+    const ratedInMod = modQuestions
+      .map((q) => confidenceMap[q.id])
+      .filter((v): v is 1 | 2 | 3 => typeof v === 'number');
+    const avgSelfConf =
+      ratedInMod.length > 0
+        ? Math.round(
+            (ratedInMod.reduce((acc, v) => acc + v, 0) / (ratedInMod.length * 3)) * 100
+          )
+        : pct;
+
+    const combinedConfidence = modStat.total > 0 ? Math.round(pct * 0.7 + avgSelfConf * 0.3) : 0;
+    const isEven = idx % 2 === 0;
+
+    doc.setFillColor(isEven ? 255 : 248, isEven ? 255 : 250, isEven ? 255 : 252);
+    doc.setDrawColor(...COLOR_BORDER);
+    doc.rect(margin, y, contentWidth, 7.5, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLOR_DARK_SLATE);
+    doc.text(`M${mod.id}: ${mod.title}`.substring(0, 46), margin + 3, y + 5);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(...COLOR_MUTED);
+    doc.text(`P${mod.pathId}`, margin + 88, y + 5);
+    doc.text(`${modStat.correct}/${modStat.total}`, margin + 104, y + 5);
+
+    doc.setFont('helvetica', 'bold');
+    if (pct >= 80) doc.setTextColor(...COLOR_EMERALD);
+    else if (pct >= 70) doc.setTextColor(...COLOR_AZURE);
+    else if (pct >= 50) doc.setTextColor(...COLOR_OCHRE);
+    else doc.setTextColor(...COLOR_TERRACOTTA);
+    doc.text(`${pct}%`, margin + 124, y + 5);
+
+    const confLabel =
+      modStat.total === 0
+        ? 'Unattempted'
+        : combinedConfidence >= 80
+        ? `${combinedConfidence}% (High)`
+        : combinedConfidence >= 65
+        ? `${combinedConfidence}% (Moderate)`
+        : `${combinedConfidence}% (Review)`;
+    doc.text(confLabel, margin + 148, y + 5);
+
+    y += 7.5;
+  });
+
+  // =========================================================================
+  // SECTION 2: SAVED STUDY NOTES & CUSTOM MEMORY ANCHORS
+  // =========================================================================
+  y = ensureSpace(24, y + 7);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11.5);
+  doc.setTextColor(...COLOR_DARK_SLATE);
+  doc.text(
+    `2. Saved Personal Study Notes (${notedQuestionIds.length}) & Custom Memory Anchors (${savedAnchors.length})`,
+    margin,
+    y
+  );
+  y += 5;
+
+  if (notedQuestionIds.length === 0 && savedAnchors.length === 0) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(...COLOR_MUTED);
+    doc.text(
+      'No personal notes or custom memory anchors saved yet. Use the Study Notes or Knowledge Deck sidebar to add notes.',
+      margin + 2,
+      y + 3
+    );
+    y += 9;
+  } else {
+    // Render Saved Question Notes
+    notedQuestionIds.forEach((qId, idx) => {
+      const noteText = (notesMap[qId] || '').trim();
+      const q = questionById.get(qId);
+      const headerLine = q
+        ? `Note #${idx + 1} [${q.id.toUpperCase()}] • Module ${q.moduleId}: ${q.moduleTitle}`
+        : `Note #${idx + 1} [${qId.toUpperCase()}]`;
+      const wrappedNote = doc.splitTextToSize(noteText, contentWidth - 8);
+      const boxHeight = Math.max(14, 9 + wrappedNote.length * 3.8);
+
+      y = ensureSpace(boxHeight + 3, y);
+      doc.setFillColor(...COLOR_LIGHT_BG);
+      doc.setDrawColor(...COLOR_BORDER);
+      doc.roundedRect(margin, y, contentWidth, boxHeight, 1.5, 1.5, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(...COLOR_AZURE);
+      doc.text(headerLine.substring(0, 95), margin + 3.5, y + 5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...COLOR_DARK_SLATE);
+      doc.text(wrappedNote, margin + 3.5, y + 10);
+
+      y += boxHeight + 2.5;
+    });
+
+    // Render Custom Memory Anchors
+    savedAnchors.forEach((anchor, idx) => {
+      const ruleLines = doc.splitTextToSize(`Anchor: ${anchor.anchorText}`, contentWidth - 8);
+      const trapLines = anchor.examTrap
+        ? doc.splitTextToSize(`Exam Trap: ${anchor.examTrap}`, contentWidth - 8)
+        : [];
+      const boxHeight = 9 + (ruleLines.length + trapLines.length) * 3.8;
+
+      y = ensureSpace(boxHeight + 3, y);
+      doc.setFillColor(255, 251, 235);
+      doc.setDrawColor(252, 211, 77);
+      doc.roundedRect(margin, y, contentWidth, boxHeight, 1.5, 1.5, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(...COLOR_OCHRE);
+      doc.text(
+        `Memory Anchor #${idx + 1}: ${anchor.title} (M${anchor.moduleId}: ${anchor.moduleTitle})`.substring(0, 95),
+        margin + 3.5,
+        y + 5
+      );
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...COLOR_DARK_SLATE);
+      doc.text(ruleLines, margin + 3.5, y + 9.5);
+
+      if (trapLines.length > 0) {
+        doc.setTextColor(...COLOR_TERRACOTTA);
+        doc.text(trapLines, margin + 3.5, y + 9.5 + ruleLines.length * 3.8);
+      }
+
+      y += boxHeight + 2.5;
+    });
+  }
+
+  // =========================================================================
+  // SECTION 3: BOOKMARKED QUESTIONS FOR OFFLINE REVIEW
+  // =========================================================================
+  y = ensureSpace(22, y + 6);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11.5);
+  doc.setTextColor(...COLOR_DARK_SLATE);
+  doc.text(
+    `3. Bookmarked Questions for Offline Review (${bookmarkedQuestions.length})`,
+    margin,
+    y
+  );
+  y += 5;
+
+  if (bookmarkedQuestions.length === 0) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(...COLOR_MUTED);
+    doc.text(
+      'No bookmarked questions yet. Click the Bookmark icon on any quiz card to include it in your offline PDF report.',
+      margin + 2,
+      y + 3
+    );
+    y += 9;
+  } else {
+    bookmarkedQuestions.forEach((q, idx) => {
+      const correctOpt = q.options.find((o) => o.letter === q.correctAnswer);
+      const qLines = doc.splitTextToSize(`Q: ${q.question}`, contentWidth - 8);
+      const ansLines = doc.splitTextToSize(
+        `Correct Answer (${q.correctAnswer}): ${correctOpt ? correctOpt.text : ''} — ${q.whyCorrect}`,
+        contentWidth - 8
+      );
+      const tipLines = doc.splitTextToSize(`Exam Tip: ${q.examTip}`, contentWidth - 8);
+      const boxHeight = 10 + (qLines.length + ansLines.length + tipLines.length) * 3.6;
+
+      y = ensureSpace(boxHeight + 3, y);
+      doc.setFillColor(...COLOR_LIGHT_BG);
+      doc.setDrawColor(...COLOR_BORDER);
+      doc.roundedRect(margin, y, contentWidth, boxHeight, 1.5, 1.5, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(...COLOR_NAVY);
+      doc.text(
+        `${idx + 1}. [${q.id.toUpperCase()}] Module ${q.moduleId}: ${q.moduleTitle} (${q.difficulty})`.substring(
+          0,
+          95
+        ),
+        margin + 3.5,
+        y + 5
+      );
+
+      let lineY = y + 9.5;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...COLOR_DARK_SLATE);
+      doc.text(qLines, margin + 3.5, lineY);
+      lineY += qLines.length * 3.6;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...COLOR_EMERALD);
+      doc.text(ansLines, margin + 3.5, lineY);
+      lineY += ansLines.length * 3.6;
+
+      doc.setTextColor(...COLOR_OCHRE);
+      doc.text(tipLines, margin + 3.5, lineY);
+
+      y += boxHeight + 3;
+    });
+  }
+
+  drawFooter(pageNumber);
+
+  const filename = `AZ900_Comprehensive_Study_Report_${today}.pdf`;
+  doc.save(filename);
+
+  return {
+    filename,
+    notesCount: notedQuestionIds.length,
+    bookmarksCount: bookmarkedQuestions.length,
+    anchorsCount: savedAnchors.length,
+  };
+}
+
