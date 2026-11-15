@@ -61,6 +61,7 @@ import { getQuestionNote, saveQuestionNote, markQuestionSkipped } from '../utils
 import { ShareQuestionModal } from './ShareQuestionModal';
 import { QuickStudyOverlay } from './QuickStudyOverlay';
 import { DeepWorkTimerWidget } from './DeepWorkTimerWidget';
+import { AudioPacingCoach } from './AudioPacingCoach';
 import { SessionCountdownTimer } from './SessionCountdownTimer';
 import {
   PersistentExamTimer,
@@ -125,12 +126,15 @@ interface QuizCardProps {
   isAudioMuted?: boolean;
   rollingAverageAccuracy?: number | null;
   rollingWindowCount?: number;
-  activeQuickFilter?: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence';
+  activeQuickFilter?: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence' | 'flagged';
   onSelectQuickFilter?: (
-    nextFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence'
+    nextFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence' | 'flagged'
   ) => void;
   bookmarksCount?: number;
+  flaggedCount?: number;
   confidenceCount?: number;
+  isFlagged?: boolean;
+  onToggleFlag?: (questionId: string) => void;
   savedNotesCount?: number;
   aiScenariosCount?: number;
   retryQueueCount?: number;
@@ -498,7 +502,10 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   activeQuickFilter = 'all',
   onSelectQuickFilter,
   bookmarksCount = 0,
+  flaggedCount = 0,
   confidenceCount = 0,
+  isFlagged = false,
+  onToggleFlag,
   savedNotesCount = 0,
   aiScenariosCount = 0,
   retryQueueCount = 0,
@@ -985,6 +992,23 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     setTimeout(() => setMarkdownExportToast(null), 4000);
   };
 
+  const [studyRoomSharedToast, setStudyRoomSharedToast] = useState<boolean>(false);
+
+  const handleShareToStudyRoom = () => {
+    try {
+      localStorage.setItem('az900_shared_study_room_question_id', question.id);
+      window.dispatchEvent(
+        new CustomEvent('az900_share_question_to_study_room', {
+          detail: { questionId: question.id, moduleTitle: question.moduleTitle },
+        })
+      );
+    } catch {
+      // ignore
+    }
+    setStudyRoomSharedToast(true);
+    setTimeout(() => setStudyRoomSharedToast(false), 2500);
+  };
+
   // Accordion section states inside the centered Study Zone popup
   const [openStudyZoneSections, setOpenStudyZoneSections] = useState<{
     sort: boolean;
@@ -1054,7 +1078,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
   const quickSwitcherOptions = React.useMemo(() => {
     const items: Array<{
-      id: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence';
+      id: 'all' | 'bookmarks' | 'flagged' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence';
       label: string;
       shortLabel: string;
       count?: number;
@@ -1076,6 +1100,14 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         count: bookmarksCount,
         description: 'Questions you marked with the bookmark icon for targeted review.',
         tip: 'Click bookmark icon on any question to add',
+      },
+      {
+        id: 'flagged',
+        label: 'Flagged Questions',
+        shortLabel: 'Flagged',
+        count: flaggedCount,
+        description: 'Questions you flagged as ambiguous or difficult for later review.',
+        tip: 'Click Flag Question on any card to add',
       },
       {
         id: 'notes',
@@ -2562,6 +2594,14 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             <span className={`w-1.5 h-1.5 rounded-full ${timerColorConfig.dot}`} />
           </div>
 
+          {/* Audio Pacing Coach Compact Rhythm Widget */}
+          <AudioPacingCoach
+            compact
+            isAudioMuted={Boolean(isAudioMuted)}
+            currentQuestionIndex={questionIndex}
+            sessionAnsweredCount={sessionAnsweredCount}
+          />
+
           {/* Question Counter */}
           <span className="text-xs font-bold text-slate-600 whitespace-nowrap px-1 shrink-0 tabular-nums">
             Q {questionIndex + 1}/{totalQuestions}
@@ -2673,6 +2713,44 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               <Share2 className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-400 shrink-0" />
             )}
             <span>{shareCopiedToast ? 'Deep Link Copied!' : 'Share Question'}</span>
+          </button>
+
+          {/* Share to StudyRoom Button (Posts Active Question ID to Virtual Study Room for Collaborative Discussion) */}
+          <button
+            id="quizcard-share-studyroom-btn"
+            data-testid="share-studyroom-btn"
+            type="button"
+            onClick={handleShareToStudyRoom}
+            title={`Post Question ${question.id} to active Virtual Study Room session for collaborative peer discussion`}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              studyRoomSharedToast
+                ? 'bg-emerald-600 text-white border-emerald-500 ring-2 ring-emerald-400/30'
+                : 'bg-white dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border-slate-300 dark:border-slate-600 hover:border-sky-400'
+            }`}
+          >
+            {studyRoomSharedToast ? (
+              <Check className="w-3.5 h-3.5 text-white shrink-0" />
+            ) : (
+              <Users className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-400 shrink-0" />
+            )}
+            <span>{studyRoomSharedToast ? 'Posted to StudyRoom!' : 'Share to StudyRoom'}</span>
+          </button>
+
+          {/* Flag Question Button (Marks ambiguous or difficult questions for later review) */}
+          <button
+            id="quizcard-flag-question-btn"
+            data-testid="flag-question-btn"
+            type="button"
+            onClick={() => onToggleFlag && onToggleFlag(question.id)}
+            title={isFlagged ? 'Unflag this question' : 'Mark this question as ambiguous or difficult for later review'}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              isFlagged
+                ? 'bg-amber-500 text-slate-950 border-amber-600 ring-2 ring-amber-400/40'
+                : 'bg-white dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border-slate-300 dark:border-slate-600 hover:border-amber-400'
+            }`}
+          >
+            <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${isFlagged ? 'text-slate-950 fill-amber-300' : 'text-amber-500'}`} />
+            <span>{isFlagged ? 'Flagged for Review' : 'Flag Question'}</span>
           </button>
 
           {/* Quick-Drill (3 Missed Questions) Button */}

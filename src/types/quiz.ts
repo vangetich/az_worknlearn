@@ -75,6 +75,7 @@ export interface UserStats {
   lastActiveDate: string;
   dailyGoal?: number; // target questions per day
   bookmarks: string[]; // Question IDs
+  flaggedQuestions?: string[]; // Question IDs flagged as ambiguous or difficult
   attempts: Record<string, QuestionAttempt[]>; // questionId -> history
   moduleMastery: Record<number, { correct: number; total: number }>;
   pathMastery: Record<number, { correct: number; total: number }>;

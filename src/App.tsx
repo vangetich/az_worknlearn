@@ -579,8 +579,10 @@ export default function App() {
     triggerMotifShimmer();
   };
   const [onlyBookmarks, setOnlyBookmarks] = useState<boolean>(false);
-  const [onlySavedNotes, setOnlySavedNotes] = useState<boolean>(false);
+  const [onlyFlagged, setOnlyFlagged] = useState<boolean>(false);
+  const [intelligentShuffle, setIntelligentShuffle] = useState<boolean>(false);
   const [savedNotesMap, setSavedNotesMap] = useState<Record<string, string>>(() => getAllQuestionNotes());
+  const [onlySavedNotes, setOnlySavedNotes] = useState<boolean>(false);
   const [onlyAiGenerated, setOnlyAiGenerated] = useState<boolean>(false);
   const [onlyUnresolvedMistakes, setOnlyUnresolvedMistakes] = useState<boolean>(false);
   const [onlyLowConfidence, setOnlyLowConfidence] = useState<boolean>(false);
@@ -700,11 +702,13 @@ export default function App() {
   }, [questions, stats?.confidenceScores]);
 
   // Active Quick Switcher filter state & handler for mobile horizontal swipe or pill tap
-  const activeQuickFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence' =
+  const activeQuickFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence' | 'flagged' =
     onlyRetryQueue && retryQueueSecondsLeft > 0
       ? 'retry-queue'
       : onlyBookmarks
       ? 'bookmarks'
+      : onlyFlagged
+      ? 'flagged'
       : onlySavedNotes
       ? 'notes'
       : onlyAiGenerated
@@ -716,11 +720,12 @@ export default function App() {
       : 'all';
 
   const handleSelectQuickFilter = (
-    nextFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence'
+    nextFilter: 'all' | 'bookmarks' | 'notes' | 'ai' | 'mistakes' | 'retry-queue' | 'confidence' | 'flagged'
   ) => {
     setRetryIncorrectPathId(null);
     setRetryIncorrectSnapshotIds([]);
     setOnlyBookmarks(nextFilter === 'bookmarks');
+    setOnlyFlagged(nextFilter === 'flagged');
     setOnlySavedNotes(nextFilter === 'notes');
     setOnlyAiGenerated(nextFilter === 'ai');
     setOnlyUnresolvedMistakes(nextFilter === 'mistakes');
@@ -1625,6 +1630,9 @@ export default function App() {
       if (onlyBookmarks && !stats.bookmarks.includes(q.id)) {
         return false;
       }
+      if (onlyFlagged && !(stats.flaggedQuestions || []).includes(q.id)) {
+        return false;
+      }
       if (onlySavedNotes && (!savedNotesMap[q.id] || !savedNotesMap[q.id].trim())) {
         return false;
       }
@@ -1726,7 +1734,52 @@ export default function App() {
 
     // When a specific learning path is selected and dynamic difficulty is off, present sequentially
     if (selectedPathId !== 'all') {
-      return [...list].sort((a, b) => a.moduleId - b.moduleId);
+      const sorted = [...list].sort((a, b) => a.moduleId - b.moduleId);
+      if (intelligentShuffle) {
+        // Shuffle within each module group to preserve module progression
+        const moduleGroups = new Map<number, Question[]>();
+        sorted.forEach((q) => {
+          const group = moduleGroups.get(q.moduleId) || [];
+          group.push(q);
+          moduleGroups.set(q.moduleId, group);
+        });
+        const shuffledList: Question[] = [];
+        const sortedModuleIds = Array.from(moduleGroups.keys()).sort((a, b) => a - b);
+        sortedModuleIds.forEach((mId) => {
+          const g = moduleGroups.get(mId) || [];
+          // Fisher-Yates shuffle within the module
+          const copy = [...g];
+          for (let i = copy.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [copy[i], copy[j]] = [copy[j], copy[i]];
+          }
+          shuffledList.push(...copy);
+        });
+        return shuffledList;
+      }
+      return sorted;
+    }
+
+    if (intelligentShuffle) {
+      // Shuffle globally while preserving module progression across modules
+      const moduleGroups = new Map<number, Question[]>();
+      list.forEach((q) => {
+        const group = moduleGroups.get(q.moduleId) || [];
+        group.push(q);
+        moduleGroups.set(q.moduleId, group);
+      });
+      const shuffledList: Question[] = [];
+      const sortedModuleIds = Array.from(moduleGroups.keys()).sort((a, b) => a - b);
+      sortedModuleIds.forEach((mId) => {
+        const g = moduleGroups.get(mId) || [];
+        const copy = [...g];
+        for (let i = copy.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
+        shuffledList.push(...copy);
+      });
+      return shuffledList;
     }
 
     return list;
@@ -1744,6 +1797,8 @@ export default function App() {
     selectedModuleDifficultyFilter,
     selectedThreadFilters,
     onlyBookmarks,
+    onlyFlagged,
+    intelligentShuffle,
     onlySavedNotes,
     savedNotesMap,
     onlyAiGenerated,

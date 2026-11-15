@@ -15,6 +15,7 @@ export function getInitialStats(): UserStats {
     lastActiveDate: new Date().toISOString().split('T')[0],
     dailyGoal: 10,
     bookmarks: [],
+    flaggedQuestions: [],
     attempts: {},
     moduleMastery: {},
     pathMastery: {
@@ -317,6 +318,27 @@ export function toggleBookmark(stats: UserStats, questionId: string): UserStats 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
     console.error('Failed to save bookmark', e);
+  }
+
+  return updated;
+}
+
+export function toggleFlaggedQuestion(stats: UserStats, questionId: string): UserStats {
+  const currentFlagged = stats.flaggedQuestions || [];
+  const exists = currentFlagged.includes(questionId);
+  const flaggedQuestions = exists
+    ? currentFlagged.filter((id) => id !== questionId)
+    : [...currentFlagged, questionId];
+
+  const updated: UserStats = {
+    ...stats,
+    flaggedQuestions,
+  };
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to save flagged question', e);
   }
 
   return updated;
