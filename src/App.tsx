@@ -58,6 +58,7 @@ import { auth, recordQuizSessionToFirestore } from './lib/firebase';
 import { DomainConfidenceTracker } from './components/DomainConfidenceTracker';
 import { DomainSkillRadar } from './components/DomainSkillRadar';
 import { LearningJourneyTimeline } from './components/LearningJourneyTimeline';
+import { DifficultyDistributionHeatmap } from './components/DifficultyDistributionHeatmap';
 import { StudyDeck } from './components/StudyDeck';
 import { MicroDrillModal } from './components/MicroDrillModal';
 import { StudyBreakModal } from './components/StudyBreakModal';
@@ -5268,6 +5269,14 @@ export default function App() {
               questions={questions}
               onLaunchAiPrompt={() => setActiveTab('ai-builder')}
               onNavigateToPractice={() => setActiveTab('quiz')}
+            />
+            <DifficultyDistributionHeatmap
+              questions={questions}
+              onSelectPath={(pId) => {
+                setSelectedPathId(pId);
+                setSelectedModuleId('all');
+                setActiveTab('quiz');
+              }}
             />
             <BalancedPathIntensityCoach
               stats={stats}

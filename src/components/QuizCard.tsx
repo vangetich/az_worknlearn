@@ -4519,16 +4519,29 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         {/* Actual Exam Question + Prominent Difficulty Badge + Voice Answer & Skip Controls */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${difficultyBadgeConfig.pillClass}`}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${difficultyBadgeConfig.pillClass}`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${difficultyBadgeConfig.dotClass}`} />
+                  <span>Difficulty: {difficultyBadgeConfig.label}</span>
+                </span>
+                <span className="text-[11px] font-semibold text-slate-500">
+                  {difficultyBadgeConfig.subLabel}
+                </span>
+              </div>
+
+              {/* Explain Concept Button (Triggers KnowledgeAssistant for concise summary of tested Azure concept) */}
+              <button
+                type="button"
+                onClick={() => handleToggleAiTutorSidebar(true)}
+                className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-slate-900 border border-amber-300 text-xs font-extrabold inline-flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0"
+                title="Explain Concept: Trigger Knowledge Assistant to provide a concise summary of the Azure service or concept tested in this question"
               >
-                <span className={`w-2 h-2 rounded-full ${difficultyBadgeConfig.dotClass}`} />
-                <span>Difficulty: {difficultyBadgeConfig.label}</span>
-              </span>
-              <span className="text-[11px] font-semibold text-slate-500">
-                {difficultyBadgeConfig.subLabel}
-              </span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-600 fill-amber-200 shrink-0" />
+                <span>Explain Concept</span>
+              </button>
             </div>
             <div className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
               <ScenarioTextWithTooltips
