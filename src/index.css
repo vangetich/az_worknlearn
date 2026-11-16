@@ -1489,4 +1489,168 @@ html.reduce-celebration-motion .animate-goal-celebrate {
   will-change: transform;
 }
 
+/* =====================================================================
+   PRINTABLE SELF-PACED MOCK EXAM PORTAL (@media print)
+   ===================================================================== */
+#printable-mock-exam-portal {
+  display: none;
+}
 
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm 14mm 16mm 14mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    width: auto !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body:has(#printable-mock-exam-portal) > *:not(#printable-mock-exam-portal) {
+    display: none !important;
+  }
+
+  #printable-mock-exam-portal {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.5;
+  }
+
+  .print-exam-metadata-header {
+    border-bottom: 2pt solid #0f172a;
+    padding-bottom: 12pt;
+    margin-bottom: 14pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-exam-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6pt 14pt;
+    margin-top: 10pt;
+    padding: 8pt 10pt;
+    border: 1pt solid #94a3b8;
+    border-radius: 4pt;
+    background: #f8fafc !important;
+    font-size: 9.25pt;
+    line-height: 1.4;
+  }
+
+  .print-exam-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .print-repeating-header {
+    display: table-header-group;
+  }
+
+  .print-repeating-header-cell {
+    padding: 0 0 8pt 0;
+    border-bottom: 1pt solid #94a3b8;
+    font-size: 8.5pt;
+    color: #475569;
+    text-align: left;
+  }
+
+  .print-question-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    padding: 10pt 0 12pt 0;
+    margin-bottom: 8pt;
+    border-bottom: 0.75pt solid #cbd5e1;
+  }
+
+  .print-question-meta {
+    font-size: 8.75pt;
+    font-weight: 700;
+    color: #0369a1;
+    margin-bottom: 4pt;
+    letter-spacing: 0.01em;
+  }
+
+  .print-question-scenario {
+    margin: 4pt 0 8pt 0;
+    padding: 7pt 9pt;
+    border: 0.75pt solid #cbd5e1;
+    border-left: 2.5pt solid #0078d4;
+    border-radius: 3pt;
+    background: #f8fafc !important;
+    font-size: 9.5pt;
+    line-height: 1.48;
+    color: #1e293b;
+  }
+
+  .print-question-stem {
+    font-size: 10.75pt;
+    font-weight: 700;
+    line-height: 1.48;
+    color: #020617;
+    margin: 0 0 8pt 0;
+  }
+
+  .print-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5.5pt;
+    padding-left: 10pt;
+    margin: 0;
+  }
+
+  .print-option-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 7pt;
+    font-size: 10pt;
+    line-height: 1.46;
+    color: #0f172a;
+  }
+
+  .print-option-bubble {
+    display: inline-block;
+    width: 10.5pt;
+    height: 10.5pt;
+    border-radius: 9999px;
+    border: 1.15pt solid #334155;
+    flex-shrink: 0;
+    margin-top: 2.25pt;
+  }
+
+  #printable-mock-exam-portal img,
+  #printable-mock-exam-portal figure,
+  #printable-mock-exam-portal .print-exam-image,
+  #printable-mock-exam-portal .print-exam-diagram svg {
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: 185mm !important;
+    object-fit: contain !important;
+    display: block;
+    margin: 6pt auto;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-page-break-before {
+    break-before: page;
+    page-break-before: always;
+  }
+}

@@ -18,10 +18,13 @@ import {
   query,
   where,
   getDocs,
+  deleteDoc,
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+import type { Question } from '../types/quiz';
+import type { PrintableExamTrack } from '../types/printableExam';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -505,4 +508,162 @@ export function subscribeToStudyChamberCheckins(
     }
   );
 }
+
+export async function savePrintableMockExamToFirestore(
+  userId: string,
+  exam: {
+    id: string;
+    title: string;
+    track: PrintableExamTrack;
+    questionCount: number;
+    questionIds: string[];
+    sourcedViaGoogleCount: number;
+    includeAnswerKey: boolean;
+    includeExplanations: boolean;
+    showMetadataHints: boolean;
+    notes?: string;
+  }
+): Promise<void> {
+  if (!auth.currentUser || auth.currentUser.uid !== userId || !auth.currentUser.emailVerified) {
+    return;
+  }
+  const safeExamId = `${userId}_${exam.id}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
+  const path = `printable_mock_exams/${safeExamId}`;
+  const ref = doc(db, 'printable_mock_exams', safeExamId);
+
+  const boundedIds = exam.questionIds
+    .map((id) => String(id).slice(0, 128))
+    .filter(Boolean)
+    .slice(0, 45);
+  if (boundedIds.length < 20) return;
+
+  const clampedCount = Math.max(20, Math.min(45, boundedIds.length));
+
+  try {
+    const existingSnap = await getDoc(ref);
+    if (!existingSnap.exists()) {
+      await setDoc(ref, {
+        userId,
+        title: (exam.title || 'AZ-900 Self-Paced Printable Exam').slice(0, 140),
+        track: exam.track,
+        questionCount: clampedCount,
+        questionIds: boundedIds,
+        sourcedViaGoogleCount: Math.max(0, Math.min(45, Math.round(exam.sourcedViaGoogleCount))),
+        includeAnswerKey: Boolean(exam.includeAnswerKey),
+        includeExplanations: Boolean(exam.includeExplanations),
+        showMetadataHints: Boolean(exam.showMetadataHints),
+        notes: (exam.notes || '').slice(0, 500),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await updateDoc(ref, {
+        title: (exam.title || 'AZ-900 Self-Paced Printable Exam').slice(0, 140),
+        includeAnswerKey: Boolean(exam.includeAnswerKey),
+        includeExplanations: Boolean(exam.includeExplanations),
+        showMetadataHints: Boolean(exam.showMetadataHints),
+        notes: (exam.notes || '').slice(0, 500),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function fetchPrintableMockExamsFromFirestore(userId: string) {
+  if (!auth.currentUser || auth.currentUser.uid !== userId) return [];
+  const path = 'printable_mock_exams';
+  try {
+    const q = query(collection(db, path), where('userId', '==', userId));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ docId: d.id, ...d.data() }));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
+export async function deletePrintableMockExamFromFirestore(
+  userId: string,
+  examId: string
+): Promise<void> {
+  if (!auth.currentUser || auth.currentUser.uid !== userId || !auth.currentUser.emailVerified) {
+    return;
+  }
+  const safeExamId = `${userId}_${examId}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
+  const path = `printable_mock_exams/${safeExamId}`;
+  try {
+    await deleteDoc(doc(db, 'printable_mock_exams', safeExamId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export async function saveGoogleSourcedQuestionsToFirestore(
+  userId: string,
+  sourcedQuestions: Question[]
+): Promise<void> {
+  if (!auth.currentUser || auth.currentUser.uid !== userId || !auth.currentUser.emailVerified) {
+    return;
+  }
+  for (const item of sourcedQuestions.slice(0, 25)) {
+    const safeDocId = `${userId}_${item.id}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
+    const path = `google_sourced_questions/${safeDocId}`;
+    const ref = doc(db, 'google_sourced_questions', safeDocId);
+    const payloadJson = JSON.stringify(item).slice(0, 16000);
+    if (payloadJson.length < 10) continue;
+
+    try {
+      const existingSnap = await getDoc(ref);
+      if (!existingSnap.exists()) {
+        await setDoc(ref, {
+          userId,
+          questionId: String(item.id).slice(0, 128),
+          learningPathId: item.learningPathId === 1 || item.learningPathId === 2 || item.learningPathId === 3 ? item.learningPathId : 1,
+          moduleId: Math.max(1, Math.min(12, Math.round(item.moduleId || 1))),
+          difficulty:
+            item.difficulty === 'Fundamental' ||
+            item.difficulty === 'Intermediate' ||
+            item.difficulty === 'Advanced'
+              ? item.difficulty
+              : 'Intermediate',
+          payloadJson,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  }
+}
+
+export async function fetchGoogleSourcedQuestionsFromFirestore(
+  userId: string
+): Promise<Question[]> {
+  if (!auth.currentUser || auth.currentUser.uid !== userId) return [];
+  const path = 'google_sourced_questions';
+  try {
+    const q = query(collection(db, path), where('userId', '==', userId));
+    const snap = await getDocs(q);
+    const parsed: Question[] = [];
+    snap.docs.forEach((d) => {
+      const data = d.data();
+      if (typeof data?.payloadJson === 'string') {
+        try {
+          const obj = JSON.parse(data.payloadJson) as Question;
+          if (obj && obj.id && obj.question && Array.isArray(obj.options)) {
+            parsed.push(obj);
+          }
+        } catch {
+          // ignore malformed payload
+        }
+      }
+    });
+    return parsed;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
 

@@ -35,6 +35,7 @@ interface ExportProgressModalProps {
   questions?: Question[];
   onClose: () => void;
   onOpenUserGuide?: () => void;
+  onOpenPrintableMockExam?: () => void;
 }
 
 export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
@@ -42,6 +43,7 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
   questions,
   onClose,
   onOpenUserGuide,
+  onOpenPrintableMockExam,
 }) => {
   const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'options' | 'printable-report'>('options');
@@ -397,6 +399,37 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
                   <Download className="w-4 h-4" />
                 </div>
               </div>
+
+              {onOpenPrintableMockExam && (
+                <div
+                  data-testid="export-open-printable-mock-exam-btn"
+                  onClick={onOpenPrintableMockExam}
+                  className="p-3.5 rounded-xl border-2 border-indigo-400 bg-gradient-to-r from-indigo-50/80 via-white to-sky-50/70 hover:shadow-md cursor-pointer transition-all flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                      <Printer className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-indigo-700 transition-colors">
+                          Printable Self-Paced Mock Exam Booklet (20–45 Qs)
+                        </h4>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-600 text-white">
+                          Print / PDF
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        Build untimed study packets (20–45 Qs) by path, weak areas, progressive difficulty, or scenarios, with Google Search sourcing.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-2 rounded-lg bg-indigo-100 text-indigo-800 group-hover:bg-indigo-600 group-hover:text-white transition-all shrink-0 ml-2">
+                    <Printer className="w-4 h-4" />
+                  </div>
+                </div>
+              )}
 
               {/* Primary Option: Client-Side Vector PDF via jsPDF */}
               <div

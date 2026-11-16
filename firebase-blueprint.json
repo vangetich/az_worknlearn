@@ -293,6 +293,145 @@
         }
       },
       "required": ["userId", "fromRoomId", "toRoomId", "questionId", "title", "note", "resolved", "createdAt", "updatedAt"]
+    },
+    "PrintableMockExam": {
+      "title": "PrintableMockExam",
+      "description": "Saved self-paced printable AZ-900 mock exam packet (20-45 unique questions) stored in the app.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "User-facing printable mock exam title.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "track": {
+          "type": "string",
+          "description": "Targeted study strategy for this printable mock exam.",
+          "enum": [
+            "balanced",
+            "path-1",
+            "path-2",
+            "path-3",
+            "weak-areas",
+            "progressive",
+            "scenario-only",
+            "tricky-traps",
+            "unseen-fresh"
+          ]
+        },
+        "questionCount": {
+          "type": "integer",
+          "description": "Number of unique questions in the packet (20 to 45)."
+        },
+        "questionIds": {
+          "type": "array",
+          "description": "Ordered list of unique question IDs in the printable packet (20 to 45 items)."
+        },
+        "sourcedViaGoogleCount": {
+          "type": "integer",
+          "description": "Number of questions in this packet sourced via Google Search."
+        },
+        "includeAnswerKey": {
+          "type": "boolean",
+          "description": "Whether a detached answer key is printed."
+        },
+        "includeExplanations": {
+          "type": "boolean",
+          "description": "Whether detailed rationale and exam tips appear in the answer key."
+        },
+        "showMetadataHints": {
+          "type": "boolean",
+          "description": "Whether difficulty and module labels are shown on the question sheet."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional study notes for this printable exam.",
+          "minLength": 0,
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "userId",
+        "title",
+        "track",
+        "questionCount",
+        "questionIds",
+        "sourcedViaGoogleCount",
+        "includeAnswerKey",
+        "includeExplanations",
+        "showMetadataHints",
+        "notes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "GoogleSourcedQuestion": {
+      "title": "GoogleSourcedQuestion",
+      "description": "Fresh AZ-900 question sourced via Google Search grounding and stored in the learner's app bank.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "questionId": {
+          "type": "string",
+          "description": "Unique question identifier.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "learningPathId": {
+          "type": "integer",
+          "description": "AZ-900 Learning Path ID (1, 2, or 3)."
+        },
+        "moduleId": {
+          "type": "integer",
+          "description": "Curriculum module ID (1 to 12)."
+        },
+        "difficulty": {
+          "type": "string",
+          "description": "Question difficulty tier.",
+          "enum": ["Fundamental", "Intermediate", "Advanced"]
+        },
+        "payloadJson": {
+          "type": "string",
+          "description": "Serialized validated question fields for cross-device hydration.",
+          "minLength": 10,
+          "maxLength": 16000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["userId", "questionId", "learningPathId", "moduleId", "difficulty", "payloadJson", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -319,6 +458,14 @@
     "/study_chamber_handoffs/{handoffId}": {
       "schema": { "$ref": "#/entities/StudyChamberHandoff" },
       "description": "Cross-chamber study handoffs and escalated traps synced for learners."
+    },
+    "/printable_mock_exams/{examId}": {
+      "schema": { "$ref": "#/entities/PrintableMockExam" },
+      "description": "Saved 20-45 question self-paced printable mock exam packets."
+    },
+    "/google_sourced_questions/{docId}": {
+      "schema": { "$ref": "#/entities/GoogleSourcedQuestion" },
+      "description": "Google Search grounded AZ-900 questions saved to the learner's in-app bank."
     }
   }
 }

@@ -29,6 +29,10 @@ export interface Question {
   examTip: string;
   errorDiagnostic?: ErrorDiagnostic;
   isAiGenerated?: boolean;
+  sourcedViaGoogle?: boolean;
+  groundingSources?: { title: string; uri: string }[];
+  imageUrl?: string;
+  imageAlt?: string;
   threadTags?: string[];
 }
 

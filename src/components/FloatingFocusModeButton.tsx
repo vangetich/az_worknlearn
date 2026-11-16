@@ -198,7 +198,7 @@ export const FloatingFocusModeButton: React.FC<FloatingFocusModeButtonProps> = (
       : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40';
 
   return (
-    <div className="fixed bottom-20 portrait:max-md:bottom-[72px] right-4 sm:bottom-24 sm:right-6 z-50 w-14 h-14 sm:w-16 sm:h-16 pointer-events-none">
+    <div className="fixed bottom-20 portrait:max-md:bottom-[72px] right-4 sm:bottom-24 sm:right-6 z-[9999] w-14 h-14 sm:w-16 sm:h-16 pointer-events-none">
       {/* Hover Pop-up Small Rectangle with Full Focus Features — Only mounted when button itself is hovered */}
       {isHovered && (
         <div
@@ -206,7 +206,7 @@ export const FloatingFocusModeButton: React.FC<FloatingFocusModeButtonProps> = (
           aria-label="Focus Mode Features & Controls"
           onMouseEnter={handlePopupMouseEnter}
           onMouseLeave={handleMouseLeave}
-          className={`w-80 sm:w-[340px] max-w-[calc(100vw-2rem)] rounded-2xl bg-slate-900/98 backdrop-blur-md text-white border border-slate-700/90 shadow-2xl p-3.5 pointer-events-auto animate-in fade-in zoom-in-95 duration-150 ${
+          className={`w-80 sm:w-[340px] max-w-[calc(100vw-2rem)] rounded-2xl bg-slate-900/98 backdrop-blur-md text-white border border-slate-700/90 shadow-2xl p-3.5 pointer-events-auto animate-in fade-in zoom-in-95 duration-150 z-[9999] ${
             isFocusMode
               ? 'fixed top-16 right-4 sm:top-20 sm:right-6 origin-top-right'
               : 'absolute bottom-full right-0 mb-2.5 origin-bottom-right'

@@ -128,6 +128,62 @@ service cloud.firestore {
         data.updatedAt is timestamp;
     }
 
+    function isValidPrintableTrack(track) {
+      return track is string && track.size() <= 32 && (
+        track == 'balanced' ||
+        track == 'path-1' ||
+        track == 'path-2' ||
+        track == 'path-3' ||
+        track == 'weak-areas' ||
+        track == 'progressive' ||
+        track == 'scenario-only' ||
+        track == 'tricky-traps' ||
+        track == 'unseen-fresh'
+      );
+    }
+
+    function isValidPrintableMockExam(data) {
+      return data.keys().hasAll([
+          'userId', 'title', 'track', 'questionCount', 'questionIds',
+          'sourcedViaGoogleCount', 'includeAnswerKey', 'includeExplanations',
+          'showMetadataHints', 'notes', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId', 'title', 'track', 'questionCount', 'questionIds',
+          'sourcedViaGoogleCount', 'includeAnswerKey', 'includeExplanations',
+          'showMetadataHints', 'notes', 'createdAt', 'updatedAt'
+        ]) &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        isValidPrintableTrack(data.track) &&
+        data.questionCount is int && data.questionCount >= 20 && data.questionCount <= 45 &&
+        data.questionIds is list && data.questionIds.size() >= 20 && data.questionIds.size() <= 45 && data.questionIds[0] is string &&
+        data.sourcedViaGoogleCount is int && data.sourcedViaGoogleCount >= 0 && data.sourcedViaGoogleCount <= 45 &&
+        data.includeAnswerKey is bool &&
+        data.includeExplanations is bool &&
+        data.showMetadataHints is bool &&
+        data.notes is string && data.notes.size() <= 500 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidGoogleSourcedQuestion(data) {
+      return data.keys().hasAll(['userId', 'questionId', 'learningPathId', 'moduleId', 'difficulty', 'payloadJson', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'questionId', 'learningPathId', 'moduleId', 'difficulty', 'payloadJson', 'createdAt', 'updatedAt']) &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.questionId is string && data.questionId.size() >= 1 && data.questionId.size() <= 128 &&
+        data.learningPathId is int && data.learningPathId >= 1 && data.learningPathId <= 3 &&
+        data.moduleId is int && data.moduleId >= 1 && data.moduleId <= 12 &&
+        data.difficulty is string && data.difficulty.size() <= 24 && (
+          data.difficulty == 'Fundamental' ||
+          data.difficulty == 'Intermediate' ||
+          data.difficulty == 'Advanced'
+        ) &&
+        data.payloadJson is string && data.payloadJson.size() >= 10 && data.payloadJson.size() <= 16000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
     // =========================================================================
     // Collection Rules
     // =========================================================================
@@ -321,6 +377,55 @@ service cloud.firestore {
         );
 
       allow delete: if isVerifiedUser() && isValidId(handoffId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 7. Printable Mock Exams Collection (Saved 20-45 Question Study Packets)
+    match /printable_mock_exams/{examId} {
+      allow get: if isSignedIn() && isValidId(examId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(examId) &&
+        isValidPrintableMockExam(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(incoming().userId));
+
+      allow update: if isVerifiedUser() &&
+        isValidId(examId) &&
+        isValidPrintableMockExam(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().track == existing().track &&
+        incoming().questionCount == existing().questionCount &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (
+            existing().userId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'includeAnswerKey', 'includeExplanations', 'showMetadataHints', 'notes', 'updatedAt'])
+          ) ||
+          isAdmin()
+        );
+
+      allow delete: if isVerifiedUser() && isValidId(examId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 8. Google-Sourced Questions Collection (Stored in App & Synced Per User)
+    match /google_sourced_questions/{docId} {
+      allow get: if isSignedIn() && isValidId(docId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(docId) &&
+        isValidGoogleSourcedQuestion(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(incoming().userId));
+
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(docId) && (existing().userId == request.auth.uid || isAdmin());
     }
   }
 }

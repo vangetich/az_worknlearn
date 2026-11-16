@@ -333,7 +333,7 @@ export const FocusSessionWidget: React.FC<FocusSessionWidgetProps> = ({
               left: `${popoverCoords.left}px`,
               width: `${Math.max(popoverCoords.width, Math.min(320, typeof window !== 'undefined' ? window.innerWidth - 24 : 320))}px`,
             }}
-            className="fixed max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain rounded-2xl bg-white border border-slate-200 shadow-2xl p-4 z-[95] animate-in fade-in zoom-in-95 duration-150 text-left space-y-3.5"
+            className="fixed max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain rounded-2xl bg-white border border-slate-200 shadow-2xl p-4 z-[9999] animate-in fade-in zoom-in-95 duration-150 text-left space-y-3.5"
           >
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <div className="flex items-center gap-2">

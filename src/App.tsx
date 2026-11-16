@@ -54,7 +54,13 @@ import {
   MockExamModeType,
   MockExamFinishMetadata,
 } from './components/MockExamModal';
-import { auth, recordQuizSessionToFirestore } from './lib/firebase';
+import {
+  auth,
+  onAuthStateChanged,
+  recordQuizSessionToFirestore,
+  fetchGoogleSourcedQuestionsFromFirestore,
+} from './lib/firebase';
+import { deduplicateQuestions } from './utils/printableExamEngine';
 import { DomainConfidenceTracker } from './components/DomainConfidenceTracker';
 import { DomainSkillRadar } from './components/DomainSkillRadar';
 import { LearningJourneyTimeline } from './components/LearningJourneyTimeline';
@@ -268,7 +274,9 @@ export default function App() {
       const stored = localStorage.getItem('az900_custom_questions_v1');
       if (stored) {
         const parsed = JSON.parse(stored);
-        return [...BUILTIN_QUESTIONS, ...parsed];
+        if (Array.isArray(parsed)) {
+          return deduplicateQuestions([...BUILTIN_QUESTIONS, ...parsed]);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -536,6 +544,33 @@ export default function App() {
     const timer = setTimeout(() => setPaymentSuccessToast(null), 7500);
     return () => clearTimeout(timer);
   }, [paymentSuccessToast]);
+
+  // Hydrate Google-sourced printable exam questions stored in Firestore when signed in
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) return;
+      fetchGoogleSourcedQuestionsFromFirestore(user.uid)
+        .then((cloudQuestions) => {
+          if (!active || !cloudQuestions || cloudQuestions.length === 0) return;
+          setQuestions((prev) => {
+            const merged = deduplicateQuestions([...cloudQuestions, ...prev]);
+            try {
+              const customOnly = merged.filter((q) => q.isAiGenerated || q.sourcedViaGoogle);
+              localStorage.setItem('az900_custom_questions_v1', JSON.stringify(customOnly));
+            } catch (e) {
+              console.error(e);
+            }
+            return merged;
+          });
+        })
+        .catch(() => {});
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
 
   const isModuleLockedForCurrentUser = (modId: number | 'all'): boolean => {
     if (modId === 'all' || modId <= 4) return false;
@@ -868,6 +903,8 @@ export default function App() {
   const [showMockExam, setShowMockExam] = useState<boolean>(false);
   const [mockExamInitialMode, setMockExamInitialMode] =
     useState<MockExamModeType>('simulation');
+  const [mockExamInitialView, setMockExamInitialView] =
+    useState<'timed' | 'printable'>('timed');
   const [adaptiveFocusPathId, setAdaptiveFocusPathId] = useState<1 | 2 | 3 | null>(null);
   const [adaptiveFocusModuleId, setAdaptiveFocusModuleId] = useState<number | null>(null);
   const [showFoundationalPrimerInPractice, setShowFoundationalPrimerInPractice] =
@@ -2252,9 +2289,9 @@ export default function App() {
   // Add newly generated AI question
   const handleQuestionGenerated = (newQ: Question) => {
     setQuestions((prev) => {
-      const updated = [newQ, ...prev];
+      const updated = deduplicateQuestions([newQ, ...prev]);
       try {
-        const customOnly = updated.filter((q) => q.isAiGenerated);
+        const customOnly = updated.filter((q) => q.isAiGenerated || q.sourcedViaGoogle);
         localStorage.setItem('az900_custom_questions_v1', JSON.stringify(customOnly));
       } catch (e) {
         console.error(e);
@@ -2270,6 +2307,21 @@ export default function App() {
     setCurrentQuestionIndex(0);
     setActiveTab('quiz');
   };
+
+  // Persist Google-sourced questions from Printable Mock Exam Studio into the app question bank
+  const handleStoreSourcedQuestions = useCallback((newQuestions: Question[]) => {
+    if (!newQuestions || newQuestions.length === 0) return;
+    setQuestions((prev) => {
+      const updated = deduplicateQuestions([...newQuestions, ...prev]);
+      try {
+        const customOnly = updated.filter((q) => q.isAiGenerated || q.sourcedViaGoogle);
+        localStorage.setItem('az900_custom_questions_v1', JSON.stringify(customOnly));
+      } catch (e) {
+        console.error(e);
+      }
+      return updated;
+    });
+  }, []);
 
   // Ask AI Tutor about current question (opens slide-over drawer by default so quiz stays in view)
   const handleOpenAiTutorDrawerForQuestion = useCallback(
@@ -3765,7 +3817,7 @@ export default function App() {
                     const uniqueNew = newQs.filter((q) => !existingIds.has(q.id));
                     const updated = [...uniqueNew, ...prev];
                     try {
-                      const customOnly = updated.filter((q) => q.isAiGenerated);
+                      const customOnly = updated.filter((q) => q.isAiGenerated || q.sourcedViaGoogle);
                       localStorage.setItem('az900_custom_questions_v1', JSON.stringify(customOnly));
                     } catch (e) {
                       console.error(e);
@@ -4976,7 +5028,7 @@ export default function App() {
                   const uniqueNew = newQs.filter((q) => !existingIds.has(q.id));
                   const updated = [...uniqueNew, ...prev];
                   try {
-                    const customOnly = updated.filter((q) => q.isAiGenerated);
+                    const customOnly = updated.filter((q) => q.isAiGenerated || q.sourcedViaGoogle);
                     localStorage.setItem('az900_custom_questions_v1', JSON.stringify(customOnly));
                   } catch (e) {
                     console.error(e);
@@ -5176,6 +5228,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setMockExamInitialMode('simulation');
+                    setMockExamInitialView('timed');
                     setShowMockExam(true);
                   }}
                   className="px-6 sm:px-7 py-3.5 rounded-xl bg-gradient-to-r from-[#0078D4] to-[#005A9E] hover:from-[#005A9E] hover:to-[#004578] text-white font-bold text-sm shadow-md hover:shadow-lg transition-all inline-flex items-center gap-2 cursor-pointer"
@@ -5186,12 +5239,24 @@ export default function App() {
                 <button
                   onClick={() => {
                     setMockExamInitialMode('weakness');
+                    setMockExamInitialView('timed');
                     setShowMockExam(true);
                   }}
                   className="px-6 py-3.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-md transition-all inline-flex items-center gap-2 cursor-pointer"
                 >
                   <Target className="w-4 h-4 text-amber-200 shrink-0" />
                   <span>Drill 15–25Q Weakness Areas</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setMockExamInitialMode('simulation');
+                    setMockExamInitialView('printable');
+                    setShowMockExam(true);
+                  }}
+                  className="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all inline-flex items-center gap-2 cursor-pointer border border-slate-700"
+                >
+                  <BookOpen className="w-4 h-4 text-sky-300 shrink-0" />
+                  <span>Printable Self-Paced Mock Exam (20–45 Qs)</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('planner')}
@@ -5435,12 +5500,14 @@ export default function App() {
         )}
       </main>
 
-      {/* Timed Mock Exam Modal Dialog */}
+      {/* Timed Mock Exam & Printable Self-Paced Booklet Modal Dialog */}
       {showMockExam && (
         <MockExamModal
           questions={questions}
           stats={stats}
           initialMode={mockExamInitialMode}
+          initialStudioView={mockExamInitialView}
+          onAddSourcedQuestions={handleStoreSourcedQuestions}
           onFinish={(correct, total, meta?: MockExamFinishMetadata) => {
             const scorePercent = Math.round((correct / Math.max(1, total)) * 100);
             if (meta?.answeredItems && meta.answeredItems.length > 0) {
@@ -5489,18 +5556,23 @@ export default function App() {
           }}
           onLaunchAdaptiveForPath={(pathId) => {
             setShowMockExam(false);
+            setMockExamInitialView('timed');
             setAdaptiveFocusPathId(pathId);
             setAdaptiveFocusModuleId(null);
             setActiveTab('adaptive');
           }}
           onOpenStudyPlanner={() => {
             setShowMockExam(false);
+            setMockExamInitialView('timed');
             setActiveTab('planner');
           }}
           onOpenWeakestAreasReview={(attempts) =>
             launchWeakestAreasReviewMode(attempts, 'Timed Mock Exam')
           }
-          onClose={() => setShowMockExam(false)}
+          onClose={() => {
+            setShowMockExam(false);
+            setMockExamInitialView('timed');
+          }}
         />
       )}
 
@@ -5741,6 +5813,12 @@ export default function App() {
           questions={questions}
           onClose={() => setShowExportModal(false)}
           onOpenUserGuide={() => setShowUserGuideModal(true)}
+          onOpenPrintableMockExam={() => {
+            setShowExportModal(false);
+            setMockExamInitialMode('simulation');
+            setMockExamInitialView('printable');
+            setShowMockExam(true);
+          }}
         />
       )}
 

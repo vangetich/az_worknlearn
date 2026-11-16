@@ -3005,6 +3005,232 @@ Rules:
   }
 });
 
+// API: Source fresh AZ-900 questions via Google Search grounding for Printable Mock Exams
+app.post('/api/mock-exam/source-questions', async (req, res) => {
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({
+        error: 'Google Search question sourcing requires GEMINI_API_KEY to be configured on the server.',
+      });
+    }
+
+    const track = String(req.body?.track || 'balanced');
+    const requestedCount = Math.max(5, Math.min(20, Number(req.body?.count || 10)));
+    const customTopic = String(req.body?.customTopic || '').trim().slice(0, 180);
+    const weakModuleIds: number[] = Array.isArray(req.body?.weakModuleIds)
+      ? req.body.weakModuleIds
+          .map((n: any) => Number(n))
+          .filter((n: number) => Number.isInteger(n) && n >= 1 && n <= 12)
+      : [];
+    const existingSnippets: string[] = Array.isArray(req.body?.existingQuestionSnippets)
+      ? req.body.existingQuestionSnippets.map((s: any) => String(s).slice(0, 120)).slice(0, 30)
+      : [];
+
+    const trackGuidanceMap: Record<string, string> = {
+      balanced:
+        'Match official AZ-900 exam domain weights: ~27% Path 1 (Cloud Concepts, Mod 1-3), ~40% Path 2 (Architecture & Services, Mod 4-7), ~33% Path 3 (Management & Governance, Mod 8-12).',
+      'path-1':
+        'Focus 100% on Learning Path 1: Describe Cloud Concepts (Module 1: Cloud Models, Module 2: Cloud Benefits, Module 3: Service Types IaaS/PaaS/SaaS & Shared Responsibility).',
+      'path-2':
+        'Focus 100% on Learning Path 2: Describe Azure Architecture and Services (Module 4: Core Architectural Components, Module 5: Compute & Networking, Module 6: Storage Services, Module 7: Identity, Access & Security).',
+      'path-3':
+        'Focus 100% on Learning Path 3: Describe Azure Management and Governance (Module 8: Cost Management, Module 9: Governance & Compliance, Module 10: Managing & Deploying Resources, Module 11: Monitoring Tools, Module 12: Cross-Path Synthesis).',
+      'weak-areas': `Prioritize high-yield remediation questions targeting these weak modules: ${
+        weakModuleIds.length > 0 ? weakModuleIds.map((m) => `Module ${m}`).join(', ') : 'Modules 5, 7, 8, 9 (Networking, Security, FinOps, Governance)'
+      }.`,
+      progressive:
+        'Structure the batch as a progressive difficulty ramp: first third Fundamental, middle third Intermediate, final third Advanced multi-constraint synthesis.',
+      'scenario-only':
+        'Every single question MUST be a rich 2-4 sentence real-world enterprise scenario/case study requiring architectural constraint analysis.',
+      'tricky-traps':
+        'Target classic AZ-900 exam traps and subtle distinctions (Azure Policy vs RBAC vs Locks, ExpressRoute vs VPN Gateway, Availability Zones vs Availability Sets, LRS vs ZRS vs GRS, CapEx vs OpEx).',
+      'unseen-fresh':
+        'Generate fresh, non-overlapping AZ-900 questions covering current Microsoft Learn exam objectives updated for 2025-2026 (including Microsoft Entra ID, Azure Arc, Bicep, Zero Trust, FinOps).',
+    };
+
+    const trackGuidance = trackGuidanceMap[track] || trackGuidanceMap.balanced;
+
+    const promptText = `Search Microsoft Learn AZ-900 official exam study guide and documentation using Google Search, then author ${requestedCount} completely distinct, high-accuracy practice questions for an untimed printable AZ-900 mock exam.
+
+Strategy & Track Focus:
+${trackGuidance}
+${customTopic ? `Custom Learner Topic Request: "${customTopic}"` : ''}
+${
+  existingSnippets.length > 0
+    ? `Avoid duplicating these existing stems:\n- ${existingSnippets.join('\n- ')}`
+    : ''
+}
+
+Output Requirements:
+Return ONLY a valid JSON array (no markdown outside the JSON) of ${requestedCount} objects. Each object MUST have:
+- "learningPathId": 1, 2, or 3
+- "learningPathTitle": "Describe Cloud Concepts" | "Describe Azure Architecture and Services" | "Describe Azure Management and Governance"
+- "moduleId": integer 1..12 matching the learningPathId (1-3 for Path 1, 4-7 for Path 2, 8-12 for Path 3)
+- "moduleTitle": concise official module title
+- "difficulty": "Fundamental" | "Intermediate" | "Advanced"
+- "scenario": rich 2-3 sentence enterprise context
+- "question": crisp exam question stem
+- "options": array of 4 objects [{"letter":"A","text":"..."},{"letter":"B","text":"..."},{"letter":"C","text":"..."},{"letter":"D","text":"..."}]
+- "correctAnswer": "A" | "B" | "C" | "D"
+- "whyCorrect": 2-3 sentence grounded explanation referencing Microsoft Learn concepts
+- "distractorBreakdown": array of 3 objects for the 3 wrong letters [{"letter":"...","reason":"1 sentence why incorrect"}]
+- "examTip": concise memory anchor
+- "threadTags": array of 1-3 short tags from ["Core Service", "Compliance", "Pricing", "Security", "Scaling", "Architecture", "Governance"]`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-4-hydrogen',
+      contents: promptText,
+      config: {
+        systemInstruction:
+          'You are an authoritative Microsoft Certified Trainer specializing in AZ-900 (Microsoft Azure Fundamentals). Always use Google Search to verify up-to-date Microsoft Azure terminology (e.g., Microsoft Entra ID) and return strictly valid JSON.',
+        tools: [{ googleSearch: {} }],
+      },
+    });
+
+    const rawText = (response.text ?? '[]').trim();
+    const cleaned = rawText
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
+    let parsedArray: any[] = [];
+    try {
+      parsedArray = JSON.parse(cleaned);
+    } catch {
+      const startIdx = cleaned.indexOf('[');
+      const endIdx = cleaned.lastIndexOf(']');
+      if (startIdx !== -1 && endIdx > startIdx) {
+        parsedArray = JSON.parse(cleaned.slice(startIdx, endIdx + 1));
+      } else {
+        throw new Error('Could not parse JSON array from Google-grounded response.');
+      }
+    }
+
+    if (!Array.isArray(parsedArray)) {
+      throw new Error('Expected an array of sourced questions.');
+    }
+
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const groundingSources = chunks
+      .map((chunk: any) => ({
+        title: String(chunk.web?.title || 'Microsoft Learn / Web Reference').slice(0, 120),
+        uri: String(chunk.web?.uri || '').trim(),
+      }))
+      .filter((s: { title: string; uri: string }) => Boolean(s.uri))
+      .slice(0, 6);
+
+    const pathTitles: Record<1 | 2 | 3, string> = {
+      1: 'Describe Cloud Concepts',
+      2: 'Describe Azure Architecture and Services',
+      3: 'Describe Azure Management and Governance',
+    };
+
+    const nowTs = Date.now();
+    const normalizedQuestions = parsedArray
+      .filter((q) => q && typeof q.question === 'string' && Array.isArray(q.options) && q.options.length === 4)
+      .slice(0, requestedCount)
+      .map((q, idx) => {
+        const modId = Math.max(1, Math.min(12, Math.round(Number(q.moduleId) || 1)));
+        const derivedPathId: 1 | 2 | 3 = modId <= 3 ? 1 : modId <= 7 ? 2 : 3;
+        const pathId: 1 | 2 | 3 =
+          q.learningPathId === 1 || q.learningPathId === 2 || q.learningPathId === 3
+            ? q.learningPathId
+            : derivedPathId;
+        const difficulty: 'Fundamental' | 'Intermediate' | 'Advanced' =
+          q.difficulty === 'Fundamental' || q.difficulty === 'Intermediate' || q.difficulty === 'Advanced'
+            ? q.difficulty
+            : 'Intermediate';
+        const correctLetter: 'A' | 'B' | 'C' | 'D' =
+          q.correctAnswer === 'A' ||
+          q.correctAnswer === 'B' ||
+          q.correctAnswer === 'C' ||
+          q.correctAnswer === 'D'
+            ? q.correctAnswer
+            : 'A';
+
+        const qId = `az900-google-${nowTs}-${idx + 1}-${Math.random().toString(36).slice(2, 6)}`;
+        const normalizedOptions = ['A', 'B', 'C', 'D'].map((ltr, oIdx) => {
+          const found = q.options.find((o: any) => String(o?.letter).toUpperCase() === ltr) || q.options[oIdx];
+          return {
+            letter: ltr,
+            text: String(found?.text || `Option ${ltr}`).trim(),
+          };
+        });
+
+        const distractorBreakdown = ['A', 'B', 'C', 'D']
+          .filter((ltr) => ltr !== correctLetter)
+          .map((ltr) => {
+            const match = Array.isArray(q.distractorBreakdown)
+              ? q.distractorBreakdown.find((d: any) => String(d?.letter).toUpperCase() === ltr)
+              : null;
+            return {
+              letter: ltr,
+              reason: String(
+                match?.reason || 'This option does not satisfy the scenario constraints.'
+              ).trim(),
+            };
+          });
+
+        const item = {
+          id: qId,
+          learningPathId: pathId,
+          learningPathTitle: String(q.learningPathTitle || pathTitles[pathId]),
+          moduleId: modId,
+          moduleTitle: String(q.moduleTitle || `Module ${modId}`),
+          difficulty,
+          scenario: String(q.scenario || '').trim(),
+          question: String(q.question || '').trim(),
+          options: normalizedOptions,
+          correctAnswer: correctLetter,
+          whyCorrect: String(
+            q.whyCorrect || 'Grounded in official Microsoft Learn AZ-900 documentation.'
+          ).trim(),
+          distractorBreakdown,
+          examTip: String(
+            q.examTip || 'Match the primary scenario requirement against core Azure service scope.'
+          ).trim(),
+          isAiGenerated: true,
+          sourcedViaGoogle: true,
+          groundingSources,
+          threadTags: Array.isArray(q.threadTags)
+            ? q.threadTags.map((t: any) => String(t)).slice(0, 3)
+            : ['Core Service'],
+        };
+
+        // Store in server backend database so it persists in-app across API consumers
+        backendDb.questions.set(item.id, {
+          id: item.id,
+          module_id: item.moduleId,
+          learning_path_id: item.learningPathId,
+          learning_path_title: item.learningPathTitle,
+          module_title: item.moduleTitle,
+          difficulty: item.difficulty,
+          scenario_text: item.scenario,
+          question_text: item.question,
+          options: item.options,
+          correct_answer: item.correctAnswer,
+          explanation_correct: item.whyCorrect,
+          explanation_distractors: item.distractorBreakdown,
+          exam_tip: item.examTip,
+        });
+
+        return item;
+      });
+
+    res.json({
+      questions: normalizedQuestions,
+      groundingSources,
+      sourcedCount: normalizedQuestions.length,
+    });
+  } catch (error: any) {
+    console.error('Error sourcing Google-grounded printable questions:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to source AZ-900 questions via Google Search.',
+    });
+  }
+});
+
 // Mount Vite or static server
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
