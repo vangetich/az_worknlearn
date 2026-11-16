@@ -86,7 +86,7 @@ import { ThreadTagBadge } from './ThreadTagBadge';
 import { ThreadContextModal } from './ThreadContextModal';
 import { ConceptRefinementOverlay } from './ConceptRefinementOverlay';
 import { RecallSprintModal } from './RecallSprintModal';
-import { formatQuestionContextMarkdown } from '../utils/studyConsolidation';
+import { formatQuestionContextMarkdown, getQuestionTags } from '../utils/studyConsolidation';
 import {
   getStoredQuizAnimationsEnabled,
   QUIZ_ANIMATIONS_CHANGED_EVENT,
@@ -115,6 +115,8 @@ interface QuizCardProps {
   onChangeLockedDifficulty?: (nextLock: 'Fundamental' | 'Intermediate' | 'Advanced' | null) => void;
   selectedDifficultyFilter?: 'all' | 'Fundamental' | 'Intermediate' | 'Advanced';
   onSelectDifficultyFilter?: (nextFilter: 'all' | 'Fundamental' | 'Intermediate' | 'Advanced') => void;
+  activeTagFilter?: string;
+  onSelectTagFilter?: (tag: string) => void;
   onOpenStudyRoom?: () => void;
   onFinishSession?: () => void;
   onOpenPersonalizedReview?: () => void;
@@ -529,6 +531,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   onOpenAccessibilitySettings,
   externalOpenNotesDrawerTrigger = 0,
   onOpenAzureTheme,
+  activeTagFilter = 'all',
+  onSelectTagFilter,
 }) => {
   const questionThreadTags = React.useMemo(
     () => getThreadTagsForQuestion(question, 3),
@@ -1007,6 +1011,39 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     }
     setStudyRoomSharedToast(true);
     setTimeout(() => setStudyRoomSharedToast(false), 2500);
+  };
+
+  const [linkedinSharedToast, setLinkedinSharedToast] = useState<boolean>(false);
+
+  const handleShareToLinkedIn = async () => {
+    const url = typeof window !== 'undefined' ? window.location.origin : 'https://az900-smart-quiz.app';
+    const postText = `I am mastering Module ${question.moduleId}: ${question.moduleTitle} on the AZ-900 Microsoft Azure Exam Smart Study Platform! 🚀☁️ Join me in preparing for Microsoft certification: ${url}`;
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `AZ-900 Study Progress: Module ${question.moduleId}`,
+          text: postText,
+          url: url,
+        });
+        setLinkedinSharedToast(true);
+        setTimeout(() => setLinkedinSharedToast(false), 2500);
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          return;
+        }
+      }
+    }
+
+    const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}&summary=${encodeURIComponent(postText)}`;
+    try {
+      window.open(linkedInUrl, '_blank', 'width=600,height=600');
+    } catch {
+      navigator.clipboard.writeText(postText);
+    }
+    setLinkedinSharedToast(true);
+    setTimeout(() => setLinkedinSharedToast(false), 2500);
   };
 
   // Accordion section states inside the centered Study Zone popup
@@ -2200,7 +2237,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       }
       onTouchStart={handleCardTouchStart}
       onTouchEnd={handleCardTouchEnd}
-      className={`relative w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden ${
+      className={`quiz-card-container relative w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden ${
         areQuizAnimationsEnabled ? 'animate-quizcard-slide-fade' : ''
       }`}
     >
@@ -2338,6 +2375,19 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
       )}
 
+      {/* Smooth Progression Progress Bar with transition animation */}
+      <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 overflow-hidden">
+        <div
+          className="bg-gradient-to-r from-[#0078D4] via-sky-400 to-emerald-500 h-full transition-all duration-500 ease-out rounded-full"
+          style={{
+            width: `${Math.min(
+              100,
+              Math.max(0, ((questionIndex + 1) / Math.max(1, totalQuestions)) * 100)
+            )}%`,
+          }}
+        />
+      </div>
+
       {/* Single-File Horizontally Scrollable 'Path: Module' Quick Switcher & Action Bar */}
       <div
         data-testid="quizcard-path-module-scroll-bar"
@@ -2437,6 +2487,34 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 <option value="Fundamental">Fundamental</option>
                 <option value="Intermediate">Intermediate</option>
                 <option value="Advanced">Advanced</option>
+              </select>
+            </div>
+          )}
+
+          {/* Persistent Tag Filter Dropdown Selector in Practice Workspace Toolbar */}
+          {onSelectTagFilter && (
+            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-slate-300 shadow-2xs shrink-0 whitespace-nowrap">
+              <Filter className="w-3 h-3 text-amber-600 shrink-0" />
+              <label
+                htmlFor="quizcard-tag-filter-dropdown"
+                className="text-[10px] font-black uppercase tracking-wider text-slate-600"
+              >
+                Tag:
+              </label>
+              <select
+                id="quizcard-tag-filter-dropdown"
+                aria-label="Filter question bank by category tag"
+                value={activeTagFilter || 'all'}
+                onChange={(e) => onSelectTagFilter(e.target.value)}
+                className="text-[11px] font-extrabold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                title="Filter question bank by category tags (Core Service, Compliance, Pricing, Security, Scaling)"
+              >
+                <option value="all">All Tags</option>
+                <option value="Core Service">Core Service</option>
+                <option value="Compliance">Compliance</option>
+                <option value="Pricing">Pricing</option>
+                <option value="Security">Security</option>
+                <option value="Scaling">Scaling</option>
               </select>
             </div>
           )}
@@ -2734,6 +2812,27 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               <Users className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-400 shrink-0" />
             )}
             <span>{studyRoomSharedToast ? 'Posted to StudyRoom!' : 'Share to StudyRoom'}</span>
+          </button>
+
+          {/* Share to LinkedIn Button (Generates formatted post with active module title and app link) */}
+          <button
+            id="quizcard-share-linkedin-btn"
+            data-testid="share-linkedin-btn"
+            type="button"
+            onClick={handleShareToLinkedIn}
+            title="Share your progress and active module on LinkedIn with a formatted post"
+            className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              linkedinSharedToast
+                ? 'bg-emerald-600 text-white border-emerald-500 ring-2 ring-emerald-400/30'
+                : 'bg-white dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border-slate-300 dark:border-slate-600 hover:border-sky-400'
+            }`}
+          >
+            {linkedinSharedToast ? (
+              <Check className="w-3.5 h-3.5 text-white shrink-0" />
+            ) : (
+              <Share2 className="w-3.5 h-3.5 text-[#0A66C2] dark:text-sky-400 shrink-0" />
+            )}
+            <span>{linkedinSharedToast ? 'Shared to LinkedIn!' : 'Share to LinkedIn'}</span>
           </button>
 
           {/* Flag Question Button (Marks ambiguous or difficult questions for later review) */}
@@ -3927,6 +4026,19 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                         {primaryThreadContext.moduleLink.serviceCategory}
                       </span>
                     )}
+
+                    {/* Question Category Tags (Core Service, Compliance, Pricing, Security, Scaling) */}
+                    {getQuestionTags(question).map((tagName) => (
+                      <button
+                        key={tagName}
+                        type="button"
+                        onClick={() => onSelectTagFilter && onSelectTagFilter(tagName)}
+                        className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-950 border border-amber-300 hover:bg-amber-200 transition-colors cursor-pointer shadow-2xs"
+                        title={`Filter quiz queue by tag: ${tagName}`}
+                      >
+                        🏷️ {tagName}
+                      </button>
+                    ))}
                   </div>
 
                   {/* Right Actions: Thread Context Toggle, Inspect in Azure Themes & Share Question Deep-Link Button */}

@@ -551,3 +551,29 @@ export function computeNextConfidenceStreakState(
     lastConfidenceLevel: confidence,
   };
 }
+
+export function getQuestionTags(q: Question): string[] {
+  const tags: string[] = [];
+  const text = `${q.moduleTitle} ${q.question} ${q.scenario} ${q.whyCorrect}`.toLowerCase();
+  if (text.includes('price') || text.includes('cost') || text.includes('pricing') || text.includes('capex') || text.includes('opex') || text.includes('calculator') || text.includes('billing')) {
+    tags.push('Pricing');
+  }
+  if (text.includes('compliance') || text.includes('governance') || text.includes('policy') || text.includes('privacy') || text.includes('regulatory') || text.includes('sovereign')) {
+    tags.push('Compliance');
+  }
+  if (text.includes('security') || text.includes('identity') || text.includes('entra') || text.includes('defender') || text.includes('key vault') || text.includes('authentication')) {
+    tags.push('Security');
+  }
+  if (text.includes('scale') || text.includes('availability') || text.includes('redundancy') || text.includes('zones') || text.includes('load balancer') || text.includes('backup')) {
+    tags.push('Scaling');
+  }
+  if (tags.length === 0) {
+    tags.push('Core Service');
+  }
+  if (q.threadTags && q.threadTags.length > 0) {
+    q.threadTags.forEach((t) => {
+      if (!tags.includes(t)) tags.push(t);
+    });
+  }
+  return tags;
+}

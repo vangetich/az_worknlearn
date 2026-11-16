@@ -172,6 +172,7 @@ import { fireModuleCompletionConfetti, fireDailyGoalCompletionConfetti } from '.
 import {
   computeNextConfidenceStreakState,
   ConfidenceStreakState,
+  getQuestionTags,
 } from './utils/studyConsolidation';
 import { AdaptiveLearningPathDashboard } from './components/AdaptiveLearningPathDashboard';
 import { ResponsiveModalContainer } from './components/ResponsiveModalContainer';
@@ -581,6 +582,7 @@ export default function App() {
   };
   const [onlyBookmarks, setOnlyBookmarks] = useState<boolean>(false);
   const [onlyFlagged, setOnlyFlagged] = useState<boolean>(false);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string>('all');
   const [intelligentShuffle, setIntelligentShuffle] = useState<boolean>(false);
   const [savedNotesMap, setSavedNotesMap] = useState<Record<string, string>>(() => getAllQuestionNotes());
   const [onlySavedNotes, setOnlySavedNotes] = useState<boolean>(false);
@@ -1621,6 +1623,12 @@ export default function App() {
         getModuleComplexityLevel(q.moduleId) !== selectedModuleDifficultyFilter
       ) {
         return false;
+      }
+      if (selectedTagFilter !== 'all') {
+        const qTags = getQuestionTags(q);
+        if (!qTags.includes(selectedTagFilter)) {
+          return false;
+        }
       }
       if (selectedThreadFilters.length > 0) {
         const qThreads = getThreadTagsForQuestion(q, 3).map((t) => t.id);
@@ -4762,6 +4770,11 @@ export default function App() {
                         selectedDifficultyFilter={selectedDifficultyFilter}
                         onSelectDifficultyFilter={(nextFilter) => {
                           setSelectedDifficultyFilter(nextFilter);
+                          setCurrentQuestionIndex(0);
+                        }}
+                        activeTagFilter={selectedTagFilter}
+                        onSelectTagFilter={(tag) => {
+                          setSelectedTagFilter(tag);
                           setCurrentQuestionIndex(0);
                         }}
                         onOpenStudyRoom={() => setShowStudyRoom(true)}
