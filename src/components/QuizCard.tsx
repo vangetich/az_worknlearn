@@ -467,6 +467,8 @@ function getEli5AnalogyForQuestion(question: Question): {
   };
 }
 
+let lastQuizCardProgressPercent: number | null = null;
+
 export const QuizCard: React.FC<QuizCardProps> = ({
   question,
   questionIndex,
@@ -1564,6 +1566,43 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   );
   const [slideFadeTriggerKey, setSlideFadeTriggerKey] = useState<number>(0);
 
+  const targetProgressPercent = Math.min(
+    100,
+    Math.max(0, ((questionIndex + 1) / Math.max(1, totalQuestions)) * 100)
+  );
+  const [animatedProgressWidth, setAnimatedProgressWidth] = useState<number>(() =>
+    areQuizAnimationsEnabled && lastQuizCardProgressPercent !== null
+      ? lastQuizCardProgressPercent
+      : targetProgressPercent
+  );
+
+  React.useEffect(() => {
+    if (
+      !areQuizAnimationsEnabled ||
+      typeof window === 'undefined' ||
+      typeof window.requestAnimationFrame !== 'function'
+    ) {
+      setAnimatedProgressWidth(targetProgressPercent);
+      lastQuizCardProgressPercent = targetProgressPercent;
+      return;
+    }
+
+    let raf2: number | null = null;
+    const raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(() => {
+        setAnimatedProgressWidth(targetProgressPercent);
+        lastQuizCardProgressPercent = targetProgressPercent;
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      if (raf2 !== null) {
+        window.cancelAnimationFrame(raf2);
+      }
+    };
+  }, [targetProgressPercent, areQuizAnimationsEnabled]);
+
   React.useEffect(() => {
     const handleAnimationsToggle = (e: Event) => {
       const customEvent = e as CustomEvent<{ enabled?: boolean }>;
@@ -2015,6 +2054,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const isExamMode = quizCardMode === 'exam';
   const showImmediateFeedback = isAnswered && (!isExamMode || examFeedbackRevealed);
   const isSelectedCorrect = selectedOption === question.correctAnswer;
+  const shouldPulseNextQuestion = Boolean(showImmediateFeedback && isSelectedCorrect);
   const isQuestionSkipped = Boolean(stats?.skippedQuestionIds?.includes(question.id));
 
   // Smoothly auto-scroll to center QuizCard in the viewport after submitting an answer,
@@ -2375,16 +2415,17 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
       )}
 
-      {/* Smooth Progression Progress Bar with transition animation */}
+      {/* Smooth Progression Progress Bar with CSS width transition animation */}
       <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 overflow-hidden">
         <div
-          className="bg-gradient-to-r from-[#0078D4] via-sky-400 to-emerald-500 h-full transition-all duration-500 ease-out rounded-full"
-          style={{
-            width: `${Math.min(
-              100,
-              Math.max(0, ((questionIndex + 1) / Math.max(1, totalQuestions)) * 100)
-            )}%`,
-          }}
+          role="progressbar"
+          aria-label="Quiz session progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(targetProgressPercent)}
+          data-testid="quizcard-progress-bar"
+          className="quiz-card-progress-fill bg-gradient-to-r from-[#0078D4] via-sky-400 to-emerald-500 h-full transition-[width] duration-500 ease-out rounded-full"
+          style={{ width: `${animatedProgressWidth}%` }}
         />
       </div>
 
@@ -3897,7 +3938,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                     <button
                       type="button"
                       onClick={onNext}
-                      className="px-3.5 py-1.5 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-black inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      data-testid="quizcard-feedback-next-btn"
+                      data-pulse-active={shouldPulseNextQuestion ? 'true' : 'false'}
+                      className={`px-3.5 py-1.5 rounded-xl bg-[#0078D4] hover:bg-[#005A9E] text-white text-xs font-black inline-flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors ${
+                        shouldPulseNextQuestion
+                          ? 'quiz-card-next-pulse ring-2 ring-emerald-400/70'
+                          : ''
+                      }`}
                     >
                       <span>Next Question</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -5711,8 +5758,15 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
             {questionIndex < totalQuestions - 1 && (
               <button
+                type="button"
                 onClick={onNext}
-                className="px-5 py-2.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-sm font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+                data-testid="quizcard-footer-next-btn"
+                data-pulse-active={shouldPulseNextQuestion ? 'true' : 'false'}
+                className={`px-5 py-2.5 rounded-lg bg-[#0078D4] hover:bg-[#005A9E] text-white text-sm font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer ${
+                  shouldPulseNextQuestion
+                    ? 'quiz-card-next-pulse ring-2 ring-emerald-400/70'
+                    : ''
+                }`}
               >
                 <span>Next Question</span>
                 <ArrowRight className="w-4 h-4" />

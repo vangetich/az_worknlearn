@@ -55,14 +55,18 @@ export function generatePrintableMockExamPdf(exam: PrintableMockExam): void {
   drawRibbon(doc, 0, 4);
 
   doc.setFillColor(...COLOR_NAVY);
-  doc.roundedRect(margin, 11, contentWidth, 34, 2, 2, 'F');
+  doc.roundedRect(margin, 11, contentWidth, 36, 2, 2, 'F');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(253, 230, 138);
-  doc.text('MICROSOFT AZURE FUNDAMENTALS (AZ-900) · UNTIMED STUDY PACKET', margin + 6, 19);
+  doc.text('AZ-900 SMART QUIZ BUILDER  ·  OFFICIAL STUDY MATERIAL', margin + 6, 18.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(224, 242, 254);
+  doc.text(`Created: ${today}`, pageWidth - margin - 6, 18.5, { align: 'right' });
 
-  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15.5);
   doc.setTextColor(255, 255, 255);
   const titleLines = doc.splitTextToSize(exam.title, contentWidth - 12);
   doc.text(titleLines.slice(0, 2), margin + 6, 27);
@@ -71,32 +75,35 @@ export function generatePrintableMockExamPdf(exam: PrintableMockExam): void {
   doc.setFontSize(8.5);
   doc.setTextColor(224, 242, 254);
   doc.text(
-    `Strategy: ${trackMeta.label} · ${exam.questions.length} Unique Questions · Created ${today}`,
+    `Strategy: ${trackMeta.label} · ${exam.questions.length} Unique Questions · Answer Key: ${
+      exam.includeAnswerKey ? 'Included' : 'Test-Only Mode'
+    }`,
     margin + 6,
-    40
+    41.5
   );
 
-  // Candidate Self-Paced Log Box
-  let y = 51;
+  // Candidate Self-Paced Log & Signature Box
+  let y = 52;
   doc.setFillColor(...COLOR_SURFACE);
   doc.setDrawColor(...COLOR_BORDER);
-  doc.roundedRect(margin, y, contentWidth, 28, 2, 2, 'FD');
+  doc.roundedRect(margin, y, contentWidth, 31, 2, 2, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(...COLOR_NAVY);
-  doc.text('Candidate Self-Paced Study Log', margin + 5, y + 7);
+  doc.text('Candidate Self-Paced Study Log & Sign-Off', margin + 5, y + 6.5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...COLOR_MUTED);
-  doc.text('Name: ____________________________________', margin + 5, y + 14);
-  doc.text('Date: ______________________', margin + 102, y + 14);
-  doc.text('Start Time: _____________   Finish Time: _____________', margin + 5, y + 22);
-  doc.text(`Score: ______ / ${exam.questions.length}   (Pass >= 70%)`, margin + 102, y + 22);
+  doc.text('Student Name: _________________________________', margin + 5, y + 13.5);
+  doc.text('Date Taken: ____________________', margin + 102, y + 13.5);
+  doc.text('Student Signature: _____________________________', margin + 5, y + 20.5);
+  doc.text(`Score: ______ / ${exam.questions.length}   (Pass >= 70%)`, margin + 102, y + 20.5);
+  doc.text('Start Time: ____________   Finish Time: ____________', margin + 5, y + 27);
 
   // Composition Breakdown
-  y = 85;
+  y = 88;
   const p1Count = exam.questions.filter((q) => q.learningPathId === 1).length;
   const p2Count = exam.questions.filter((q) => q.learningPathId === 2).length;
   const p3Count = exam.questions.filter((q) => q.learningPathId === 3).length;
@@ -127,7 +134,7 @@ export function generatePrintableMockExamPdf(exam: PrintableMockExam): void {
     y + 19.5
   );
 
-  y = 115;
+  y = 117;
 
   // Optional Self-Test Answer Bubble Grid on Cover Page
   if (exam.includeBubbleSheet) {

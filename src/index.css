@@ -34,10 +34,47 @@
   animation: quizcardSlideFadeEntrance 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.quiz-card-container .quiz-card-progress-fill {
+  transition: width 550ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: width;
+}
+
+@keyframes quizCardNextQuestionPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 2px 8px rgba(0, 120, 212, 0.24), 0 0 0 0 rgba(16, 185, 129, 0.46);
+  }
+  50% {
+    transform: scale(1.025);
+    box-shadow: 0 6px 16px rgba(0, 120, 212, 0.32), 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+}
+
+.quiz-card-container .quiz-card-next-pulse {
+  animation: quizCardNextQuestionPulse 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform, box-shadow;
+}
+
+.quiz-card-container .quiz-card-next-pulse:hover {
+  animation-play-state: paused;
+}
+
 html.reduce-quiz-transitions .animate-quizcard-slide-fade,
-html[data-quiz-animations="false"] .animate-quizcard-slide-fade {
+html[data-quiz-animations="false"] .animate-quizcard-slide-fade,
+html.reduce-quiz-transitions .quiz-card-container .quiz-card-progress-fill,
+html[data-quiz-animations="false"] .quiz-card-container .quiz-card-progress-fill,
+html.reduce-quiz-transitions .quiz-card-container .quiz-card-next-pulse,
+html[data-quiz-animations="false"] .quiz-card-container .quiz-card-next-pulse {
   animation: none !important;
   transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quiz-card-container .quiz-card-progress-fill,
+  .quiz-card-container .quiz-card-next-pulse {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 :root {
@@ -1538,6 +1575,57 @@ html.reduce-celebration-motion .animate-goal-celebrate {
     margin-bottom: 14pt;
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .print-brand-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12pt;
+    padding-bottom: 10pt;
+    margin-bottom: 10pt;
+    border-bottom: 1.5pt solid #0078d4;
+  }
+
+  .print-brand-lockup {
+    display: flex;
+    align-items: center;
+    gap: 9pt;
+  }
+
+  .print-brand-logo-badge {
+    width: 30pt;
+    height: 30pt;
+    border-radius: 6pt;
+    background: #0078d4 !important;
+    color: #ffffff !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .print-brand-logo-badge svg {
+    width: 18pt !important;
+    height: 18pt !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  .print-signature-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 10pt 16pt;
+    margin-top: 8pt;
+    padding-top: 8pt;
+    border-top: 0.75pt dashed #94a3b8;
+    font-size: 9.25pt;
+    color: #0f172a;
+  }
+
+  .print-answer-key-page {
+    break-before: page;
+    page-break-before: always;
   }
 
   .print-exam-meta-grid {

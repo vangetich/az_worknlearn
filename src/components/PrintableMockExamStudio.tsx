@@ -245,6 +245,16 @@ export const PrintableMockExamStudio: React.FC<PrintableMockExamStudioProps> = (
     [questions]
   );
 
+  const createdDateLabel = useMemo(
+    () =>
+      new Date(effectiveExam.createdAt || Date.now()).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }),
+    [effectiveExam.createdAt]
+  );
+
   const handleTrackChange = (trackId: PrintableExamTrack) => {
     setLoadedSavedExam(null);
     setSelectedTrack(trackId);
@@ -850,16 +860,34 @@ export const PrintableMockExamStudio: React.FC<PrintableMockExamStudioProps> = (
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={includeAnswerKey}
-                  onChange={(e) => setIncludeAnswerKey(e.target.checked)}
-                  className="rounded border-slate-300 text-[#0078D4] focus:ring-[#0078D4]"
-                />
-                <span>Include Detached Answer Key (new page)</span>
-              </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs">
+              <div className="sm:col-span-2 p-3 rounded-lg border border-slate-200 bg-slate-50/80 flex items-center justify-between gap-3">
+                <div>
+                  <span className="font-bold text-slate-900 block">Print Answer Key</span>
+                  <span className="text-[11px] text-slate-600">
+                    {includeAnswerKey
+                      ? 'Enabled — adds a separate page at the end with correct answers and brief explanations.'
+                      : 'Hidden — prints questions only for a clean test-like environment.'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={includeAnswerKey}
+                  aria-label="Print Answer Key"
+                  data-testid="print-answer-key-toggle"
+                  onClick={() => setIncludeAnswerKey((prev) => !prev)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0078D4] focus:ring-offset-1 ${
+                    includeAnswerKey ? 'bg-[#0078D4]' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-xs transition-transform ${
+                      includeAnswerKey ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
 
               <label className="flex items-center gap-2 cursor-pointer text-slate-700">
                 <input
@@ -869,7 +897,7 @@ export const PrintableMockExamStudio: React.FC<PrintableMockExamStudioProps> = (
                   onChange={(e) => setIncludeExplanations(e.target.checked)}
                   className="rounded border-slate-300 text-[#0078D4] focus:ring-[#0078D4] disabled:opacity-40"
                 />
-                <span>Include Rationales &amp; Exam Tips in Key</span>
+                <span>Include Brief Explanations in Answer Key</span>
               </label>
 
               <label className="flex items-center gap-2 cursor-pointer text-slate-700">
@@ -1025,16 +1053,40 @@ export const PrintableMockExamStudio: React.FC<PrintableMockExamStudioProps> = (
 
             {/* Paper Mockup Preview */}
             <div className="p-4 rounded-lg border border-slate-300 bg-white max-h-[420px] overflow-y-auto space-y-4 text-xs">
-              <div className="pb-3 border-b border-slate-200">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  AZ-900 Untimed Self-Paced Mock Exam
+              <div className="pb-3 border-b border-slate-200 space-y-2">
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-[#0078D4]/40">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-[#0078D4] text-white flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-xs font-extrabold text-slate-950 leading-tight">
+                        AZ-900 Smart Quiz Builder
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        Official Self-Paced Study Material
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right text-[10px] text-slate-600 tabular-nums">
+                    <div>Created: {createdDateLabel}</div>
+                    <div className="font-semibold text-[#0078D4]">
+                      {effectiveExam.includeAnswerKey ? 'Answer Key Included' : 'Test-Only Printout'}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-sm font-bold text-slate-900 mt-0.5">
+
+                <div className="text-sm font-bold text-slate-900">
                   {effectiveExam.title}
                 </div>
-                <div className="text-[11px] text-slate-500 mt-1 tabular-nums">
-                  {effectiveExam.questions.length} Unique Questions ·{' '}
-                  {effectiveExam.includeAnswerKey ? 'Detached Answer Key Included' : 'Questions Only'}
+                <div className="text-[11px] text-slate-600 tabular-nums">
+                  {effectiveExam.questions.length} Unique Questions · Strategy: {activeTrackMeta.shortLabel}
+                </div>
+                <div className="pt-1 text-[10px] text-slate-500 flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-slate-200">
+                  <span>Student Signature: ________________________</span>
+                  <span>Date Taken: ____________</span>
                 </div>
               </div>
 
@@ -1092,12 +1144,36 @@ export const PrintableMockExamStudio: React.FC<PrintableMockExamStudioProps> = (
           <div id="printable-mock-exam-portal" aria-hidden="true">
             {/* Cover Exam Metadata Header */}
             <header className="print-exam-metadata-header">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                Microsoft Azure Fundamentals (AZ-900) · Untimed Self-Paced Study Booklet
+              {/* Custom AZ-900 Smart Quiz Builder Brand Lockup & Date of Creation */}
+              <div className="print-brand-header">
+                <div className="print-brand-lockup">
+                  <span className="print-brand-logo-badge" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
+                    </svg>
+                  </span>
+                  <div>
+                    <div className="text-base font-extrabold tracking-tight text-slate-950">
+                      AZ-900 Smart Quiz Builder
+                    </div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-[#0078D4]">
+                      Microsoft Azure Fundamentals · Self-Paced Study Booklet
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right text-xs text-slate-700 tabular-nums">
+                  <div>
+                    <strong>Date of Creation:</strong> {createdDateLabel}
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    {activeTrackMeta.shortLabel} · {effectiveExam.questions.length} Unique Questions
+                  </div>
+                </div>
               </div>
+
               <h1 className="text-2xl font-bold text-slate-950 mt-1">{effectiveExam.title}</h1>
               <div className="text-xs text-slate-700 mt-1">
-                Study Strategy: {activeTrackMeta.label} · {effectiveExam.questions.length} Unique Questions · Passing Benchmark: 70% (700/1000)
+                Study Strategy: {activeTrackMeta.label} · Passing Benchmark: 70% (700/1000)
               </div>
 
               <div className="print-exam-meta-grid">
@@ -1114,13 +1190,25 @@ export const PrintableMockExamStudio: React.FC<PrintableMockExamStudioProps> = (
                   <strong>Sources:</strong> {effectiveExam.questions.length - statsBreakdown.googleCount} Built-in · {statsBreakdown.googleCount} Google-Grounded
                 </div>
                 <div>
-                  <strong>Generated:</strong> {new Date(effectiveExam.updatedAt).toLocaleDateString()}
+                  <strong>Date of Creation:</strong> {createdDateLabel}
                 </div>
                 <div>
-                  <strong>Answer Key:</strong> {effectiveExam.includeAnswerKey ? 'Included (Detached)' : 'Questions Only'}
+                  <strong>Print Answer Key:</strong> {effectiveExam.includeAnswerKey ? 'Included (Separate End Page)' : 'Hidden (Clean Test Environment)'}
                 </div>
-                <div>Candidate Name: ____________________________</div>
-                <div>Score: ______ / {effectiveExam.questions.length} &nbsp; Date: ______________</div>
+                <div className="col-span-2 print-signature-row">
+                  <div>
+                    <strong>Student Name:</strong> ___________________________________
+                  </div>
+                  <div>
+                    <strong>Date Completed:</strong> ______________________
+                  </div>
+                  <div>
+                    <strong>Student Signature:</strong> ________________________________
+                  </div>
+                  <div>
+                    <strong>Score:</strong> ______ / {effectiveExam.questions.length}
+                  </div>
+                </div>
               </div>
 
               {effectiveExam.notes && effectiveExam.notes.trim() && (
@@ -1162,10 +1250,10 @@ export const PrintableMockExamStudio: React.FC<PrintableMockExamStudioProps> = (
                     <th className="print-repeating-header-cell">
                       <div className="flex items-center justify-between gap-4">
                         <span>
-                          <strong>{effectiveExam.title}</strong> · Track: {activeTrackMeta.shortLabel}
+                          <strong>AZ-900 Smart Quiz Builder</strong> · {effectiveExam.title}
                         </span>
                         <span>
-                          {effectiveExam.questions.length} Questions · Self-Paced AZ-900 Mock Exam
+                          Created {createdDateLabel} · {effectiveExam.questions.length} Questions
                         </span>
                       </div>
                     </th>
@@ -1235,14 +1323,25 @@ export const PrintableMockExamStudio: React.FC<PrintableMockExamStudioProps> = (
               </table>
             </div>
 
-            {/* Section II: Detached Answer Key */}
+            {/* Section II: Separate End Page Answer Key */}
             {effectiveExam.includeAnswerKey && (
-              <div className="print-page-break-before space-y-4">
-                <div className="border-b-2 border-slate-900 pb-2">
-                  <h2 className="text-lg font-bold text-slate-950">
-                    Detached Answer Key &amp; Self-Grading Guide ({effectiveExam.questions.length} Questions)
-                  </h2>
-                  <p className="text-xs text-slate-600">{effectiveExam.title}</p>
+              <section
+                data-testid="printable-answer-key-section"
+                className="print-page-break-before print-answer-key-page space-y-4"
+              >
+                <div className="border-b-2 border-slate-900 pb-2 flex items-end justify-between gap-4">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#0078D4]">
+                      AZ-900 Smart Quiz Builder · Separate Answer Key
+                    </div>
+                    <h2 className="text-lg font-bold text-slate-950">
+                      Answer Key &amp; Brief Explanations ({effectiveExam.questions.length} Questions)
+                    </h2>
+                    <p className="text-xs text-slate-600">{effectiveExam.title}</p>
+                  </div>
+                  <div className="text-right text-[10px] text-slate-600 tabular-nums">
+                    Created: {createdDateLabel}
+                  </div>
                 </div>
 
                 {/* Compact Quick Answer Grid */}
@@ -1293,7 +1392,7 @@ export const PrintableMockExamStudio: React.FC<PrintableMockExamStudioProps> = (
                     </ul>
                   </div>
                 )}
-              </div>
+              </section>
             )}
           </div>,
           document.body
