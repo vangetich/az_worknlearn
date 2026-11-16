@@ -168,6 +168,12 @@ interface QuizCardProps {
 
 const EXAM_SIMULATION_DURATION_SECONDS = 45 * 60; // 45:00 standard AZ-900 exam duration
 
+function getComplexityCountdownSeconds(difficulty: Question['difficulty']): number {
+  if (difficulty === 'Fundamental') return 35;
+  if (difficulty === 'Advanced') return 70;
+  return 50; // Intermediate default
+}
+
 // Synthesize subtle Web Audio API sound effects ('ping' on correct, 'woosh' on incorrect)
 function playAnswerFeedbackSound(isCorrect: boolean, isMuted: boolean) {
   if (isMuted || typeof window === 'undefined') return;
@@ -468,6 +474,7 @@ function getEli5AnalogyForQuestion(question: Question): {
 }
 
 let lastQuizCardProgressPercent: number | null = null;
+let lastQuizCardQuestionIndex: number | null = null;
 
 export const QuizCard: React.FC<QuizCardProps> = ({
   question,
@@ -590,6 +597,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     });
   };
   const [copiedContext, setCopiedContext] = useState<boolean>(false);
+  const [copiedQuestionDetails, setCopiedQuestionDetails] = useState<boolean>(false);
+  const [quizResultsSharedToast, setQuizResultsSharedToast] = useState<'shared' | 'copied' | null>(null);
   const [isConceptRefinementOpen, setIsConceptRefinementOpen] = useState<boolean>(false);
   const [focusedAiOption, setFocusedAiOption] = useState<string | null>(null);
   const [isAiTutorLoading, setIsAiTutorLoading] = useState<boolean>(false);
@@ -639,9 +648,139 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     }
   };
 
+  const handleCopyQuestionDetails = async () => {
+    const optionLines = question.options
+      .map((opt) => `${opt.letter}. ${opt.text}`)
+      .join('\n');
+    const detailsText = [
+      `AZ-900 Module ${question.moduleId}: ${question.moduleTitle} (${question.difficulty})`,
+      question.scenario ? `Scenario: ${question.scenario}` : '',
+      `Question: ${question.question}`,
+      '',
+      'Options:',
+      optionLines,
+    ]
+      .filter((line, idx, arr) => !(line === '' && arr[idx - 1] === ''))
+      .join('\n');
+
+    let copied = false;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(detailsText);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+    if (!copied && typeof document !== 'undefined') {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = detailsText;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        copied = false;
+      }
+    }
+    if (copied) {
+      setCopiedQuestionDetails(true);
+      window.setTimeout(() => setCopiedQuestionDetails(false), 2500);
+    }
+  };
+
+  const handleShareQuizResults = async () => {
+    const appUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}${window.location.pathname}`
+        : 'https://az900-smart-quiz.app';
+
+    const modMastery = stats?.moduleMastery?.[question.moduleId];
+    const totalAnswered = stats?.totalAnswered ?? 0;
+    const totalCorrect = stats?.totalCorrect ?? 0;
+
+    let scoreSummary: string;
+    if (modMastery && modMastery.total > 0) {
+      const modPct = Math.round((modMastery.correct / modMastery.total) * 100);
+      scoreSummary = `${modPct}% (${modMastery.correct}/${modMastery.total} answered in module)`;
+    } else if (totalAnswered > 0) {
+      const overallPct = Math.round((totalCorrect / totalAnswered) * 100);
+      scoreSummary = `${overallPct}% (${totalCorrect}/${totalAnswered} answered overall)`;
+    } else if (rollingAverageAccuracy !== null && rollingAverageAccuracy !== undefined) {
+      scoreSummary = `${Math.round(rollingAverageAccuracy)}% accuracy`;
+    } else if (hasSubmitted && selectedOption) {
+      scoreSummary = selectedOption === question.correctAnswer ? '100% (1/1)' : '0% (0/1)';
+    } else {
+      scoreSummary = '0% (0/0 answered yet)';
+    }
+
+    const overallNote =
+      modMastery && modMastery.total > 0 && totalAnswered > 0
+        ? ` | Overall Score: ${Math.round((totalCorrect / totalAnswered) * 100)}% (${totalCorrect}/${totalAnswered})`
+        : '';
+
+    const shareTitle = `AZ-900 Quiz Results — Module ${question.moduleId}: ${question.moduleTitle}`;
+    const shareMessage = `I scored ${scoreSummary}${overallNote} on Module ${question.moduleId}: ${question.moduleTitle} in AZ-900 Smart Quiz! Practice with me: ${appUrl}`;
+
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareMessage,
+          url: appUrl,
+        });
+        setQuizResultsSharedToast('shared');
+        window.setTimeout(() => setQuizResultsSharedToast(null), 2600);
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          return;
+        }
+      }
+    }
+
+    let copied = false;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareMessage);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+    if (!copied && typeof document !== 'undefined') {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = shareMessage;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        copied = false;
+      }
+    }
+    if (copied) {
+      setQuizResultsSharedToast('copied');
+      window.setTimeout(() => setQuizResultsSharedToast(null), 2600);
+    }
+  };
+
   // Keep the contextual Ask AI Tutor sidebar pre-filled whenever the active question changes
   React.useEffect(() => {
     setCopiedContext(false);
+    setCopiedQuestionDetails(false);
+    setCopiedQuestionLinkUrl(null);
+    setQuizResultsSharedToast(null);
+    setLinkedinSharedToast(null);
+    setGeneratedLinkedInPost(null);
     setFocusedAiOption(null);
     setAiTutorInput(
       `Clarify Module ${question.moduleId} (${question.moduleTitle}): "${question.question}" — what is the core Azure decision rule here?`
@@ -832,6 +971,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [markdownExportToast, setMarkdownExportToast] = useState<string | null>(null);
   const [retryNoticeMessage, setRetryNoticeMessage] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [isReadingAloud, setIsReadingAloud] = useState<boolean>(false);
   const [isSpeakingWhyCorrect, setIsSpeakingWhyCorrect] = useState<boolean>(false);
   const [ttsFeedbackError, setTtsFeedbackError] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
@@ -1015,37 +1155,67 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     setTimeout(() => setStudyRoomSharedToast(false), 2500);
   };
 
-  const [linkedinSharedToast, setLinkedinSharedToast] = useState<boolean>(false);
+  const [linkedinSharedToast, setLinkedinSharedToast] = useState<'shared' | 'copied' | null>(null);
+  const [generatedLinkedInPost, setGeneratedLinkedInPost] = useState<string | null>(null);
+
+  const buildLinkedInPostText = () => {
+    const url =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}${window.location.pathname}`
+        : 'https://az900-smart-quiz.app';
+    return {
+      url,
+      postText: `I am mastering Module ${question.moduleId}: ${question.moduleTitle} on the AZ-900 Microsoft Azure Exam Smart Study Platform! Join me in preparing for Microsoft certification: ${url}`,
+    };
+  };
 
   const handleShareToLinkedIn = async () => {
-    const url = typeof window !== 'undefined' ? window.location.origin : 'https://az900-smart-quiz.app';
-    const postText = `I am mastering Module ${question.moduleId}: ${question.moduleTitle} on the AZ-900 Microsoft Azure Exam Smart Study Platform! 🚀☁️ Join me in preparing for Microsoft certification: ${url}`;
+    const { url, postText } = buildLinkedInPostText();
+    setGeneratedLinkedInPost(postText);
 
-    if (typeof navigator !== 'undefined' && navigator.share) {
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         await navigator.share({
-          title: `AZ-900 Study Progress: Module ${question.moduleId}`,
+          title: `AZ-900 Study Progress: Module ${question.moduleId} — ${question.moduleTitle}`,
           text: postText,
-          url: url,
+          url,
         });
-        setLinkedinSharedToast(true);
-        setTimeout(() => setLinkedinSharedToast(false), 2500);
+        setLinkedinSharedToast('shared');
+        window.setTimeout(() => setLinkedinSharedToast(null), 4000);
         return;
       } catch (err: any) {
-        if (err.name === 'AbortError') {
+        if (err?.name === 'AbortError') {
           return;
         }
       }
     }
 
-    const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}&summary=${encodeURIComponent(postText)}`;
+    let copied = false;
     try {
-      window.open(linkedInUrl, '_blank', 'width=600,height=600');
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(postText);
+        copied = true;
+      }
     } catch {
-      navigator.clipboard.writeText(postText);
+      copied = false;
     }
-    setLinkedinSharedToast(true);
-    setTimeout(() => setLinkedinSharedToast(false), 2500);
+    if (!copied && typeof document !== 'undefined') {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = postText;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        copied = false;
+      }
+    }
+    setLinkedinSharedToast(copied ? 'copied' : 'shared');
+    window.setTimeout(() => setLinkedinSharedToast(null), 4500);
   };
 
   // Accordion section states inside the centered Study Zone popup
@@ -1096,6 +1266,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     }
   });
   const [showAnalyzeDistractorsPanel, setShowAnalyzeDistractorsPanel] = useState<boolean>(false);
+  const [showRevealDistractorsComparison, setShowRevealDistractorsComparison] = useState<boolean>(false);
+
+  const complexityTotalSeconds = getComplexityCountdownSeconds(question.difficulty);
+  const [countdownSecondsLeft, setCountdownSecondsLeft] = useState<number>(() =>
+    getComplexityCountdownSeconds(question.difficulty)
+  );
+  const [hasResetCountdownOnAnswer, setHasResetCountdownOnAnswer] = useState<boolean>(false);
 
   const handleToggleEli5 = () => {
     setShowEli5Analogy((prev) => {
@@ -1322,6 +1499,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     onSelectDifficultyFilter(nextFilter);
   };
 
+  const [copiedQuestionLinkUrl, setCopiedQuestionLinkUrl] = useState<string | null>(null);
+
   // Instant Share Deep-Link Copy Handler
   const handleShareDeepLinkCopy = async () => {
     if (typeof window === 'undefined') return;
@@ -1359,6 +1538,54 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       // Fallback: open share modal if clipboard is blocked
       setShowShareModal(true);
     }
+  };
+
+  // Dedicated 'Copy Question Link' handler generating direct URL with ?q=<question.id>
+  const handleCopyQuestionLink = async () => {
+    const baseUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}${window.location.pathname}`
+        : 'https://az900-smart-quiz.app/';
+    const directUrl = `${baseUrl}?q=${encodeURIComponent(question.id)}&path=${question.learningPathId}&mod=${question.moduleId}`;
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.history.replaceState(
+          null,
+          '',
+          `?q=${encodeURIComponent(question.id)}&path=${question.learningPathId}&mod=${question.moduleId}`
+        );
+      } catch {
+        // ignore history errors in restricted iframes
+      }
+    }
+
+    let copied = false;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(directUrl);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+    if (!copied && typeof document !== 'undefined') {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = directUrl;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        copied = false;
+      }
+    }
+    setCopiedQuestionLinkUrl(directUrl);
+    window.setTimeout(() => setCopiedQuestionLinkUrl(null), 4000);
   };
 
   // Global Toggle: 'study' (Study Mode: immediate feedback, hints, distractor explanations)
@@ -1564,7 +1791,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [areQuizAnimationsEnabled, setAreQuizAnimationsEnabled] = useState<boolean>(
     getStoredQuizAnimationsEnabled
   );
-  const [slideFadeTriggerKey, setSlideFadeTriggerKey] = useState<number>(0);
+  const [navDirection] = useState<1 | -1>(() =>
+    lastQuizCardQuestionIndex !== null && questionIndex < lastQuizCardQuestionIndex ? -1 : 1
+  );
+
+  React.useEffect(() => {
+    lastQuizCardQuestionIndex = questionIndex;
+  }, [questionIndex]);
 
   const targetProgressPercent = Math.min(
     100,
@@ -1573,6 +1806,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   const [animatedProgressWidth, setAnimatedProgressWidth] = useState<number>(() =>
     areQuizAnimationsEnabled && lastQuizCardProgressPercent !== null
       ? lastQuizCardProgressPercent
+      : areQuizAnimationsEnabled
+      ? 0
       : targetProgressPercent
   );
 
@@ -1588,10 +1823,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     }
 
     let raf2: number | null = null;
+    let timerId: number | null = null;
     const raf1 = window.requestAnimationFrame(() => {
       raf2 = window.requestAnimationFrame(() => {
-        setAnimatedProgressWidth(targetProgressPercent);
-        lastQuizCardProgressPercent = targetProgressPercent;
+        timerId = window.setTimeout(() => {
+          setAnimatedProgressWidth(targetProgressPercent);
+          lastQuizCardProgressPercent = targetProgressPercent;
+        }, 70);
       });
     });
 
@@ -1599,6 +1837,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       window.cancelAnimationFrame(raf1);
       if (raf2 !== null) {
         window.cancelAnimationFrame(raf2);
+      }
+      if (timerId !== null) {
+        window.clearTimeout(timerId);
       }
     };
   }, [targetProgressPercent, areQuizAnimationsEnabled]);
@@ -1619,14 +1860,16 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
   // Reset state, question timer, study note & cancel audio when question changes
   React.useEffect(() => {
-    setSlideFadeTriggerKey((prev) => prev + 1);
     setSelectedOption(null);
     setHasSubmitted(false);
     setShowAnalyzeDistractorsPanel(false);
+    setShowRevealDistractorsComparison(false);
     setUserConfidence(stats?.confidenceScores?.[question.id] || null);
     setConfidenceToast(null);
     setExamFeedbackRevealed(false);
     setElapsedSeconds(0);
+    setCountdownSecondsLeft(getComplexityCountdownSeconds(question.difficulty));
+    setHasResetCountdownOnAnswer(false);
     setShowKnowledgeCheck(false);
     setSelectedConceptId(null);
     setIsAnswerFirstScenarioRevealed(false);
@@ -1659,6 +1902,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
+    setIsReadingAloud(false);
     setIsSpeakingWhyCorrect(false);
     setTtsFeedbackError(null);
   }, [question.id, stats?.confidenceScores]);
@@ -1792,14 +2036,26 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     onToggleRetryIncorrectInPath(question.learningPathId);
   };
 
-  // Increment per-question timer every second until user submits an answer (respects active pause)
+  // Increment per-question timer & decrement complexity-adaptive countdown every second until answered
   React.useEffect(() => {
     if (hasSubmitted || isExamTimerPaused) return;
     const interval = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
+      setCountdownSecondsLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(interval);
   }, [hasSubmitted, question.id, isExamTimerPaused]);
+
+  const countdownRemainingPct =
+    complexityTotalSeconds > 0
+      ? Math.min(100, Math.max(0, (countdownSecondsLeft / complexityTotalSeconds) * 100))
+      : 0;
+  const countdownUrgencyState: 'normal' | 'warning' | 'urgent' =
+    hasResetCountdownOnAnswer || countdownRemainingPct > 45
+      ? 'normal'
+      : countdownRemainingPct > 20
+      ? 'warning'
+      : 'urgent';
 
   // Cancel speech on unmount
   React.useEffect(() => {
@@ -1879,6 +2135,46 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     window.speechSynthesis.speak(utterance);
   };
 
+  const handleToggleReadAloud = () => {
+    setTtsFeedbackError(null);
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      setTtsFeedbackError('Read Aloud (Web Speech API) is not supported in this browser.');
+      return;
+    }
+
+    if (isReadingAloud) {
+      window.speechSynthesis.cancel();
+      setIsReadingAloud(false);
+      setIsSpeaking(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    setIsSpeakingWhyCorrect(false);
+
+    const optionsText = question.options
+      .map((o) => `Option ${o.letter}: ${o.text}`)
+      .join('. ');
+    const narrationText = `Question: ${question.question}. Options: ${optionsText}`;
+
+    const utterance = new SpeechSynthesisUtterance(narrationText);
+    utterance.rate = 0.98;
+    utterance.pitch = 1.0;
+
+    utterance.onend = () => {
+      setIsReadingAloud(false);
+      setIsSpeaking(false);
+    };
+    utterance.onerror = () => {
+      setIsReadingAloud(false);
+      setIsSpeaking(false);
+    };
+
+    setIsReadingAloud(true);
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
   const handleToggleSpeakWhyCorrect = () => {
     setTtsFeedbackError(null);
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
@@ -1915,6 +2211,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
     if (hasSubmitted) return;
     setSelectedOption(letter);
     setHasSubmitted(true);
+    // Reset complexity countdown upon answering
+    setCountdownSecondsLeft(complexityTotalSeconds);
+    setHasResetCountdownOnAnswer(true);
 
     // Record question completion time to update rolling average
     try {
@@ -2251,35 +2550,55 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   return (
     <motion.div
       ref={cardRootRef}
-      key={`quizcard-motion-${question.id}-${slideFadeTriggerKey}`}
+      key={`quizcard-motion-${question.id}`}
       data-testid="quizcard-container"
       data-transition-animation={areQuizAnimationsEnabled ? 'slide-and-fade' : 'disabled'}
+      data-nav-direction={navDirection > 0 ? 'forward' : 'backward'}
       layout={areQuizAnimationsEnabled}
       initial={
         areQuizAnimationsEnabled
-          ? { opacity: 0, x: 28, y: 12, scale: 0.992 }
+          ? {
+              opacity: 0,
+              x: navDirection * 36,
+              y: 10,
+              scale: 0.986,
+            }
           : false
       }
-      animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+      animate={{
+        opacity: 1,
+        x: 0,
+        y: 0,
+        scale: 1,
+      }}
       exit={
         areQuizAnimationsEnabled
-          ? { opacity: 0, x: -24, y: -8, scale: 0.992 }
+          ? {
+              opacity: 0,
+              x: navDirection * -28,
+              y: -8,
+              scale: 0.99,
+              transition: {
+                duration: 0.18,
+                ease: [0.4, 0, 1, 1],
+              },
+            }
           : undefined
       }
       transition={
         areQuizAnimationsEnabled
           ? {
-              duration: 0.24,
-              ease: [0.16, 1, 0.3, 1],
+              opacity: { duration: 0.24, ease: [0.22, 1, 0.36, 1] },
+              x: { type: 'spring', stiffness: 360, damping: 32, mass: 0.85 },
+              y: { duration: 0.26, ease: [0.22, 1, 0.36, 1] },
+              scale: { duration: 0.26, ease: [0.22, 1, 0.36, 1] },
               layout: { duration: 0.26, ease: [0.16, 1, 0.3, 1] },
             }
           : { duration: 0 }
       }
       onTouchStart={handleCardTouchStart}
       onTouchEnd={handleCardTouchEnd}
-      className={`quiz-card-container relative w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden ${
-        areQuizAnimationsEnabled ? 'animate-quizcard-slide-fade' : ''
-      }`}
+      className="quiz-card-container relative w-full max-w-full min-w-0 bg-white rounded-xl border border-slate-200/90 card-elevation overflow-hidden"
     >
       {/* Floating Focus Mode Toggle Icon in Top-Right Corner of QuizCard (Enter/Exit Focus Mode Without Navigating to Main Header) */}
       <button
@@ -2416,7 +2735,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       )}
 
       {/* Smooth Progression Progress Bar with CSS width transition animation */}
-      <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 overflow-hidden">
+      <div className="w-full bg-slate-200/90 dark:bg-slate-800 h-2 overflow-hidden">
         <div
           role="progressbar"
           aria-label="Quiz session progress"
@@ -2424,8 +2743,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           aria-valuemax={100}
           aria-valuenow={Math.round(targetProgressPercent)}
           data-testid="quizcard-progress-bar"
-          className="quiz-card-progress-fill bg-gradient-to-r from-[#0078D4] via-sky-400 to-emerald-500 h-full transition-[width] duration-500 ease-out rounded-full"
-          style={{ width: `${animatedProgressWidth}%` }}
+          className="quiz-card-progress-fill bg-gradient-to-r from-[#0078D4] via-sky-400 to-emerald-500 h-full rounded-full"
+          style={{
+            width: `${animatedProgressWidth}%`,
+            transition: areQuizAnimationsEnabled
+              ? 'width 600ms cubic-bezier(0.22, 1, 0.36, 1)'
+              : 'none',
+          }}
         />
       </div>
 
@@ -2873,7 +3197,61 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             ) : (
               <Share2 className="w-3.5 h-3.5 text-[#0A66C2] dark:text-sky-400 shrink-0" />
             )}
-            <span>{linkedinSharedToast ? 'Shared to LinkedIn!' : 'Share to LinkedIn'}</span>
+            <span>
+              {linkedinSharedToast === 'shared'
+                ? 'Shared to LinkedIn!'
+                : linkedinSharedToast === 'copied'
+                ? 'LinkedIn Post Copied!'
+                : 'Share to LinkedIn'}
+            </span>
+          </button>
+
+          {/* Share Quiz Results Button (Web Share API with current score, module name & app URL) */}
+          <button
+            id="quizcard-share-results-btn"
+            data-testid="share-quiz-results-btn"
+            type="button"
+            onClick={handleShareQuizResults}
+            title="Share your current quiz score, module name, and app link via Web Share API"
+            className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              quizResultsSharedToast
+                ? 'bg-emerald-600 text-white border-emerald-500 ring-2 ring-emerald-400/30'
+                : 'bg-white dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border-slate-300 dark:border-slate-600 hover:border-sky-400'
+            }`}
+          >
+            {quizResultsSharedToast ? (
+              <Check className="w-3.5 h-3.5 text-white shrink-0" />
+            ) : (
+              <Share2 className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-400 shrink-0" />
+            )}
+            <span>
+              {quizResultsSharedToast === 'shared'
+                ? 'Results Shared!'
+                : quizResultsSharedToast === 'copied'
+                ? 'Results Copied!'
+                : 'Share Quiz Results'}
+            </span>
+          </button>
+
+          {/* Copy Question Details Button (Copies active question text and all options for offline notes) */}
+          <button
+            id="quizcard-copy-details-btn"
+            data-testid="copy-question-details-btn"
+            type="button"
+            onClick={handleCopyQuestionDetails}
+            title="Copy the active question text and all answer options to clipboard for offline note-taking"
+            className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+              copiedQuestionDetails
+                ? 'bg-emerald-600 text-white border-emerald-500 ring-2 ring-emerald-400/30'
+                : 'bg-white dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border-slate-300 dark:border-slate-600 hover:border-sky-400'
+            }`}
+          >
+            {copiedQuestionDetails ? (
+              <Check className="w-3.5 h-3.5 text-white shrink-0" />
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-[#0078D4] dark:text-sky-400 shrink-0" />
+            )}
+            <span>{copiedQuestionDetails ? 'Details Copied!' : 'Copy Question Details'}</span>
           </button>
 
           {/* Flag Question Button (Marks ambiguous or difficult questions for later review) */}
@@ -3860,7 +4238,100 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         onPausedStateChange={setIsExamTimerPaused}
       />
 
-      <div className="relative p-4 sm:p-6 lg:p-8 min-w-0 w-full overflow-hidden">
+      {/* Complexity-Adaptive Visual Countdown Timer Strip (adjusts to difficulty & resets upon answering) */}
+      <div
+        data-testid="quizcard-complexity-countdown"
+        className={`px-4 sm:px-6 py-2 border-b transition-colors ${
+          countdownUrgencyState === 'urgent'
+            ? 'bg-rose-50/90 border-rose-200 text-rose-950'
+            : countdownUrgencyState === 'warning'
+            ? 'bg-amber-50/90 border-amber-200 text-amber-950'
+            : 'bg-sky-50/60 border-slate-200/80 text-slate-800'
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs mb-1.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <Clock
+              className={`w-3.5 h-3.5 shrink-0 ${
+                countdownUrgencyState === 'urgent'
+                  ? 'text-rose-600 animate-pulse'
+                  : countdownUrgencyState === 'warning'
+                  ? 'text-amber-600'
+                  : 'text-[#0078D4]'
+              }`}
+            />
+            <span className="font-bold">
+              {question.difficulty} Complexity Pace ({complexityTotalSeconds}s)
+            </span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide ${
+                hasResetCountdownOnAnswer
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : countdownSecondsLeft === 0
+                  ? 'bg-rose-600 text-white'
+                  : countdownUrgencyState === 'urgent'
+                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                  : countdownUrgencyState === 'warning'
+                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                  : 'bg-white text-sky-900 border border-sky-200'
+              }`}
+            >
+              {hasResetCountdownOnAnswer
+                ? 'Reset Upon Answer'
+                : countdownSecondsLeft === 0
+                ? 'Time Expired'
+                : 'Timed Practice'}
+            </span>
+          </div>
+
+          <div
+            role="timer"
+            aria-live="off"
+            aria-label={`Complexity countdown timer: ${countdownSecondsLeft} seconds remaining for ${question.difficulty} question`}
+            data-testid="quizcard-complexity-countdown-value"
+            className={`font-mono text-xs font-black tabular-nums ${
+              countdownUrgencyState === 'urgent'
+                ? 'text-rose-700'
+                : countdownUrgencyState === 'warning'
+                ? 'text-amber-800'
+                : 'text-[#005A9E]'
+            }`}
+          >
+            {formatTimer(countdownSecondsLeft)} / {formatTimer(complexityTotalSeconds)}
+          </div>
+        </div>
+
+        <div className="w-full h-1.5 rounded-full bg-slate-200/90 overflow-hidden">
+          <div
+            data-testid="quizcard-complexity-countdown-bar"
+            className={`h-full rounded-full transition-[width] duration-700 ease-linear ${
+              countdownUrgencyState === 'urgent'
+                ? 'bg-rose-600'
+                : countdownUrgencyState === 'warning'
+                ? 'bg-amber-500'
+                : 'bg-gradient-to-r from-[#0078D4] to-emerald-500'
+            }`}
+            style={{ width: `${countdownRemainingPct}%` }}
+          />
+        </div>
+      </div>
+
+      <motion.div
+        key={`quizcard-content-${question.id}`}
+        data-testid="quizcard-fade-in-slide-content"
+        initial={
+          areQuizAnimationsEnabled
+            ? { opacity: 0, y: 8 }
+            : false
+        }
+        animate={{ opacity: 1, y: 0 }}
+        transition={
+          areQuizAnimationsEnabled
+            ? { duration: 0.26, delay: 0.04, ease: [0.22, 1, 0.36, 1] }
+            : { duration: 0 }
+        }
+        className="relative p-4 sm:p-6 lg:p-8 min-w-0 w-full overflow-hidden"
+      >
         <KitengeCardWatermark opacity={0.055} />
         <div className="relative z-10">
         {/* Optional Deep Work Timer Widget */}
@@ -4691,17 +5162,77 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 </span>
               </div>
 
-              {/* Explain Concept Button (Triggers KnowledgeAssistant for concise summary of tested Azure concept) */}
-              <button
-                type="button"
-                onClick={() => handleToggleAiTutorSidebar(true)}
-                className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-slate-900 border border-amber-300 text-xs font-extrabold inline-flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0"
-                title="Explain Concept: Trigger Knowledge Assistant to provide a concise summary of the Azure service or concept tested in this question"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-600 fill-amber-200 shrink-0" />
-                <span>Explain Concept</span>
-              </button>
+              {/* Direct Question Stem Accessibility & AI Help Actions */}
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  id="quizcard-read-aloud-btn"
+                  data-testid="quizcard-read-aloud-btn"
+                  onClick={handleToggleReadAloud}
+                  aria-pressed={isReadingAloud}
+                  className={`px-2.5 py-1 rounded-xl border text-xs font-extrabold inline-flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
+                    isReadingAloud
+                      ? 'bg-[#0078D4] text-white border-[#005A9E] ring-2 ring-[#0078D4]/30'
+                      : 'bg-sky-50 hover:bg-sky-100 text-[#005A9E] border-sky-200'
+                  }`}
+                  title={
+                    isReadingAloud
+                      ? 'Stop voice narration of the active question stem and options'
+                      : 'Read Aloud: Narrate the current question stem and all options using Web Speech API'
+                  }
+                >
+                  {isReadingAloud ? (
+                    <VolumeX className="w-3.5 h-3.5 text-amber-200 shrink-0" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+                  )}
+                  <span>{isReadingAloud ? 'Stop Read Aloud' : 'Read Aloud'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="quizcard-ask-ai-drawer-btn"
+                  data-testid="quizcard-ask-ai-drawer-btn"
+                  onClick={() => {
+                    if (onOpenAiTutorDrawer) {
+                      onOpenAiTutorDrawer(question, selectedOption);
+                    } else {
+                      handleToggleAiTutorSidebar(true);
+                    }
+                  }}
+                  aria-pressed={isAiTutorDrawerOpen}
+                  className={`px-2.5 py-1 rounded-xl border text-xs font-extrabold inline-flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
+                    isAiTutorDrawerOpen
+                      ? 'bg-gradient-to-r from-[#C2410C] to-[#D97706] text-white border-amber-400 ring-2 ring-amber-400/35'
+                      : 'bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-slate-900 border-amber-300'
+                  }`}
+                  title="Ask AI: Open the AI Tutor drawer for immediate contextual help on this active question"
+                >
+                  <Sparkles
+                    className={`w-3.5 h-3.5 shrink-0 ${
+                      isAiTutorDrawerOpen ? 'text-yellow-200' : 'text-amber-600 fill-amber-200'
+                    }`}
+                  />
+                  <span>Ask AI</span>
+                </button>
+
+                {/* Explain Concept Button (Triggers KnowledgeAssistant for concise summary of tested Azure concept) */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleAiTutorSidebar(true)}
+                  className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-slate-900 border border-amber-300 text-xs font-extrabold inline-flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0"
+                  title="Explain Concept: Trigger Knowledge Assistant to provide a concise summary of the Azure service or concept tested in this question"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 fill-amber-200 shrink-0" />
+                  <span>Explain Concept</span>
+                </button>
+              </div>
             </div>
+            {ttsFeedbackError && !showImmediateFeedback && (
+              <p className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5">
+                {ttsFeedbackError}
+              </p>
+            )}
             <div className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
               <ScenarioTextWithTooltips
                 text={question.question}
@@ -4988,6 +5519,92 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         </div>
           </>
         )}
+
+        {/* 'Reveal Why Distractors are Wrong' Toggle & Unified Comparison Panel inside .quiz-card-container */}
+        <div className="pt-1 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showRevealDistractorsComparison}
+              data-testid="reveal-why-distractors-wrong-btn"
+              onClick={() => setShowRevealDistractorsComparison((prev) => !prev)}
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-extrabold transition-all cursor-pointer shadow-2xs ${
+                showRevealDistractorsComparison
+                  ? 'bg-slate-900 text-white border-slate-900 ring-2 ring-[#0078D4]/30'
+                  : 'bg-white hover:bg-rose-50/70 text-slate-800 border-slate-300 hover:border-rose-300'
+              }`}
+            >
+              <ShieldAlert
+                className={`w-4 h-4 shrink-0 ${
+                  showRevealDistractorsComparison ? 'text-amber-300' : 'text-rose-600'
+                }`}
+              />
+              <span>Reveal Why Distractors are Wrong</span>
+              <span
+                className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase ${
+                  showRevealDistractorsComparison
+                    ? 'bg-emerald-500 text-slate-950'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {showRevealDistractorsComparison ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </div>
+
+          {showRevealDistractorsComparison && (
+            <div
+              data-testid="reveal-why-distractors-wrong-panel"
+              className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 animate-in fade-in duration-150"
+            >
+              {/* Correct Answer Rationale */}
+              <div className="p-3.5 rounded-xl bg-emerald-50/90 border border-emerald-300 space-y-1">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-extrabold text-emerald-900">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    Correct Answer: Option {question.correctAnswer} —{' '}
+                    {question.options.find((o) => o.letter === question.correctAnswer)?.text}
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-950 leading-relaxed">{question.whyCorrect}</p>
+              </div>
+
+              {/* Concise Explanation for Each Incorrect Option */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                  Why Incorrect Options Are Wrong
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  {question.options
+                    .filter((opt) => opt.letter !== question.correctAnswer)
+                    .map((incorrectOpt) => {
+                      const breakdown = question.distractorBreakdown?.find(
+                        (d) => d.letter === incorrectOpt.letter
+                      );
+                      return (
+                        <div
+                          key={`reveal-wrong-${incorrectOpt.letter}`}
+                          className="p-3 rounded-lg bg-white border border-rose-200/90 space-y-1 text-xs"
+                        >
+                          <div className="font-bold text-rose-900 flex items-start gap-1.5">
+                            <XCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                            <span>
+                              Option {incorrectOpt.letter}: {incorrectOpt.text}
+                            </span>
+                          </div>
+                          <p className="text-slate-700 leading-relaxed pl-5">
+                            {breakdown?.reason ||
+                              'This option does not satisfy the scenario requirements.'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Exam Simulation Mode Locked Answer Banner (No Immediate Feedback) */}
         {isAnswered && isExamMode && !examFeedbackRevealed && (
@@ -5677,14 +6294,61 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
         {/* Footer Navigation Buttons */}
         <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-          <button
-            onClick={onPrev}
-            disabled={questionIndex === 0}
-            className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Previous</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={onPrev}
+              disabled={questionIndex === 0}
+              className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-sm font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Previous</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="footer-share-linkedin-btn"
+              onClick={handleShareToLinkedIn}
+              title="Generate and share a formatted LinkedIn post with your active module title and app link"
+              className={`px-3.5 py-2 rounded-lg border text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                linkedinSharedToast
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                  : 'bg-sky-50 hover:bg-sky-100 text-[#0A66C2] border-sky-200 hover:border-[#0A66C2]/40'
+              }`}
+            >
+              {linkedinSharedToast ? (
+                <Check className="w-3.5 h-3.5 text-white shrink-0" />
+              ) : (
+                <Share2 className="w-3.5 h-3.5 text-[#0A66C2] shrink-0" />
+              )}
+              <span>
+                {linkedinSharedToast === 'shared'
+                  ? 'Shared to LinkedIn!'
+                  : linkedinSharedToast === 'copied'
+                  ? 'LinkedIn Post Copied!'
+                  : 'Share to LinkedIn'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              id="quizcard-copy-question-link-btn"
+              data-testid="copy-question-link-btn"
+              onClick={handleCopyQuestionLink}
+              title={`Copy direct link to this question (?q=${question.id})`}
+              className={`px-3.5 py-2 rounded-lg border text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                copiedQuestionLinkUrl
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                  : 'bg-slate-50 hover:bg-sky-50 text-slate-800 border-slate-200 hover:border-sky-300'
+              }`}
+            >
+              {copiedQuestionLinkUrl ? (
+                <Check className="w-3.5 h-3.5 text-white shrink-0" />
+              ) : (
+                <Copy className="w-3.5 h-3.5 text-[#0078D4] shrink-0" />
+              )}
+              <span>{copiedQuestionLinkUrl ? 'Link Copied!' : 'Copy Question Link'}</span>
+            </button>
+          </div>
 
           <div className="flex flex-wrap items-center gap-2">
             {/* Direct 'Retry Incorrect' Button in Footer for Current Learning Path */}
@@ -5715,6 +6379,8 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 onClick={() => {
                   setSelectedOption(null);
                   setHasSubmitted(false);
+                  setCountdownSecondsLeft(complexityTotalSeconds);
+                  setHasResetCountdownOnAnswer(false);
                 }}
                 className="px-3 py-2 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
                 title="Reset and re-attempt this specific question"
@@ -5774,6 +6440,62 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             )}
           </div>
         </div>
+
+        {/* Inline Direct Question Link Confirmation Banner after clicking 'Copy Question Link' */}
+        {copiedQuestionLinkUrl && (
+          <div
+            data-testid="copy-question-link-banner"
+            role="status"
+            className="p-3 rounded-xl bg-emerald-50/95 border border-emerald-200 text-xs text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in duration-150"
+          >
+            <div className="space-y-1 min-w-0">
+              <div className="flex items-center gap-1.5 font-extrabold text-emerald-800">
+                <Check className="w-3.5 h-3.5 shrink-0" />
+                <span>Direct Question Link Copied to Clipboard</span>
+              </div>
+              <code className="block px-2 py-1 rounded bg-white border border-emerald-200 text-[11px] font-mono text-slate-800 break-all">
+                {copiedQuestionLinkUrl}
+              </code>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCopiedQuestionLinkUrl(null)}
+              className="px-2.5 py-1 rounded-lg bg-white hover:bg-emerald-100 border border-emerald-200 text-[11px] font-bold text-emerald-900 shrink-0 cursor-pointer self-start sm:self-center"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* Inline Formatted LinkedIn Post Preview after clicking 'Share to LinkedIn' */}
+        {generatedLinkedInPost && (
+          <div
+            data-testid="linkedin-post-preview-banner"
+            role="status"
+            className="p-3 rounded-xl bg-sky-50/90 border border-sky-200 text-xs text-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in duration-150"
+          >
+            <div className="space-y-1 min-w-0">
+              <div className="flex items-center gap-1.5 font-extrabold text-[#0A66C2]">
+                <Share2 className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  {linkedinSharedToast === 'shared'
+                    ? 'LinkedIn Share Sheet Opened — Formatted Post Ready'
+                    : 'Formatted LinkedIn Post Copied to Clipboard'}
+                </span>
+              </div>
+              <p className="text-slate-700 leading-relaxed break-words">
+                {generatedLinkedInPost}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setGeneratedLinkedInPost(null)}
+              className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-600 shrink-0 cursor-pointer self-start sm:self-center"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
       </motion.div>
 
         {/* Right Side-Panel: Contextual 'Ask AI Tutor' & Knowledge Assistant Sidebar Next to QuizCard */}
@@ -6070,7 +6792,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
         )}
       </motion.div>
         </div>
-    </div>
+    </motion.div>
 
     {/* Quick Notes Slide-Out Panel */}
     <QuickNotesDrawer

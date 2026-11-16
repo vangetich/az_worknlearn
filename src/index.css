@@ -34,8 +34,24 @@
   animation: quizcardSlideFadeEntrance 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@keyframes fadeInSlide {
+  0% {
+    opacity: 0;
+    transform: translate3d(20px, 8px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.quiz-card-container .fade-in-slide {
+  animation: fadeInSlide 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity, transform;
+}
+
 .quiz-card-container .quiz-card-progress-fill {
-  transition: width 550ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: width;
 }
 
@@ -61,6 +77,8 @@
 
 html.reduce-quiz-transitions .animate-quizcard-slide-fade,
 html[data-quiz-animations="false"] .animate-quizcard-slide-fade,
+html.reduce-quiz-transitions .quiz-card-container .fade-in-slide,
+html[data-quiz-animations="false"] .quiz-card-container .fade-in-slide,
 html.reduce-quiz-transitions .quiz-card-container .quiz-card-progress-fill,
 html[data-quiz-animations="false"] .quiz-card-container .quiz-card-progress-fill,
 html.reduce-quiz-transitions .quiz-card-container .quiz-card-next-pulse,
@@ -70,6 +88,7 @@ html[data-quiz-animations="false"] .quiz-card-container .quiz-card-next-pulse {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .quiz-card-container .fade-in-slide,
   .quiz-card-container .quiz-card-progress-fill,
   .quiz-card-container .quiz-card-next-pulse {
     animation: none !important;
